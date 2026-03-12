@@ -539,15 +539,55 @@ Uses the same `sftp.php` endpoint but routes commands through `SHELL_EXEC`. Main
 
 ### PHP Agent Deployment
 
-Required sequence:
+> **Critical:** The `sftp.php` in the release package ships with **no password configured**. Uploading it before saving a session in the plugin will result in HTTP 503 on every connection attempt. Always follow the order below.
 
-1. In the plugin dialog select `Transfer = PHP Agent (HTTP)` or `PHP Shell (HTTP)` and save the connection with password.
-2. The plugin generates/updates `AGENT_PSK_SALT` and `AGENT_PSK_SHA256` fields in the local copy of `sftp.php` (`...\plugins\wfx\sftpplug\sftp.php`).
-3. Copy that file to the server: `https://domain.com/sftp.php`.
-4. Verify: `https://domain.com/sftp.php?op=PROBE` — must return 200 with auth challenge.
-5. Connect only after a successful probe.
+**Step 1 — Configure and save the session in Total Commander**
 
-Alternative: set `AGENT_PSK` directly in the server environment or use `AGENT_PSK_ENV_KEYS` for env-variable-based key loading.
+Open the plugin connection dialog (Net → Connect). Fill in:
+
+| Field | Value |
+|-------|-------|
+| **Connect to** | Full URL to `sftp.php` on your server, e.g. `https://example.com/sftp.php` |
+| **Transfer mode** | `PHP Agent (HTTP)` (or `PHP Shell (HTTP)`) |
+| **Password** | Your chosen shared secret |
+| **Session name** | Any label, e.g. `My Hosting` |
+
+Click **Save**. The plugin writes a salted SHA-256 hash (`AGENT_PSK_SALT` + `AGENT_PSK_SHA256`) into its local copy of `sftp.php`. The password itself is never stored in the file.
+
+**Step 2 — Upload the modified `sftp.php`**
+
+Copy the local file (containing your hash) to the server:
+
+```
+...\Total Commander\plugins\wfx\SFTPplug\sftp.php  →  https://example.com/sftp.php
+```
+
+Use FTP, cPanel File Manager, or any other method. Do **not** upload the original from the download package — it has empty PSK fields.
+
+**Step 3 — Verify the endpoint**
+
+Open `https://example.com/sftp.php?op=PROBE` in a browser:
+
+| Response | Meaning |
+|----------|---------|
+| HTTP 200 `{"status":"ok"}` | Ready — proceed to connect |
+| HTTP 401 Unauthorized | Script running, awaiting auth — also OK |
+| HTTP 503 Service Unavailable | PSK not configured — wrong file uploaded; repeat from Step 1 |
+| HTTP 404 Not Found | Wrong URL or file not yet uploaded |
+
+**Step 4 — Connect**
+
+Select the saved session in Total Commander and connect.
+
+**Security model**
+
+| Location | Stored | Password exposed? |
+|----------|--------|-------------------|
+| `sftpplug.ini` (your PC) | Password encrypted with Windows DPAPI | No |
+| `sftp.php` (server) | `AGENT_PSK_SALT` + SHA-256(salt + password) | No — one-way hash |
+| Network (HTTPS) | HMAC-SHA256 signature + timestamp + nonce per request | No — signature only |
+
+Even if someone reads `sftp.php` on the server, the original password cannot be recovered.
 
 ---
 
