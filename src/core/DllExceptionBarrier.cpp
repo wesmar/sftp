@@ -20,6 +20,7 @@
 
 #include <windows.h>
 #include <dbghelp.h>
+#include <atomic>
 #include <exception>
 #include <stdexcept>
 #include <system_error>
@@ -36,20 +37,22 @@ namespace sftp {
 
 namespace {
 
-SRWLOCK g_sym_lock        = SRWLOCK_INIT;  // serialises all DbgHelp calls
-bool    g_sym_initialized = false;          // guarded by g_sym_lock
+SRWLOCK                  g_sym_lock        = SRWLOCK_INIT; // serialises all DbgHelp calls
+std::atomic<bool>        g_sym_initialized{false};         // acquire/release, see EnsureSymbols()
 
 // EnsureSymbols — idempotent, lazy.  Acquires exclusive lock for first call.
 void EnsureSymbols() noexcept
 {
-    // Fast path: read without lock once initialised (g_sym_initialized is
-    // written exactly once and only under the lock, so a plain read is safe
-    // on x86/x64 with their strong memory model).
-    if (g_sym_initialized)
+    // Fast path: acquire-load guarantees that if we see true, every store
+    // performed by the initialising thread (SymInitialize etc.) is visible
+    // to us.  This is the double-checked locking pattern, correct under the
+    // C++ memory model (unlike a plain bool read which is formally UB and
+    // also subject to compiler hoisting across the lock).
+    if (g_sym_initialized.load(std::memory_order_acquire))
         return;
 
     ::AcquireSRWLockExclusive(&g_sym_lock);
-    if (!g_sym_initialized) {
+    if (!g_sym_initialized.load(std::memory_order_relaxed)) {
         // SYMOPT_UNDNAME    — demangle C++ names
         // SYMOPT_LOAD_LINES — load source file / line number info from PDB
         // SYMOPT_DEFERRED_LOADS — don't load all modules up front (faster init)
@@ -59,7 +62,7 @@ void EnsureSymbols() noexcept
         // already mapped into the process.  This is the most robust option
         // for a plugin where we cannot predict the search path at runtime.
         ::SymInitialize(::GetCurrentProcess(), nullptr, TRUE);
-        g_sym_initialized = true;
+        g_sym_initialized.store(true, std::memory_order_release);
     }
     ::ReleaseSRWLockExclusive(&g_sym_lock);
 }
@@ -152,9 +155,9 @@ std::string BuildStackTrace(USHORT skip) noexcept
 void ShutdownSymbols() noexcept
 {
     ::AcquireSRWLockExclusive(&g_sym_lock);
-    if (g_sym_initialized) {
+    if (g_sym_initialized.load(std::memory_order_relaxed)) {
         ::SymCleanup(::GetCurrentProcess());
-        g_sym_initialized = false;
+        g_sym_initialized.store(false, std::memory_order_relaxed);
     }
     ::ReleaseSRWLockExclusive(&g_sym_lock);
 }
