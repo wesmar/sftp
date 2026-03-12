@@ -41,9 +41,9 @@
   <li><b>Private key file:</b> 
     <ul>
       <li>Accepts PEM format (OpenSSH)</li>
-      <li>Accepts PPK format (PuTTY) - native conversion, no external tool needed</li>
+      <li>Accepts PPK format (PuTTY) — native conversion, no external tool or DLL needed</li>
       <li>Supports encrypted keys with passphrase prompt</li>
-      <li>PPK v2 and v3 formats supported (argon2 for v3)</li>
+      <li>PPK v2 and PPK v3 (Argon2) both supported natively — Argon2 is built into the plugin</li>
     </ul>
   </li>
 </ul>
@@ -89,10 +89,17 @@
 
 <h3>Advanced Options</h3>
 <ul>
-  <li><b>Show entire directory listings in log:</b> Debug option for troubleshooting</li>
-  
-  
-  <li><b>Detailed log:</b> Enable verbose logging for troubleshooting</li>
+  <li><b>Detailed log:</b> Enable verbose logging; output appears in the TC log window (F5 log pane or separate log window)</li>
+  <li><b>Show entire directory listings in log:</b> Includes full remote <code>ls -la</code> output in the log — useful for diagnosing SCP/shell listing problems</li>
+</ul>
+
+<h3>File Permissions (SFTP mode)</h3>
+<p>In SFTP transfer mode you can change file and directory permissions directly from Total Commander:</p>
+<ul>
+  <li>Use <b>Properties</b> (Alt+Enter) on a remote file or directory to view and edit its Unix permissions</li>
+  <li>Permission changes use SFTP setstat — the plugin reads current permissions first, applies your change, and writes back</li>
+  <li>Works on files and directories; symlinks are not followed</li>
+  <li>Not available in SCP-only, Shell, PHP Agent, or LAN Pair modes</li>
 </ul>
 
 <h3>Character Encoding</h3>
