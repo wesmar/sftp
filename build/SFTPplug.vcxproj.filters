@@ -28,6 +28,9 @@
     <ClCompile Include="..\src\core\PluginEntryPoints.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\DllExceptionBarrier.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\SftpConnection.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -137,6 +140,9 @@
   <!-- Header Files -->
   <ItemGroup>
     <ClInclude Include="..\src\include\PluginEntryPoints.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\DllExceptionBarrier.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\IUserFeedback.h">
