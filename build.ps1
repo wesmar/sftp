@@ -488,49 +488,46 @@ file=$projectName.wfx64
 defaultdir=$projectName
 version=1.0
 "@
-    
-    # Create temporary directory for ZIP contents
-    $tempDir = Join-Path $binDir "temp_zip"
-    if (Test-Path $tempDir) {
-        Remove-Item $tempDir -Recurse -Force
+
+    Add-Type -AssemblyName System.IO.Compression
+
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+
+    $outStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
+    $zip = [System.IO.Compression.ZipArchive]::new($outStream, [System.IO.Compression.ZipArchiveMode]::Create)
+
+    function Add-ZipFile([string]$src, [string]$entryName) {
+        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+        $dst = $entry.Open()
+        $fs  = [System.IO.File]::OpenRead($src)
+        try   { $fs.CopyTo($dst) }
+        finally { $fs.Dispose(); $dst.Dispose() }
     }
-    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-    
-    # Copy ONLY final files to temp directory
-    Copy-Item -Path (Join-Path $buildOutputDir "$projectName.wfx") -Destination (Join-Path $tempDir "$projectName.wfx64") -Force
-    
-    if (Test-Path $phpAgentSource) {
-        Copy-Item -Path $phpAgentSource -Destination (Join-Path $tempDir "sftp.php") -Force
+
+    function Add-ZipString([string]$text, [string]$entryName) {
+        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+        $dst = $entry.Open()
+        $bytes = [System.Text.Encoding]::ASCII.GetBytes($text)
+        try   { $dst.Write($bytes, 0, $bytes.Length) }
+        finally { $dst.Dispose() }
     }
-    
-    if (Test-Path $helpCompiled) {
-        Copy-Item -Path $helpCompiled -Destination (Join-Path $tempDir "$projectName.chm") -Force
-    }
-    
-    # Create pluginst.inf
-    Set-Content -Path (Join-Path $tempDir "pluginst.inf") -Value $pluginstInf -Encoding ASCII
-    
-    # Copy readme from source
-    $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
-    if (Test-Path $readmeSource) {
-        Copy-Item -Path $readmeSource -Destination (Join-Path $tempDir "readme.txt") -Force
-    }
-    
-    # Create ZIP using built-in PowerShell Compress-Archive
-    if (Test-Path $zipPath) {
-        Remove-Item $zipPath -Force
-    }
-    
+
     try {
-        Compress-Archive -Path (Join-Path $tempDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+        Add-ZipFile  (Join-Path $buildOutputDir "$projectName.wfx") "$projectName.wfx64"
+        Add-ZipString $pluginstInf "pluginst.inf"
+
+        if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
+        if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName.chm" }
+
+        $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
+        if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
+
         Write-Host "  Created: $projectName.zip" -ForegroundColor Green
     } catch {
         Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
-    }
-    
-    # Cleanup temp directory
-    if (Test-Path $tempDir) {
-        Remove-Item $tempDir -Recurse -Force
+    } finally {
+        $zip.Dispose()
+        $outStream.Dispose()
     }
 }
 
