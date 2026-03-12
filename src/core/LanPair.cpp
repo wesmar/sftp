@@ -1,4 +1,5 @@
 #include "LanPair.h"
+#include "LanPairInternal.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -33,113 +34,15 @@
 namespace smb {
 namespace {
 
-constexpr size_t kNonceSize = 16;
-constexpr size_t kSaltSize = 16;
-constexpr size_t kDerivedKeySize = 32;
-constexpr ULONG kPbkdf2Iterations = 120000;
+// Pull in all shared primitives from LanPairInternal.h.
+using namespace lanpair_internal;
 
-std::optional<std::vector<uint8_t>> hmacSha256(std::span<const uint8_t> key, std::span<const uint8_t> data);
-std::string sanitizeKey(std::string_view key);
-
-std::string trustKeyForServer(std::string_view serverPeerId, std::string_view clientPeerId) {
-    return "lanpair_trust_srv_" + sanitizeKey(std::string(serverPeerId)) + "__" + sanitizeKey(std::string(clientPeerId));
-}
-
-std::string trustKeyForClient(std::string_view serverPeerId, std::string_view clientPeerId) {
-    return "lanpair_trust_cli_" + sanitizeKey(std::string(serverPeerId)) + "__" + sanitizeKey(std::string(clientPeerId));
-}
-
-class WsaScope {
-public:
-    WsaScope() {
-        const std::lock_guard<std::mutex> lock(mu_);
-        if (refCount_++ == 0) {
-            WSADATA wsa{};
-            ok_ = (WSAStartup(MAKEWORD(2, 2), &wsa) == 0);
-            started_ = ok_;
-        } else {
-            ok_ = started_;
-        }
-    }
-
-    ~WsaScope() {
-        const std::lock_guard<std::mutex> lock(mu_);
-        if (refCount_ == 0) {
-            return;
-        }
-        if (--refCount_ == 0 && started_) {
-            WSACleanup();
-            started_ = false;
-        }
-    }
-
-    bool ok() const noexcept { return ok_; }
-
-private:
-    bool ok_ = false;
-    static inline std::mutex mu_;
-    static inline int refCount_ = 0;
-    static inline bool started_ = false;
-};
+// ---- helpers local to LanPair.cpp ----
 
 void setErr(PairError* err, int code, std::string message) {
-    if (!err) {
-        return;
-    }
-    err->code = code;
+    if (!err) return;
+    err->code    = code;
     err->message = std::move(message);
-}
-
-std::string hexEncode(const uint8_t* data, size_t len) {
-    static constexpr char kHex[] = "0123456789ABCDEF";
-    std::string out;
-    out.resize(len * 2);
-    for (size_t i = 0; i < len; ++i) {
-        out[2 * i] = kHex[(data[i] >> 4) & 0x0F];
-        out[2 * i + 1] = kHex[data[i] & 0x0F];
-    }
-    return out;
-}
-
-std::optional<std::vector<uint8_t>> hexDecode(std::string_view in) {
-    if ((in.size() % 2) != 0) {
-        return std::nullopt;
-    }
-    auto val = [](char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-        return -1;
-    };
-
-    std::vector<uint8_t> out;
-    out.resize(in.size() / 2);
-    for (size_t i = 0; i < out.size(); ++i) {
-        const int hi = val(in[2 * i]);
-        const int lo = val(in[2 * i + 1]);
-        if (hi < 0 || lo < 0) {
-            return std::nullopt;
-        }
-        out[i] = static_cast<uint8_t>((hi << 4) | lo);
-    }
-    return out;
-}
-
-std::string escapeToken(std::string_view in) {
-    std::ostringstream oss;
-    for (unsigned char c : in) {
-        if (std::isalnum(c) || c == '_' || c == '-' || c == '.') {
-            oss << static_cast<char>(c);
-        } else {
-            oss << '%' << std::uppercase << std::hex;
-            if (c < 16) {
-                oss << '0';
-            }
-            oss << static_cast<int>(c);
-            oss << std::nouppercase << std::dec;
-        }
-    }
-    return oss.str();
 }
 
 std::string unescapeToken(std::string_view in) {
@@ -161,200 +64,31 @@ std::string unescapeToken(std::string_view in) {
 
 std::string roleToString(PairRole role) {
     switch (role) {
-    case PairRole::Donor: return "donor";
+    case PairRole::Donor:    return "donor";
     case PairRole::Receiver: return "receiver";
-    case PairRole::Dual: return "dual";
+    case PairRole::Dual:     return "dual";
     }
     return "dual";
 }
 
 PairRole roleFromString(const std::string& s) {
-    if (s == "donor") return PairRole::Donor;
+    if (s == "donor")    return PairRole::Donor;
     if (s == "receiver") return PairRole::Receiver;
     return PairRole::Dual;
 }
 
-bool randomBytes(uint8_t* out, size_t len) {
-    return BCryptGenRandom(nullptr, out, static_cast<ULONG>(len), BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
-}
-
-std::optional<std::vector<uint8_t>> deriveKeyPbkdf2(
-    std::string_view password,
-    std::span<const uint8_t> salt,
-    size_t keyLen) {
-    if (keyLen == 0) {
-        return std::vector<uint8_t>{};
-    }
-
-    const std::vector<uint8_t> passBytes(password.begin(), password.end());
-    if (passBytes.empty()) {
-        return std::nullopt;
-    }
-
-    constexpr size_t hLen = 32; // SHA-256 output length
-    const size_t blockCount = (keyLen + hLen - 1) / hLen;
-    std::vector<uint8_t> derived;
-    derived.reserve(blockCount * hLen);
-
-    for (size_t block = 1; block <= blockCount; ++block) {
-        std::vector<uint8_t> saltBlock(salt.begin(), salt.end());
-        saltBlock.push_back(static_cast<uint8_t>((block >> 24) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >> 16) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >> 8) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>(block & 0xFF));
-
-        auto u = hmacSha256(passBytes, saltBlock);
-        if (!u) {
-            return std::nullopt;
-        }
-        std::vector<uint8_t> t = *u;
-
-        for (ULONG i = 2; i <= kPbkdf2Iterations; ++i) {
-            u = hmacSha256(passBytes, std::span<const uint8_t>(u->data(), u->size()));
-            if (!u) {
-                return std::nullopt;
-            }
-            for (size_t j = 0; j < t.size(); ++j) {
-                t[j] ^= (*u)[j];
-            }
-        }
-
-        derived.insert(derived.end(), t.begin(), t.end());
-    }
-
-    derived.resize(keyLen);
-    return derived;
-}
-
-std::optional<std::vector<uint8_t>> hmacSha256(std::span<const uint8_t> key, std::span<const uint8_t> data) {
-    BCRYPT_ALG_HANDLE alg = nullptr;
-    BCRYPT_HASH_HANDLE hHash = nullptr;
-    DWORD objLen = 0;
-    DWORD cb = 0;
-    DWORD hashLen = 0;
-    std::vector<uint8_t> hashObj;
-    std::vector<uint8_t> out;
-
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, BCRYPT_ALG_HANDLE_HMAC_FLAG) != 0) {
-        return std::nullopt;
-    }
-
-    if (BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&objLen), sizeof(objLen), &cb, 0) != 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        return std::nullopt;
-    }
-
-    if (BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashLen), sizeof(hashLen), &cb, 0) != 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        return std::nullopt;
-    }
-
-    hashObj.resize(objLen);
-    out.resize(hashLen);
-
-    if (BCryptCreateHash(alg,
-                         &hHash,
-                         hashObj.data(),
-                         objLen,
-                         const_cast<PUCHAR>(key.data()),
-                         static_cast<ULONG>(key.size()),
-                         0) != 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        return std::nullopt;
-    }
-
-    const NTSTATUS h1 = BCryptHashData(hHash, const_cast<PUCHAR>(data.data()), static_cast<ULONG>(data.size()), 0);
-    const NTSTATUS h2 = BCryptFinishHash(hHash, out.data(), static_cast<ULONG>(out.size()), 0);
-
-    BCryptDestroyHash(hHash);
-    BCryptCloseAlgorithmProvider(alg, 0);
-
-    if (h1 != 0 || h2 != 0) {
-        return std::nullopt;
-    }
-    return out;
-}
-
-bool setSocketTimeout(SOCKET s, std::chrono::milliseconds timeout) {
-    const DWORD ms = static_cast<DWORD>(timeout.count());
-    return setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms)) == 0 &&
-           setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms)) == 0;
-}
-
-bool sendAll(SOCKET s, const uint8_t* data, size_t len) {
-    size_t sent = 0;
-    while (sent < len) {
-        const int n = send(s, reinterpret_cast<const char*>(data + sent), static_cast<int>(len - sent), 0);
-        if (n <= 0) {
-            return false;
-        }
-        sent += static_cast<size_t>(n);
-    }
-    return true;
-}
-
-bool recvLine(SOCKET s, std::string* out, size_t maxLen = 2048) {
-    out->clear();
-    char c = 0;
-    while (out->size() < maxLen) {
-        const int n = recv(s, &c, 1, 0);
-        if (n <= 0) {
-            return false;
-        }
-        if (c == '\n') {
-            return true;
-        }
-        if (c != '\r') {
-            out->push_back(c);
-        }
-    }
-    return false;
-}
-
-bool sendLine(SOCKET s, const std::string& line) {
-    return sendAll(s, reinterpret_cast<const uint8_t*>(line.data()), line.size()) &&
-           sendAll(s, reinterpret_cast<const uint8_t*>("\n"), 1);
-}
-
-std::vector<std::string> splitBySpace(const std::string& line) {
-    std::istringstream iss(line);
-    std::vector<std::string> parts;
-    for (std::string tok; iss >> tok;) {
-        parts.push_back(std::move(tok));
-    }
-    return parts;
-}
-
 std::string getHostNameSafe() {
     char buf[256] = {};
-    if (gethostname(buf, static_cast<int>(sizeof(buf) - 1)) == 0) {
+    if (gethostname(buf, static_cast<int>(sizeof(buf) - 1)) == 0)
         return buf;
-    }
     return "host";
 }
 
 std::filesystem::path secretsDir() {
     const char* appData = std::getenv("APPDATA");
-    if (!appData || !*appData) {
+    if (!appData || !*appData)
         return std::filesystem::temp_directory_path() / "sftpplug.secrets";
-    }
     return std::filesystem::path(appData) / "GHISLER" / "sftpplug.secrets";
-}
-
-std::string sanitizeKey(std::string_view key) {
-    std::string out;
-    out.reserve(key.size());
-    for (char c : key) {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
-            out.push_back(c);
-        } else {
-            out.push_back('_');
-        }
-    }
-    if (out.empty()) {
-        out = "default";
-    }
-    return out;
 }
 
 std::optional<std::vector<uint8_t>> dpapiProtect(std::span<const uint8_t> plain) {
@@ -363,9 +97,9 @@ std::optional<std::vector<uint8_t>> dpapiProtect(std::span<const uint8_t> plain)
     in.cbData = static_cast<DWORD>(plain.size());
 
     DATA_BLOB out{};
-    if (!CryptProtectData(&in, L"sftpplug-lanpair", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+    if (!CryptProtectData(&in, L"sftpplug-lanpair", nullptr, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, &out))
         return std::nullopt;
-    }
 
     std::vector<uint8_t> enc(out.pbData, out.pbData + out.cbData);
     LocalFree(out.pbData);
@@ -378,16 +112,16 @@ std::optional<std::vector<uint8_t>> dpapiUnprotect(std::span<const uint8_t> ciph
     in.cbData = static_cast<DWORD>(cipher.size());
 
     DATA_BLOB out{};
-    if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+    if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, &out))
         return std::nullopt;
-    }
 
     std::vector<uint8_t> plain(out.pbData, out.pbData + out.cbData);
     LocalFree(out.pbData);
     return plain;
 }
 
-} // namespace
+} // anonymous namespace
 
 struct DiscoveryService::Impl {
     WsaScope wsa;
@@ -407,14 +141,8 @@ struct DiscoveryService::Impl {
     std::unordered_map<std::string, PeerAnnouncement> peers;
 
     void closeSockets() {
-        if (txSock != INVALID_SOCKET) {
-            closesocket(txSock);
-            txSock = INVALID_SOCKET;
-        }
-        if (rxSock != INVALID_SOCKET) {
-            closesocket(rxSock);
-            rxSock = INVALID_SOCKET;
-        }
+        if (txSock != INVALID_SOCKET) { closesocket(txSock); txSock = INVALID_SOCKET; }
+        if (rxSock != INVALID_SOCKET) { closesocket(rxSock); rxSock = INVALID_SOCKET; }
     }
 
     std::string buildAnnouncement() const {
@@ -461,7 +189,7 @@ struct DiscoveryService::Impl {
 
                         auto* sin = reinterpret_cast<sockaddr_in*>(ua->Address.lpSockaddr);
                         DWORD prefixLen = ua->OnLinkPrefixLength;
-                        uint32_t ip  = ntohl(sin->sin_addr.s_addr);
+                        uint32_t ip   = ntohl(sin->sin_addr.s_addr);
                         uint32_t mask = prefixLen ? (~0u << (32 - prefixLen)) : 0u;
                         uint32_t bcast = (ip & mask) | ~mask;
 
@@ -514,42 +242,32 @@ struct DiscoveryService::Impl {
             int fromLen = sizeof(from);
             const int n = recvfrom(rxSock, buf.data(), static_cast<int>(buf.size() - 1), 0,
                                    reinterpret_cast<sockaddr*>(&from), &fromLen);
-            if (n <= 0) {
-                continue;
-            }
+            if (n <= 0) continue;
             buf[static_cast<size_t>(n)] = 0;
 
             const std::string line(buf.data());
             const auto parts = splitBySpace(line);
-            if (parts.size() != 7) {
-                continue;
-            }
-            if (parts[0] != cfg.appTag || parts[1] != "ANN") {
-                continue;
-            }
-            if (parts[2] == peerId) {
-                continue;
-            }
+            if (parts.size() != 7) continue;
+            if (parts[0] != cfg.appTag || parts[1] != "ANN") continue;
+            if (parts[2] == peerId) continue;
 
             char ip[INET_ADDRSTRLEN] = {};
             inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
 
             PeerAnnouncement ann;
-            ann.peerId = parts[2];
+            ann.peerId      = parts[2];
             ann.displayName = unescapeToken(parts[3]); // UTF-8
-            ann.hostName = unescapeToken(parts[4]);    // UTF-8
-            ann.role = roleFromString(parts[5]);
-            ann.tcpPort = static_cast<uint16_t>(std::strtoul(parts[6].c_str(), nullptr, 10));
-            ann.ip = ip;
-            ann.lastSeen = std::chrono::steady_clock::now();
+            ann.hostName    = unescapeToken(parts[4]); // UTF-8
+            ann.role        = roleFromString(parts[5]);
+            ann.tcpPort     = static_cast<uint16_t>(std::strtoul(parts[6].c_str(), nullptr, 10));
+            ann.ip          = ip;
+            ann.lastSeen    = std::chrono::steady_clock::now();
 
             {
                 const std::lock_guard<std::mutex> lock(peersMu);
                 peers[ann.peerId] = ann;
             }
-            if (onPeer) {
-                onPeer(ann);
-            }
+            if (onPeer) onPeer(ann);
         }
     }
 };
@@ -565,12 +283,12 @@ bool DiscoveryService::start(const DiscoveryConfig& cfg,
                              PairError* err) {
     stop();
 
-    impl_->cfg = cfg;
-    impl_->peerId = peerId;
+    impl_->cfg         = cfg;
+    impl_->peerId      = peerId;
     impl_->displayName = displayName.empty() ? getHostNameSafe() : displayName;
-    impl_->role = role;
-    impl_->onPeer = std::move(onPeer);
-    impl_->stop = false;
+    impl_->role        = role;
+    impl_->onPeer      = std::move(onPeer);
+    impl_->stop        = false;
 
     if (!impl_->wsa.ok()) {
         setErr(err, WSAGetLastError(), "WSAStartup failed");
@@ -586,15 +304,18 @@ bool DiscoveryService::start(const DiscoveryConfig& cfg,
     }
 
     const BOOL yes = TRUE;
-    setsockopt(impl_->txSock, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&yes), sizeof(yes));
-    setsockopt(impl_->rxSock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
+    setsockopt(impl_->txSock, SOL_SOCKET, SO_BROADCAST,
+               reinterpret_cast<const char*>(&yes), sizeof(yes));
+    setsockopt(impl_->rxSock, SOL_SOCKET, SO_REUSEADDR,
+               reinterpret_cast<const char*>(&yes), sizeof(yes));
 
     sockaddr_in bindAddr{};
     bindAddr.sin_family = AF_INET;
-    bindAddr.sin_port = htons(cfg.udpPort);
+    bindAddr.sin_port   = htons(cfg.udpPort);
     inet_pton(AF_INET, cfg.bindAddress.c_str(), &bindAddr.sin_addr);
 
-    if (bind(impl_->rxSock, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0) {
+    if (bind(impl_->rxSock,
+             reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0) {
         setErr(err, WSAGetLastError(), "Cannot bind discovery UDP socket");
         stop();
         return false;
@@ -606,18 +327,11 @@ bool DiscoveryService::start(const DiscoveryConfig& cfg,
 }
 
 void DiscoveryService::stop() {
-    if (!impl_) {
-        return;
-    }
+    if (!impl_) return;
     impl_->stop = true;
     impl_->closeSockets();
-
-    if (impl_->txThread.joinable()) {
-        impl_->txThread.join();
-    }
-    if (impl_->rxThread.joinable()) {
-        impl_->rxThread.join();
-    }
+    if (impl_->txThread.joinable()) impl_->txThread.join();
+    if (impl_->rxThread.joinable()) impl_->rxThread.join();
 }
 
 struct PairServer::Impl {
@@ -638,28 +352,23 @@ struct PairServer::Impl {
 
     bool authenticateClient(SOCKET s, PairSessionInfo* info) {
         std::string line;
-        if (!recvLine(s, &line)) {
-            return false;
-        }
+        if (!recvLine(s, &line)) return false;
 
         const auto hello = splitBySpace(line);
-        if (hello.size() != 5 || hello[0] != "PAIR1" || hello[1] != "HELLO") {
+        if (hello.size() != 5 || hello[0] != "PAIR1" || hello[1] != "HELLO")
             return false;
-        }
 
-        const std::string clientPeerId = hello[2];
-        const PairRole clientRole = roleFromString(hello[3]);
-        const auto clientNonceHex = hello[4];
-        const auto clientNonce = hexDecode(clientNonceHex);
-        if (!clientNonce || clientNonce->size() != kNonceSize) {
-            return false;
-        }
+        const std::string clientPeerId    = hello[2];
+        const PairRole    clientRole      = roleFromString(hello[3]);
+        const auto        clientNonceHex  = hello[4];
+        const auto        clientNonce     = hexDecode(clientNonceHex);
+        if (!clientNonce || clientNonce->size() != kNonceSize) return false;
 
-        std::array<uint8_t, kSaltSize> salt{};
+        std::array<uint8_t, kSaltSize>  salt{};
         std::array<uint8_t, kNonceSize> serverNonce{};
-        if (!randomBytes(salt.data(), salt.size()) || !randomBytes(serverNonce.data(), serverNonce.size())) {
+        if (!randomBytes(salt.data(), salt.size()) ||
+            !randomBytes(serverNonce.data(), serverNonce.size()))
             return false;
-        }
 
         std::ostringstream ch;
         ch << "PAIR1 CHALLENGE "
@@ -669,16 +378,13 @@ struct PairServer::Impl {
            << hexEncode(salt.data(), salt.size()) << " "
            << hexEncode(serverNonce.data(), serverNonce.size());
 
-        if (!sendLine(s, ch.str())) {
-            return false;
-        }
+        if (!sendLine(s, ch.str())) return false;
+        if (!recvLine(s, &line))    return false;
 
-        if (!recvLine(s, &line)) {
-            return false;
-        }
         const auto auth = splitBySpace(line);
         std::vector<uint8_t> key;
         std::string issuedTrustHex;
+
         const std::string material = "C|" + clientNonceHex + "|" +
             hexEncode(serverNonce.data(), serverNonce.size()) + "|" +
             clientPeerId + "|" + cfg.peerId;
@@ -687,19 +393,15 @@ struct PairServer::Impl {
             clientPeerId + "|" + cfg.peerId;
 
         if (!cfg.password.empty()) {
-            if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH") {
+            if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH")
                 return false;
-            }
             const auto derived = deriveKeyPbkdf2(cfg.password, salt, kDerivedKeySize);
-            if (!derived) {
-                return false;
-            }
+            if (!derived) return false;
             key = *derived;
             const auto expected = hmacSha256(key,
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(material.data()), material.size()));
-            if (!expected) {
-                return false;
-            }
+                std::span<const uint8_t>(
+                    reinterpret_cast<const uint8_t*>(material.data()), material.size()));
+            if (!expected) return false;
             if (hexEncode(expected->data(), expected->size()) != auth[2]) {
                 sendLine(s, "PAIR1 FAIL bad-auth");
                 return false;
@@ -709,15 +411,13 @@ struct PairServer::Impl {
             std::string storedSecret;
             const bool haveTrust = DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr);
             if (haveTrust) {
-                if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH") {
+                if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH")
                     return false;
-                }
                 key.assign(storedSecret.begin(), storedSecret.end());
                 const auto expected = hmacSha256(key,
-                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(material.data()), material.size()));
-                if (!expected) {
-                    return false;
-                }
+                    std::span<const uint8_t>(
+                        reinterpret_cast<const uint8_t*>(material.data()), material.size()));
+                if (!expected) return false;
                 if (hexEncode(expected->data(), expected->size()) != auth[2]) {
                     sendLine(s, "PAIR1 FAIL bad-trust");
                     return false;
@@ -728,9 +428,7 @@ struct PairServer::Impl {
                     return false;
                 }
                 std::array<uint8_t, kDerivedKeySize> fresh{};
-                if (!randomBytes(fresh.data(), fresh.size())) {
-                    return false;
-                }
+                if (!randomBytes(fresh.data(), fresh.size())) return false;
                 key.assign(fresh.begin(), fresh.end());
                 issuedTrustHex = hexEncode(fresh.data(), fresh.size());
                 std::string secret(reinterpret_cast<const char*>(fresh.data()), fresh.size());
@@ -739,24 +437,22 @@ struct PairServer::Impl {
         }
 
         const auto serverProof = hmacSha256(key,
-            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(materialSrv.data()), materialSrv.size()));
-        if (!serverProof) {
-            return false;
-        }
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(materialSrv.data()), materialSrv.size()));
+        if (!serverProof) return false;
 
         std::ostringstream ok;
         if (!issuedTrustHex.empty()) {
-            ok << "PAIR1 OKTRUST " << hexEncode(serverProof->data(), serverProof->size()) << " " << issuedTrustHex;
+            ok << "PAIR1 OKTRUST " << hexEncode(serverProof->data(), serverProof->size())
+               << " " << issuedTrustHex;
         } else {
             ok << "PAIR1 OK " << hexEncode(serverProof->data(), serverProof->size());
         }
-        if (!sendLine(s, ok.str())) {
-            return false;
-        }
+        if (!sendLine(s, ok.str())) return false;
 
         if (info) {
-            info->remotePeerId = clientPeerId;
-            info->remoteRole = clientRole;
+            info->remotePeerId      = clientPeerId;
+            info->remoteRole        = clientRole;
             info->remoteDisplayName = clientPeerId;
         }
         return true;
@@ -766,12 +462,12 @@ struct PairServer::Impl {
         while (!stop.load(std::memory_order_relaxed)) {
             sockaddr_in from{};
             int fromLen = sizeof(from);
-            SOCKET client = accept(listenSock, reinterpret_cast<sockaddr*>(&from), &fromLen);
-            if (client == INVALID_SOCKET) {
-                continue;
-            }
+            SOCKET client = accept(listenSock,
+                                   reinterpret_cast<sockaddr*>(&from), &fromLen);
+            if (client == INVALID_SOCKET) continue;
 
-            setSocketTimeout(client, cfg.authTimeout);
+            // authTimeout is std::chrono::milliseconds — convert to DWORD for setSocketTimeout.
+            setSocketTimeout(client, static_cast<DWORD>(cfg.authTimeout.count()));
 
             PairSessionInfo info;
             char ip[INET_ADDRSTRLEN] = {};
@@ -781,9 +477,7 @@ struct PairServer::Impl {
             const bool ok = authenticateClient(client, &info);
             closesocket(client);
 
-            if (ok && onAccepted) {
-                onAccepted(info);
-            }
+            if (ok && onAccepted) onAccepted(info);
         }
     }
 };
@@ -796,9 +490,9 @@ bool PairServer::start(const PairServerConfig& cfg,
                        PairError* err) {
     stop();
 
-    impl_->cfg = cfg;
+    impl_->cfg        = cfg;
     impl_->onAccepted = std::move(onAccepted);
-    impl_->stop = false;
+    impl_->stop       = false;
 
     if (!impl_->wsa.ok()) {
         setErr(err, WSAGetLastError(), "WSAStartup failed");
@@ -812,14 +506,16 @@ bool PairServer::start(const PairServerConfig& cfg,
     }
 
     const BOOL yes = TRUE;
-    setsockopt(impl_->listenSock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
+    setsockopt(impl_->listenSock, SOL_SOCKET, SO_REUSEADDR,
+               reinterpret_cast<const char*>(&yes), sizeof(yes));
 
     sockaddr_in bindAddr{};
     bindAddr.sin_family = AF_INET;
-    bindAddr.sin_port = htons(cfg.port);
+    bindAddr.sin_port   = htons(cfg.port);
     inet_pton(AF_INET, cfg.bindAddress.c_str(), &bindAddr.sin_addr);
 
-    if (bind(impl_->listenSock, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0) {
+    if (bind(impl_->listenSock,
+             reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0) {
         setErr(err, WSAGetLastError(), "Cannot bind pairing TCP socket");
         stop();
         return false;
@@ -836,14 +532,11 @@ bool PairServer::start(const PairServerConfig& cfg,
 }
 
 void PairServer::stop() {
-    if (!impl_) {
-        return;
-    }
+    if (!impl_) return;
     impl_->stop = true;
     impl_->closeListen();
-    if (impl_->acceptThread.joinable()) {
+    if (impl_->acceptThread.joinable())
         impl_->acceptThread.join();
-    }
 }
 
 struct PairClient::Impl {
@@ -860,17 +553,18 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
         setErr(err, WSAGetLastError(), "WSAStartup failed");
         return false;
     }
+
     SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == INVALID_SOCKET) {
         setErr(err, WSAGetLastError(), "Cannot create TCP socket");
         return false;
     }
 
-    setSocketTimeout(s, cfg.timeout);
+    setSocketTimeout(s, static_cast<DWORD>(cfg.timeout.count()));
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(cfg.targetPort);
+    addr.sin_port   = htons(cfg.targetPort);
     if (inet_pton(AF_INET, cfg.targetIp.c_str(), &addr.sin_addr) != 1) {
         closesocket(s);
         setErr(err, ERROR_INVALID_ADDRESS, "Invalid target IP");
@@ -893,7 +587,8 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     const std::string clientNonceHex = hexEncode(clientNonce.data(), clientNonce.size());
 
     std::ostringstream hello;
-    hello << "PAIR1 HELLO " << cfg.peerId << " " << roleToString(PairRole::Donor) << " " << clientNonceHex;
+    hello << "PAIR1 HELLO " << cfg.peerId << " "
+          << roleToString(PairRole::Donor) << " " << clientNonceHex;
     if (!sendLine(s, hello.str())) {
         closesocket(s);
         setErr(err, WSAGetLastError(), "Cannot send hello");
@@ -914,19 +609,21 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
         return false;
     }
 
-    const std::string serverPeerId = ch[2];
+    const std::string serverPeerId      = ch[2];
     const std::string serverDisplayName = unescapeToken(ch[3]);
-    const PairRole serverRole = roleFromString(ch[4]);
-    const auto salt = hexDecode(ch[5]);
-    const auto serverNonce = hexDecode(ch[6]);
-    if (!salt || !serverNonce || salt->size() != kSaltSize || serverNonce->size() != kNonceSize) {
+    const PairRole    serverRole        = roleFromString(ch[4]);
+    const auto        salt              = hexDecode(ch[5]);
+    const auto        serverNonce       = hexDecode(ch[6]);
+
+    if (!salt || !serverNonce ||
+        salt->size() != kSaltSize || serverNonce->size() != kNonceSize) {
         closesocket(s);
         setErr(err, ERROR_INVALID_DATA, "Invalid challenge nonce/salt");
         return false;
     }
 
     std::vector<uint8_t> key;
-    const std::string proofMaterial = "C|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
+    const std::string proofMaterial    = "C|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
     const std::string serverProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
 
     if (!cfg.password.empty()) {
@@ -938,7 +635,8 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
         }
         key = *derived;
         const auto proof = hmacSha256(key,
-            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(proofMaterial.data()), proofMaterial.size()));
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(proofMaterial.data()), proofMaterial.size()));
         if (!proof) {
             closesocket(s);
             setErr(err, ERROR_INVALID_DATA, "Cannot compute client proof");
@@ -958,7 +656,8 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
         if (haveTrust) {
             key.assign(trustSecret.begin(), trustSecret.end());
             const auto proof = hmacSha256(key,
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(proofMaterial.data()), proofMaterial.size()));
+                std::span<const uint8_t>(
+                    reinterpret_cast<const uint8_t*>(proofMaterial.data()), proofMaterial.size()));
             if (!proof) {
                 closesocket(s);
                 setErr(err, ERROR_INVALID_DATA, "Cannot compute trust proof");
@@ -1012,7 +711,8 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     }
 
     const auto expectedServerProof = hmacSha256(key,
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(serverProofMaterial.data()), serverProofMaterial.size()));
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(serverProofMaterial.data()), serverProofMaterial.size()));
     if (!expectedServerProof) {
         closesocket(s);
         setErr(err, ERROR_INVALID_DATA, "Cannot verify server proof");
@@ -1026,10 +726,10 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     }
 
     if (outInfo) {
-        outInfo->remotePeerId = serverPeerId;
+        outInfo->remotePeerId      = serverPeerId;
         outInfo->remoteDisplayName = serverDisplayName;
-        outInfo->remoteRole = serverRole;
-        outInfo->remoteIp = cfg.targetIp;
+        outInfo->remoteRole        = serverRole;
+        outInfo->remoteIp          = cfg.targetIp;
     }
 
     closesocket(s);
@@ -1089,12 +789,8 @@ bool DpapiSecretStore::loadSecret(const std::string& key,
     std::array<uint8_t, 512> chunk{};
     while (true) {
         const size_t n = fread(chunk.data(), 1, chunk.size(), f);
-        if (n > 0) {
-            enc.insert(enc.end(), chunk.data(), chunk.data() + n);
-        }
-        if (n < chunk.size()) {
-            break;
-        }
+        if (n > 0) enc.insert(enc.end(), chunk.data(), chunk.data() + n);
+        if (n < chunk.size()) break;
     }
     fclose(f);
 

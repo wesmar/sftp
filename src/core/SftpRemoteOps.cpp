@@ -178,106 +178,130 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         return SFTP_OK;
     }
 
-    if (cs->scponly) {
-        if (!EnsureScpShell(cs)) {
-            bool sockLost = (cs->sock == INVALID_SOCKET) || IsSocketError(cs->sock);
-            int sessErr = cs->session ? cs->session->lastErrno() : -1;
-            if (sockLost || sessErr == LIBSSH2_ERROR_SOCKET_DISCONNECT ||
-                sessErr == LIBSSH2_ERROR_SOCKET_SEND || sessErr == LIBSSH2_ERROR_SOCKET_RECV) {
-                ShowStatus("SCP: session lost, reconnecting...");
-                SftpCloseConnection(cs);
-                Sleep(RECONNECT_SLEEP_MS);
-                if (SftpConnect(cs) != SFTP_OK || !EnsureScpShell(cs)) {
+if (cs->scponly) {
+        // Retry loop in case of silent TCP disconnections (e.g., home.pl)
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            if (!EnsureScpShell(cs)) {
+                bool sockLost = (cs->sock == INVALID_SOCKET) || IsSocketError(cs->sock);
+                int sessErr = cs->session ? cs->session->lastErrno() : -1;
+                if (sockLost || sessErr == LIBSSH2_ERROR_SOCKET_DISCONNECT ||
+                    sessErr == LIBSSH2_ERROR_SOCKET_SEND || sessErr == LIBSSH2_ERROR_SOCKET_RECV) {
+                    ShowStatus("SCP: session lost, reconnecting...");
+                    SftpCloseConnection(cs);
+                    Sleep(RECONNECT_SLEEP_MS);
+                    if (SftpConnect(cs) != SFTP_OK || !EnsureScpShell(cs)) {
+                        if (attempt == 1) { // If this is your second attempt, give up
+                            ShowStatus("SCP listing: no shell");
+                            return SFTP_FAILED;
+                        }
+                        continue; // Try again
+                    }
+                } else {
                     ShowStatus("SCP listing: no shell");
                     return SFTP_FAILED;
                 }
-            } else {
+            }
+
+            ISshChannel* channel = cs->scpShellChannel.get();
+            if (!channel) {
                 ShowStatus("SCP listing: no shell");
                 return SFTP_FAILED;
             }
-        }
 
-        ISshChannel* channel = cs->scpShellChannel.get();
-        if (!channel) {
-            ShowStatus("SCP listing: no shell");
-            return SFTP_FAILED;
-        }
+            cs->scpShellMsgBuf[0] = 0;
+            cs->scpShellErrBuf[0] = 0;
 
-        cs->scpShellMsgBuf[0] = 0;
-        cs->scpShellErrBuf[0] = 0;
+            std::string listTarget = dirStr;
+            if (!listTarget.empty() && listTarget[0] == '/')
+                listTarget = (listTarget.size() == 1) ? "." : listTarget.substr(1);
 
-        std::string listTarget = dirStr;
-        if (!listTarget.empty() && listTarget[0] == '/')
-            listTarget = (listTarget.size() == 1) ? "." : listTarget.substr(1);
+            static unsigned scpListSeq = 1;
+            const unsigned markerSeq = scpListSeq++;
+            std::string beginMarker = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
+            std::string endMarker   = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
 
-        static unsigned scpListSeq = 1;
-        const unsigned markerSeq = scpListSeq++;
-        std::string beginMarker = std::string(kScpListBeginMarker) + "_" + std::to_string(markerSeq);
-        std::string endMarker   = std::string(kScpListEndMarker)   + "_" + std::to_string(markerSeq);
+            std::string command = "echo \"" + beginMarker + "\"; ls -la '" + string_util::ShellQuoteSingle(listTarget) +
+                                  "'; echo \"" + endMarker + "\":$?\n";
 
-        std::string command = "echo \"" + beginMarker + "\"; ls -la '" + string_util::ShellQuoteSingle(listTarget) +
-                              "'; echo \"" + endMarker + "\":$?\n";
+            // Write command
+            bool writeFailed = false;
+            {
+                const auto writeStart = std::chrono::steady_clock::now();
+                size_t written = 0;
+                while (written < command.size()) {
+                    int rc = static_cast<int>(channel->write(command.data() + written, command.size() - written));
+                    if (rc > 0) {
+                        written += rc;
+                        continue;
+                    }
+                    if (rc != LIBSSH2_ERROR_EAGAIN) {
+                        writeFailed = true;
+                        break;
+                    }
+                    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - writeStart).count();
+                    if (elapsed > kScpWriteTimeoutMs) {
+                        writeFailed = true;
+                        break;
+                    }
+                    IsSocketReadable(cs->sock);
+                }
+            }
 
-        // Write command
-        {
-            const auto writeStart = std::chrono::steady_clock::now();
-            size_t written = 0;
-            while (written < command.size()) {
-                int rc = static_cast<int>(channel->write(command.data() + written, command.size() - written));
-                if (rc > 0) {
-                    written += rc;
+            // Instead of immediately throwing an error, we force a restart on the next iteration.
+            if (writeFailed) {
+                CloseScpShell(cs);
+                if (attempt == 0) {
+                    cs->sock = INVALID_SOCKET; // Simulate socket loss
                     continue;
                 }
-                if (rc != LIBSSH2_ERROR_EAGAIN) {
-                    CloseScpShell(cs);
-                    return SFTP_FAILED;
-                }
-                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - writeStart).count();
-                if (elapsed > kScpWriteTimeoutMs) {
-                    CloseScpShell(cs);
-                    return SFTP_FAILED;
-                }
-                IsSocketReadable(cs->sock);
+                return SFTP_FAILED;
             }
-        }
 
-        std::vector<std::string> lines;
-        bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs, beginMarker.c_str());
+            std::vector<std::string> lines;
+            bool gotEnd = ScpReadCommandOutput(cs, endMarker.c_str(), lines, kScpReadTimeoutMs, beginMarker.c_str());
 
-        std::vector<WIN32_FIND_DATAW> entries;
-        for (const auto& line : lines) {
-            if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
-                continue;
-            WIN32_FIND_DATAW fd{};
-            if (ParseScpListingLine(cs, line.c_str(), fd)) {
-                if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+            std::vector<WIN32_FIND_DATAW> entries;
+            for (const auto& line : lines) {
+                if (line.empty() || _strnicmp(line.c_str(), "total ", 6) == 0)
                     continue;
-                entries.push_back(fd);
+                WIN32_FIND_DATAW fd{};
+                if (ParseScpListingLine(cs, line.c_str(), fd)) {
+                    if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+                        continue;
+                    entries.push_back(fd);
+                }
             }
-        }
 
-        if (!gotEnd && entries.empty()) {
-            if (cs->scpShellErrBuf[0]) {
-                std::array<char, sizeof(cs->scpShellErrBuf)> err{};
-                strlcpy(err.data(), cs->scpShellErrBuf, err.size() - 1);
-                StripEscapeSequences(err.data());
-                ShowStatus(err.data());
-            } else {
-                ShowStatus("SCP listing failed: no output or timeout.");
+            if (!gotEnd && entries.empty()) {
+                if (cs->scpShellErrBuf[0]) {
+                    std::array<char, sizeof(cs->scpShellErrBuf)> err{};
+                    strlcpy(err.data(), cs->scpShellErrBuf, err.size() - 1);
+                    StripEscapeSequences(err.data());
+                    ShowStatus(err.data());
+                } else {
+                    ShowStatus("SCP listing failed: no output or timeout.");
+                }
+                CloseScpShell(cs);
+
+                // Instead of immediately throwing an error, try reconnecting.
+                if (attempt == 0) {
+                    cs->sock = INVALID_SOCKET;
+                    continue;
+                }
+                return SFTP_FAILED;
             }
-            CloseScpShell(cs);
-            return SFTP_FAILED;
-        }
 
-        auto scpd = std::make_unique<ScpData>();
-        scpd->magic = kScpDataMagic;
-        auto state = std::make_unique<ScpListState>();
-        state->entries = std::move(entries);
-        scpd->listingState = std::move(state);
-        *davdataptr = scpd.release();
-        wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
-        return SFTP_OK;
+            auto scpd = std::make_unique<ScpData>();
+            scpd->magic = kScpDataMagic;
+            auto state = std::make_unique<ScpListState>();
+            state->entries = std::move(entries);
+            scpd->listingState = std::move(state);
+            *davdataptr = scpd.release();
+            wcslcpy(cs->lastactivepath, remotedir, _countof(cs->lastactivepath) - 1);
+            
+            return SFTP_OK;
+        }
     }
 
     if (!ReconnectSFTPChannelIfNeeded(cs))

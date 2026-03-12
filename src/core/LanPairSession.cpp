@@ -7,6 +7,7 @@
 
 #include "LanPairSession.h"
 #include "LanPair.h"
+#include "LanPairInternal.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -42,184 +43,13 @@
 #define FS_FILE_WRITEERROR  4
 #define FS_FILE_USERABORT   5
 
-// ============================================================
-// Anonymous-namespace helpers (duplicated from LanPair.cpp
-// because those are in an anonymous namespace there)
-// ============================================================
 namespace {
 
-constexpr size_t kNonceSize      = 16;
-constexpr size_t kSaltSize       = 16;
-constexpr size_t kDerivedKeySize = 32;
-constexpr ULONG  kPbkdf2Iters   = 120000;
+// Pull in all shared crypto / socket primitives.
+using namespace lanpair_internal;
 
-// ---------- WSA reference-counted scope ----------
+// ---- role helpers (local: use smb::PairRole with full qualifier) ----
 
-class WsaScope {
-public:
-    WsaScope() {
-        std::lock_guard<std::mutex> lk(mu_);
-        if (refCount_++ == 0) {
-            WSADATA wsa{};
-            ok_ = (WSAStartup(MAKEWORD(2, 2), &wsa) == 0);
-            started_ = ok_;
-        } else {
-            ok_ = started_;
-        }
-    }
-    ~WsaScope() {
-        std::lock_guard<std::mutex> lk(mu_);
-        if (refCount_ == 0) return;
-        if (--refCount_ == 0 && started_) {
-            WSACleanup();
-            started_ = false;
-        }
-    }
-    bool ok() const noexcept { return ok_; }
-private:
-    bool ok_ = false;
-    static inline std::mutex mu_;
-    static inline int  refCount_ = 0;
-    static inline bool started_  = false;
-};
-
-// ---------- crypto helpers ----------
-
-std::string hexEncode(const uint8_t* data, size_t len) {
-    static constexpr char kHex[] = "0123456789ABCDEF";
-    std::string out(len * 2, '\0');
-    for (size_t i = 0; i < len; ++i) {
-        out[2 * i]     = kHex[(data[i] >> 4) & 0x0F];
-        out[2 * i + 1] = kHex[data[i]        & 0x0F];
-    }
-    return out;
-}
-
-std::optional<std::vector<uint8_t>> hexDecode(std::string_view in) {
-    if (in.size() % 2 != 0) return std::nullopt;
-    auto val = [](char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-        return -1;
-    };
-    std::vector<uint8_t> out(in.size() / 2);
-    for (size_t i = 0; i < out.size(); ++i) {
-        int hi = val(in[2 * i]), lo = val(in[2 * i + 1]);
-        if (hi < 0 || lo < 0) return std::nullopt;
-        out[i] = static_cast<uint8_t>((hi << 4) | lo);
-    }
-    return out;
-}
-
-bool randomBytes(uint8_t* out, size_t len) {
-    return BCryptGenRandom(nullptr, out, static_cast<ULONG>(len),
-                           BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
-}
-
-std::optional<std::vector<uint8_t>> hmacSha256(
-    std::span<const uint8_t> key,
-    std::span<const uint8_t> data)
-{
-    BCRYPT_ALG_HANDLE  alg   = nullptr;
-    BCRYPT_HASH_HANDLE hHash = nullptr;
-    DWORD objLen = 0, cb = 0, hashLen = 0;
-
-    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr,
-                                    BCRYPT_ALG_HANDLE_HMAC_FLAG) != 0)
-        return std::nullopt;
-
-    BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH,
-                      reinterpret_cast<PUCHAR>(&objLen), sizeof(objLen), &cb, 0);
-    BCryptGetProperty(alg, BCRYPT_HASH_LENGTH,
-                      reinterpret_cast<PUCHAR>(&hashLen), sizeof(hashLen), &cb, 0);
-
-    std::vector<uint8_t> hashObj(objLen), out(hashLen);
-
-    if (BCryptCreateHash(alg, &hHash, hashObj.data(), objLen,
-                         const_cast<PUCHAR>(key.data()),
-                         static_cast<ULONG>(key.size()), 0) != 0) {
-        BCryptCloseAlgorithmProvider(alg, 0);
-        return std::nullopt;
-    }
-
-    const NTSTATUS h1 = BCryptHashData(hHash,
-                                       const_cast<PUCHAR>(data.data()),
-                                       static_cast<ULONG>(data.size()), 0);
-    const NTSTATUS h2 = BCryptFinishHash(hHash, out.data(),
-                                         static_cast<ULONG>(out.size()), 0);
-    BCryptDestroyHash(hHash);
-    BCryptCloseAlgorithmProvider(alg, 0);
-
-    if (h1 != 0 || h2 != 0) return std::nullopt;
-    return out;
-}
-
-std::optional<std::vector<uint8_t>> deriveKeyPbkdf2(
-    std::string_view password,
-    std::span<const uint8_t> salt,
-    size_t keyLen)
-{
-    if (keyLen == 0) return std::vector<uint8_t>{};
-    const std::vector<uint8_t> passBytes(password.begin(), password.end());
-    if (passBytes.empty()) return std::nullopt;
-
-    constexpr size_t hLen = 32;
-    const size_t blockCount = (keyLen + hLen - 1) / hLen;
-    std::vector<uint8_t> derived;
-    derived.reserve(blockCount * hLen);
-
-    for (size_t block = 1; block <= blockCount; ++block) {
-        std::vector<uint8_t> saltBlock(salt.begin(), salt.end());
-        saltBlock.push_back(static_cast<uint8_t>((block >> 24) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >> 16) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >>  8) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>( block        & 0xFF));
-
-        auto u = hmacSha256(passBytes, saltBlock);
-        if (!u) return std::nullopt;
-        std::vector<uint8_t> t = *u;
-
-        for (ULONG i = 2; i <= kPbkdf2Iters; ++i) {
-            u = hmacSha256(passBytes, std::span<const uint8_t>(u->data(), u->size()));
-            if (!u) return std::nullopt;
-            for (size_t j = 0; j < t.size(); ++j) t[j] ^= (*u)[j];
-        }
-        derived.insert(derived.end(), t.begin(), t.end());
-    }
-    derived.resize(keyLen);
-    return derived;
-}
-
-// Sanitise a peer ID so it can be used as a filename component.
-std::string sanitizeKey(std::string_view key) {
-    std::string out;
-    out.reserve(key.size());
-    for (char c : key) {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-')
-            out.push_back(c);
-        else
-            out.push_back('_');
-    }
-    return out.empty() ? "default" : out;
-}
-
-std::string trustKeyForServer(std::string_view serverPeerId, std::string_view clientPeerId) {
-    return "lanpair_trust_srv_" + sanitizeKey(serverPeerId)
-         + "__" + sanitizeKey(clientPeerId);
-}
-
-std::string trustKeyForClient(std::string_view serverPeerId, std::string_view clientPeerId) {
-    return "lanpair_trust_cli_" + sanitizeKey(serverPeerId)
-         + "__" + sanitizeKey(clientPeerId);
-}
-
-// ---------------------------------------------------------------------------
-// Pre-derive trust keys from shared password and store in DPAPI.
-// Called when a LAN Pair profile is saved.  Both machines save independently
-// using the same password -> same key bytes -> PAIR1 AUTH works without
-// any password exchange at connection time.
-// ---------------------------------------------------------------------------
 std::string roleToString(smb::PairRole role) {
     switch (role) {
     case smb::PairRole::Donor:    return "donor";
@@ -234,78 +64,20 @@ smb::PairRole roleFromString(const std::string& s) {
     return smb::PairRole::Dual;
 }
 
-std::string escapeToken(std::string_view in) {
-    std::ostringstream oss;
-    for (unsigned char c : in) {
-        if (std::isalnum(c) || c == '_' || c == '-' || c == '.') {
-            oss << static_cast<char>(c);
-        } else {
-            oss << '%' << std::uppercase << std::hex;
-            if (c < 16) oss << '0';
-            oss << static_cast<int>(c)
-                << std::nouppercase << std::dec;
-        }
-    }
-    return oss.str();
-}
-
-// ---------- socket helpers ----------
-
-bool setSocketTimeout(SOCKET s, DWORD ms) {
-    return setsockopt(s, SOL_SOCKET, SO_RCVTIMEO,
-                      reinterpret_cast<const char*>(&ms), sizeof(ms)) == 0
-        && setsockopt(s, SOL_SOCKET, SO_SNDTIMEO,
-                      reinterpret_cast<const char*>(&ms), sizeof(ms)) == 0;
-}
-
-bool sendAll(SOCKET s, const uint8_t* data, size_t len) {
-    size_t sent = 0;
-    while (sent < len) {
-        int n = send(s, reinterpret_cast<const char*>(data + sent),
-                     static_cast<int>(len - sent), 0);
-        if (n <= 0) return false;
-        sent += static_cast<size_t>(n);
-    }
-    return true;
-}
+// ---- socket helpers only needed here ----
 
 bool recvAll(SOCKET s, uint8_t* buf, size_t len) {
     size_t got = 0;
     while (got < len) {
-        int n = recv(s, reinterpret_cast<char*>(buf + got),
-                     static_cast<int>(len - got), 0);
+        const int n = recv(s, reinterpret_cast<char*>(buf + got),
+                           static_cast<int>(len - got), 0);
         if (n <= 0) return false;
         got += static_cast<size_t>(n);
     }
     return true;
 }
 
-bool recvLine(SOCKET s, std::string* out, size_t maxLen = 4096) {
-    out->clear();
-    char c = 0;
-    while (out->size() < maxLen) {
-        int n = recv(s, &c, 1, 0);
-        if (n <= 0)    return false;
-        if (c == '\n') return true;
-        if (c != '\r') out->push_back(c);
-    }
-    return false;
-}
-
-bool sendLine(SOCKET s, const std::string& line) {
-    return sendAll(s, reinterpret_cast<const uint8_t*>(line.data()), line.size())
-        && sendAll(s, reinterpret_cast<const uint8_t*>("\n"), 1);
-}
-
-std::vector<std::string> splitBySpace(const std::string& line) {
-    std::istringstream iss(line);
-    std::vector<std::string> parts;
-    for (std::string tok; iss >> tok;)
-        parts.push_back(std::move(tok));
-    return parts;
-}
-
-// ---------- base64 ----------
+// ---- base64 ----
 
 static constexpr char kB64Table[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -344,7 +116,6 @@ std::string b64EncodeStr(const std::string& s) {
 }
 
 std::optional<std::vector<uint8_t>> b64Decode(std::string_view in) {
-    // Build reverse table
     static const uint8_t* kInv = []() -> const uint8_t* {
         static uint8_t t[256];
         for (int i = 0; i < 256; ++i) t[i] = 0xFF;
@@ -353,13 +124,14 @@ std::optional<std::vector<uint8_t>> b64Decode(std::string_view in) {
         t[static_cast<unsigned char>('=')] = 0;
         return t;
     }();
-    // Strip whitespace
+
     std::string stripped;
     stripped.reserve(in.size());
     for (char c : in)
         if (c != '\r' && c != '\n' && c != ' ') stripped.push_back(c);
 
     if (stripped.size() % 4 != 0) return std::nullopt;
+
     std::vector<uint8_t> out;
     out.reserve(stripped.size() / 4 * 3);
     for (size_t i = 0; i < stripped.size(); i += 4) {
@@ -381,11 +153,12 @@ std::string b64DecodeStr(const std::string& in) {
     return std::string(v->begin(), v->end());
 }
 
-// ---------- Wide<->UTF-8 helpers ----------
+// ---- Wide <-> UTF-8 helpers ----
 
 std::string wideToUtf8(LPCWSTR wide) {
     if (!wide || !*wide) return {};
-    int n = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
+    const int n = WideCharToMultiByte(CP_UTF8, 0, wide, -1,
+                                      nullptr, 0, nullptr, nullptr);
     if (n <= 1) return {};
     std::string out(static_cast<size_t>(n - 1), '\0');
     WideCharToMultiByte(CP_UTF8, 0, wide, -1, out.data(), n, nullptr, nullptr);
@@ -394,32 +167,33 @@ std::string wideToUtf8(LPCWSTR wide) {
 
 std::wstring utf8ToWide(const std::string& utf8) {
     if (utf8.empty()) return {};
-    int n = MultiByteToWideChar(CP_UTF8, 0, utf8.data(),
-                                static_cast<int>(utf8.size()), nullptr, 0);
+    const int n = MultiByteToWideChar(CP_UTF8, 0,
+                                      utf8.data(), static_cast<int>(utf8.size()),
+                                      nullptr, 0);
     if (n <= 0) return {};
     std::wstring out(static_cast<size_t>(n), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, utf8.data(),
-                        static_cast<int>(utf8.size()), out.data(), n);
+    MultiByteToWideChar(CP_UTF8, 0,
+                        utf8.data(), static_cast<int>(utf8.size()),
+                        out.data(), n);
     return out;
 }
 
-// ---------- PAIR1 client-side auth (returns open socket + key on success) ----------
+// ---- PAIR1 client-side auth ----
+// Returns an open, authenticated socket plus the shared key on success.
+// On failure, sock == INVALID_SOCKET.
 
 struct AuthResult {
-    SOCKET         sock = INVALID_SOCKET;
+    SOCKET               sock = INVALID_SOCKET;
     std::vector<uint8_t> key;
 };
 
-// Performs full PAIR1 handshake as client.
-// Returns open, authenticated socket (caller owns it) plus the shared key.
-// On failure sock == INVALID_SOCKET.
 AuthResult pair1Connect(
     const std::string& targetIp,
     uint16_t           targetPort,
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    smb::PairError* err) noexcept
+    smb::PairError*    err) noexcept
 {
     AuthResult result;
 
@@ -441,17 +215,16 @@ AuthResult pair1Connect(
     }
 
     if (connect(s, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) {
-        int code = WSAGetLastError();
+        const int code = WSAGetLastError();
         closesocket(s);
         if (err) { err->code = code; err->message = "connect() failed"; }
         return result;
     }
 
-    // Enable TCP keepalive to prevent connection timeout during idle periods
     const BOOL keepAlive = TRUE;
-    setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
+    setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
+               reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
 
-    // Generate client nonce
     std::array<uint8_t, kNonceSize> clientNonce{};
     if (!randomBytes(clientNonce.data(), clientNonce.size())) {
         closesocket(s);
@@ -460,7 +233,6 @@ AuthResult pair1Connect(
     }
     const std::string clientNonceHex = hexEncode(clientNonce.data(), clientNonce.size());
 
-    // Send HELLO
     std::ostringstream hello;
     hello << "PAIR1 HELLO " << localPeerId << " "
           << roleToString(smb::PairRole::Donor) << " " << clientNonceHex;
@@ -470,7 +242,6 @@ AuthResult pair1Connect(
         return result;
     }
 
-    // Receive CHALLENGE
     std::string line;
     if (!recvLine(s, &line)) {
         closesocket(s);
@@ -485,7 +256,6 @@ AuthResult pair1Connect(
     }
 
     const std::string serverPeerId = ch[2];
-    // Validate against expected remote peer id if caller provided one
     if (!remotePeerId.empty() && serverPeerId != remotePeerId) {
         closesocket(s);
         if (err) { err->code = ERROR_ACCESS_DENIED; err->message = "Peer ID mismatch"; }
@@ -501,7 +271,7 @@ AuthResult pair1Connect(
         return result;
     }
 
-    const std::string proofMaterial  = "C|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
+    const std::string proofMaterial    = "C|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
     const std::string srvProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
 
     std::vector<uint8_t> key;
@@ -529,7 +299,6 @@ AuthResult pair1Connect(
         return result;
     }
 
-    // Receive OK / OKTRUST
     if (!recvLine(s, &line)) {
         closesocket(s);
         if (err) { err->code = WSAGetLastError(); err->message = "No OK response"; }
@@ -561,7 +330,6 @@ AuthResult pair1Connect(
         smb::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
     }
 
-    // Verify server proof
     auto expectedSrvProof = hmacSha256(key,
         std::span<const uint8_t>(
             reinterpret_cast<const uint8_t*>(srvProofMaterial.data()),
@@ -578,15 +346,12 @@ AuthResult pair1Connect(
     return result;
 }
 
-// ---------- LAN2 command helpers ----------
+// ---- LAN2 command helpers ----
 
-// Send a single LAN2 command token and an optional base64-encoded path argument.
 bool lan2SendCmd(SOCKET s, const std::string& cmd) {
     return sendLine(s, cmd);
 }
 
-// Read a response line and check its first token.
-// Returns the full split response or empty on failure/error.
 std::vector<std::string> lan2ReadResponse(SOCKET s) {
     std::string line;
     if (!recvLine(s, &line)) return {};
@@ -602,26 +367,27 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
                               const std::string& remotePeerId,
                               const std::string& password) noexcept
 {
+    using namespace lanpair_internal;
+
     std::string combined = localPeerId + "<>" + remotePeerId;
     std::vector<uint8_t> salt(16, 0);
-    auto h = hmacSha256(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7), 
-                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+    auto h = hmacSha256(
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
     if (h && h->size() >= 16) {
-        for(size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
+        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
     } else {
         memcpy(salt.data(), "sftpplug-pair...", 16);
     }
 
     auto key = deriveKeyPbkdf2(password,
-                    std::span<const uint8_t>(salt.data(), salt.size()),
-                    kDerivedKeySize);
+                               std::span<const uint8_t>(salt.data(), salt.size()),
+                               kDerivedKeySize);
     if (!key) return false;
-    const std::string raw(reinterpret_cast<const char*>(key->data()), key->size());
 
-    smb::DpapiSecretStore::saveSecret(
-        trustKeyForClient(remotePeerId, localPeerId), raw, nullptr);
-    smb::DpapiSecretStore::saveSecret(
-        trustKeyForServer(localPeerId, remotePeerId), raw, nullptr);
+    const std::string raw(reinterpret_cast<const char*>(key->data()), key->size());
+    smb::DpapiSecretStore::saveSecret(trustKeyForClient(remotePeerId, localPeerId), raw, nullptr);
+    smb::DpapiSecretStore::saveSecret(trustKeyForServer(localPeerId, remotePeerId), raw, nullptr);
     return true;
 }
 
@@ -630,7 +396,7 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
 // ============================================================
 
 struct LanPairSession::Impl {
-    WsaScope wsa;
+    lanpair_internal::WsaScope wsa;
     SOCKET   sock_       = INVALID_SOCKET;
     bool     connected_  = false;
     int      timeoutMin_ = 0;
@@ -644,30 +410,20 @@ struct LanPairSession::Impl {
 
     void close() noexcept {
         if (sock_ != INVALID_SOCKET) {
-            // Best-effort QUIT
-            sendLine(sock_, "QUIT");
+            sendLine(sock_, "QUIT"); // best-effort
             closesocket(sock_);
             sock_ = INVALID_SOCKET;
         }
         connected_ = false;
     }
 
-    // Helper: send a command line and get the response parts back.
+    // Send a command line and return the response tokens.
     // Returns empty vector on I/O failure or session timeout.
     std::vector<std::string> cmd(const std::string& line) noexcept {
-        if (isTimedOut()) {
-            close();
-            return {};
-        }
-        if (!sendLine(sock_, line)) {
-            close();
-            return {};
-        }
+        if (isTimedOut()) { close(); return {}; }
+        if (!sendLine(sock_, line)) { close(); return {}; }
         std::string resp;
-        if (!recvLine(sock_, &resp)) {
-            close();
-            return {};
-        }
+        if (!recvLine(sock_, &resp)) { close(); return {}; }
         return splitBySpace(resp);
     }
 };
@@ -708,7 +464,6 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
     }
     SFTP_LOG("LAN2", "pair1Connect OK, sending LAN2 HELLO");
 
-    // Upgrade to LAN2 command channel
     if (!sendLine(ar.sock, "LAN2 HELLO")) {
         closesocket(ar.sock);
         if (err) { err->code = WSAGetLastError(); err->message = "Cannot send LAN2 HELLO"; }
@@ -799,15 +554,14 @@ bool LanPairSession::listDirectory(const std::string&     path,
 bool LanPairSession::getFile(const std::string& remotePath,
                              LPCWSTR            localPath,
                              int64_t            /*remoteSize*/,
-                             const FILETIME* ft,
+                             const FILETIME*    ft,
                              bool               overwrite,
                              bool               resume,
-                             int* fsResult) noexcept
+                             int*               fsResult) noexcept
 {
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
 
-    // Determine resume offset
     int64_t offset = 0;
     if (resume) {
         HANDLE hExist = CreateFileW(localPath, GENERIC_READ, FILE_SHARE_READ,
@@ -819,7 +573,6 @@ bool LanPairSession::getFile(const std::string& remotePath,
         }
     }
 
-    // Send GET command
     std::ostringstream req;
     req << "GET " << b64EncodeStr(remotePath) << " " << offset;
     const auto resp = impl_->cmd(req.str());
@@ -831,14 +584,12 @@ bool LanPairSession::getFile(const std::string& remotePath,
     const int64_t dataSize = static_cast<int64_t>(
         std::strtoll(resp[1].c_str(), nullptr, 10));
 
-    // Open local file
     const DWORD createDisp = resume ? OPEN_ALWAYS : (overwrite ? CREATE_ALWAYS : CREATE_NEW);
     HANDLE hLocal = CreateFileW(localPath, GENERIC_WRITE, 0, nullptr,
                                 createDisp, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hLocal == INVALID_HANDLE_VALUE) {
         if (fsResult) *fsResult =
             (GetLastError() == ERROR_FILE_EXISTS) ? FS_FILE_EXISTS : FS_FILE_WRITEERROR;
-        // Server already started sending; drain is impractical - close connection
         impl_->close();
         return false;
     }
@@ -848,7 +599,6 @@ bool LanPairSession::getFile(const std::string& remotePath,
         SetFilePointerEx(hLocal, li, nullptr, FILE_END);
     }
 
-    // Stream data
     constexpr size_t kChunk = 65536;
     std::vector<uint8_t> buf(kChunk);
     int64_t remaining = dataSize;
@@ -872,9 +622,7 @@ bool LanPairSession::getFile(const std::string& remotePath,
         remaining -= static_cast<int64_t>(want);
     }
 
-    if (ok && ft) {
-        SetFileTime(hLocal, nullptr, nullptr, ft);
-    }
+    if (ok && ft) SetFileTime(hLocal, nullptr, nullptr, ft);
     CloseHandle(hLocal);
 
     if (!ok) {
@@ -891,7 +639,7 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
                              const std::string& remotePath,
                              bool               /*overwrite*/,
                              bool               /*resume*/,
-                             int* fsResult) noexcept
+                             int*               fsResult) noexcept
 {
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
@@ -911,7 +659,6 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
     }
     const int64_t fileSize = sz.QuadPart;
 
-    // Send PUT command
     std::ostringstream req;
     req << "PUT " << b64EncodeStr(remotePath) << " " << fileSize;
     const auto resp = impl_->cmd(req.str());
@@ -921,7 +668,6 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
         return false;
     }
 
-    // Stream data
     constexpr size_t kChunk = 65536;
     std::vector<uint8_t> buf(kChunk);
     int64_t remaining = fileSize;
@@ -947,7 +693,6 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
 
     if (!ok) { impl_->close(); return false; }
 
-    // Await DONE from server
     std::string doneResp;
     if (!recvLine(impl_->sock_, &doneResp) || splitBySpace(doneResp)[0] != "DONE") {
         impl_->close();
@@ -985,7 +730,7 @@ bool LanPairSession::rename(const std::string& oldPath,
 // ============================================================
 
 struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
-    WsaScope            wsa;
+    lanpair_internal::WsaScope wsa;
     std::atomic<bool>   running_{false};
     SOCKET              listenSock_ = INVALID_SOCKET;
     std::thread         acceptThread_;
@@ -993,12 +738,10 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     uint16_t            port_         = 45846;
     mutable std::mutex  passwordMu_;
     std::string         password_;
-    
-    // Thread tracking for proper cleanup
-    std::mutex          clientThreadsMu_;
+
+    std::mutex               clientThreadsMu_;
     std::vector<std::thread> clientThreads_;
 
-    // Per-connection server-side peer ID for trust-key lookup.
     static constexpr char kDefaultPeerId[] = "lanfilesrv";
 
     void closeListen() noexcept {
@@ -1007,7 +750,6 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             closesocket(listenSock_);
             listenSock_ = INVALID_SOCKET;
         }
-        // Note: client threads manage their own sockets via shared_from_this
     }
 
     bool authenticateClient(SOCKET s, std::string& clientPeerId) noexcept {
@@ -1018,7 +760,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         if (hello.size() != 5 || hello[0] != "PAIR1" || hello[1] != "HELLO")
             return false;
 
-        clientPeerId             = hello[2];
+        clientPeerId              = hello[2];
         const auto clientNonceHex = hello[4];
         const auto clientNonce    = hexDecode(clientNonceHex);
         if (!clientNonce || clientNonce->size() != kNonceSize) return false;
@@ -1109,9 +851,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             if (cmd == "QUIT") {
                 sendLine(s, "BYE");
                 break;
-            }
-
-            if (cmd == "ROOTS") {
+            } else if (cmd == "ROOTS") {
                 cmdRoots(s);
             } else if (cmd == "LIST" && parts.size() >= 2) {
                 cmdList(s, b64DecodeStr(parts[1]));
@@ -1135,14 +875,12 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         }
     }
 
-    // Bezpieczna normalizacja ścieżki
+    // Safe path normalization — blocks path traversal.
     static std::string normPath(const std::string& p) {
         std::string res = p;
         std::replace(res.begin(), res.end(), '/', '\\');
-        // Zabezpieczenie przed ucieczką z katalogu (Path Traversal)
-        if (res.find("..") != std::string::npos) {
+        if (res.find("..") != std::string::npos)
             return "C:\\INVALID_PATH_TRAVERSAL_DETECTED";
-        }
         size_t i = 0;
         while (i < res.size() && res[i] == '\\') ++i;
         return res.substr(i);
@@ -1160,8 +898,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         std::ostringstream oss;
         oss << "OK " << drives.size();
         sendLine(s, oss.str());
-        for (const auto& d : drives)
-            sendLine(s, d);
+        for (const auto& d : drives) sendLine(s, d);
     }
 
     void cmdList(SOCKET s, const std::string& path) noexcept {
@@ -1180,25 +917,23 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         std::vector<std::string> lines;
         do {
             if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
-                 continue;
+                continue;
 
-            const bool isDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            const int64_t size = isDir ? 0 :
+            const bool    isDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            const int64_t size  = isDir ? 0 :
                 (static_cast<int64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
             const uint64_t ft64 =
                 (static_cast<uint64_t>(fd.ftLastWriteTime.dwHighDateTime) << 32) |
                  fd.ftLastWriteTime.dwLowDateTime;
 
-            std::string nameUtf8 = wideToUtf8(fd.cFileName);
             char attrBuf[16]{};
             sprintf_s(attrBuf, sizeof(attrBuf), "%X", fd.dwFileAttributes);
 
             std::ostringstream entry;
             entry << (isDir ? "D" : "F") << " "
-                  << size << " "
-                  << ft64 << " "
+                  << size << " " << ft64 << " "
                   << attrBuf << " "
-                  << b64EncodeStr(nameUtf8);
+                  << b64EncodeStr(wideToUtf8(fd.cFileName));
             lines.push_back(entry.str());
         } while (FindNextFileW(h, &fd));
         FindClose(h);
@@ -1206,41 +941,27 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         std::ostringstream hdr;
         hdr << "OK " << lines.size();
         sendLine(s, hdr.str());
-        for (const auto& l : lines)
-            sendLine(s, l);
+        for (const auto& l : lines) sendLine(s, l);
     }
 
     void cmdGet(SOCKET s, const std::string& path, int64_t offset) noexcept {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, 0, nullptr);
-        if (h == INVALID_HANDLE_VALUE) {
-            sendLine(s, "ERR not-found");
-            return;
-        }
+        if (h == INVALID_HANDLE_VALUE) { sendLine(s, "ERR not-found"); return; }
 
         LARGE_INTEGER sz{};
-        if (!GetFileSizeEx(h, &sz)) {
-            CloseHandle(h);
-            sendLine(s, "ERR stat-failed");
-            return;
-        }
+        if (!GetFileSizeEx(h, &sz)) { CloseHandle(h); sendLine(s, "ERR stat-failed"); return; }
 
         if (offset > 0) {
             LARGE_INTEGER li{}; li.QuadPart = offset;
             if (!SetFilePointerEx(h, li, nullptr, FILE_BEGIN)) {
-                CloseHandle(h);
-                sendLine(s, "ERR seek-failed");
-                return;
+                CloseHandle(h); sendLine(s, "ERR seek-failed"); return;
             }
         }
 
         const int64_t dataSize = sz.QuadPart - offset;
-        if (dataSize < 0) {
-            CloseHandle(h);
-            sendLine(s, "ERR bad-offset");
-            return;
-        }
+        if (dataSize < 0) { CloseHandle(h); sendLine(s, "ERR bad-offset"); return; }
 
         std::ostringstream resp;
         resp << "OK " << dataSize;
@@ -1249,13 +970,11 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         constexpr size_t kChunk = 65536;
         std::vector<uint8_t> buf(kChunk);
         int64_t remaining = dataSize;
-
         while (remaining > 0) {
             const DWORD want = static_cast<DWORD>(
                 std::min<int64_t>(remaining, static_cast<int64_t>(kChunk)));
             DWORD bytesRead = 0;
-            if (!ReadFile(h, buf.data(), want, &bytesRead, nullptr) || bytesRead == 0)
-                break;
+            if (!ReadFile(h, buf.data(), want, &bytesRead, nullptr) || bytesRead == 0) break;
             if (!sendAll(s, buf.data(), bytesRead)) break;
             remaining -= static_cast<int64_t>(bytesRead);
         }
@@ -1268,6 +987,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (h == INVALID_HANDLE_VALUE) {
             sendLine(s, "ERR open-failed");
+            // Drain the incoming data to keep the connection usable.
             constexpr size_t kChunk = 65536;
             std::vector<uint8_t> discard(kChunk);
             int64_t rem = size;
@@ -1286,7 +1006,6 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         std::vector<uint8_t> buf(kChunk);
         int64_t remaining = size;
         bool ok = true;
-
         while (remaining > 0) {
             const size_t want = static_cast<size_t>(
                 std::min<int64_t>(remaining, static_cast<int64_t>(kChunk)));
@@ -1299,19 +1018,12 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             remaining -= static_cast<int64_t>(want);
         }
         CloseHandle(h);
-
-        if (ok)
-            sendLine(s, "DONE");
-        else
-            sendLine(s, "ERR write-failed");
+        sendLine(s, ok ? "DONE" : "ERR write-failed");
     }
 
     void cmdMkdir(SOCKET s, const std::string& path) noexcept {
         const std::wstring wpath = utf8ToWide(normPath(path));
-        if (CreateDirectoryW(wpath.c_str(), nullptr))
-            sendLine(s, "OK");
-        else
-            sendLine(s, "ERR mkdir-failed");
+        sendLine(s, CreateDirectoryW(wpath.c_str(), nullptr) ? "OK" : "ERR mkdir-failed");
     }
 
     void cmdDel(SOCKET s, const std::string& path) noexcept {
@@ -1329,20 +1041,15 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                           const std::string& newPath) noexcept {
         const std::wstring wold = utf8ToWide(normPath(oldPath));
         const std::wstring wnew = utf8ToWide(normPath(newPath));
-        if (MoveFileExW(wold.c_str(), wnew.c_str(), MOVEFILE_REPLACE_EXISTING))
-            sendLine(s, "OK");
-        else
-            sendLine(s, "ERR rename-failed");
+        sendLine(s, MoveFileExW(wold.c_str(), wnew.c_str(), MOVEFILE_REPLACE_EXISTING)
+                        ? "OK" : "ERR rename-failed");
     }
 
-    // Entry point for each accepted connection (called on its own thread).
     void handleClient(SOCKET client) noexcept {
-        // Enable TCP keepalive to prevent connection timeout during idle periods
         const BOOL keepAlive = TRUE;
-        setsockopt(client, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
-        
-        // Set longer timeout for file operations (5 minutes instead of 30s)
-        setSocketTimeout(client, 300000);
+        setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
+                   reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
+        setSocketTimeout(client, 300000); // 5 minutes for file operations
 
         std::string clientPeerId;
         if (!authenticateClient(client, clientPeerId)) {
@@ -1350,7 +1057,6 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             return;
         }
 
-        // Wait for LAN2 HELLO from client before sending LAN2 READY.
         std::string helloLine;
         if (!recvLine(client, &helloLine)) { closesocket(client); return; }
         const auto hp = splitBySpace(helloLine);
@@ -1359,10 +1065,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             return;
         }
 
-        if (!sendLine(client, "LAN2 READY")) {
-            closesocket(client);
-            return;
-        }
+        if (!sendLine(client, "LAN2 READY")) { closesocket(client); return; }
 
         serveCommands(client);
         closesocket(client);
@@ -1376,7 +1079,6 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                                    reinterpret_cast<sockaddr*>(&from), &fromLen);
             if (client == INVALID_SOCKET) continue;
 
-            // Clean up finished threads before adding new one
             {
                 std::lock_guard<std::mutex> lk(clientThreadsMu_);
                 clientThreads_.erase(
@@ -1385,22 +1087,18 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                     clientThreads_.end());
             }
 
-            // Use shared_from_this to prevent use-after-free
             auto self = shared_from_this();
             std::lock_guard<std::mutex> lk(clientThreadsMu_);
-            clientThreads_.emplace_back([self, client] { 
-                self->handleClient(client); 
+            clientThreads_.emplace_back([self, client] {
+                self->handleClient(client);
             });
         }
     }
-    
-    // Join all client handler threads - called from stop()
+
     void joinClientThreads() noexcept {
         std::lock_guard<std::mutex> lk(clientThreadsMu_);
-        for (auto& t : clientThreads_) {
-            if (t.joinable())
-                t.join();
-        }
+        for (auto& t : clientThreads_)
+            if (t.joinable()) t.join();
         clientThreads_.clear();
     }
 };
@@ -1423,7 +1121,6 @@ bool LanFileServer::start(uint16_t port, smb::PairError* err) noexcept {
     }
 
     impl_->port_ = port;
-    // Use machine hostname as peer ID — must match what discovery broadcasts.
     char host[256] = {};
     gethostname(host, static_cast<int>(sizeof(host) - 1));
     impl_->serverPeerId_ = host[0] ? std::string(host) : Impl::kDefaultPeerId;
@@ -1467,7 +1164,6 @@ void LanFileServer::stop() noexcept {
     impl_->closeListen();
     if (impl_->acceptThread_.joinable())
         impl_->acceptThread_.join();
-    // Join all client handler threads to prevent use-after-free
     impl_->joinClientThreads();
 }
 

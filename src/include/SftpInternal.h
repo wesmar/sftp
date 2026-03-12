@@ -48,17 +48,6 @@ extern const bool SSH_ScpNeedBlockingMode;
 extern const bool SSH_ScpNeedQuote;
 
 // ---------------------------------------------------------------------------
-// Internal SCP channel data (defined in SftpConnection.cpp, used by RemoteOps)
-// ---------------------------------------------------------------------------
-typedef struct {
-    uint32_t magic;
-    ISshChannel *channel;
-    char msgbuf[2048];   // previously received data
-    char errbuf[2048];
-    void* listing_state; // owned by SCP listing path (SftpRemoteOps.cpp)
-} SCP_DATA;
-
-// ---------------------------------------------------------------------------
 // Auth method flags (used in SftpConnection.cpp and SftpAuth.cpp)
 // ---------------------------------------------------------------------------
 constexpr int SSH_AUTH_PASSWORD         = 0x01;
