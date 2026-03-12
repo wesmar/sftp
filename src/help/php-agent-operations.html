@@ -1,0 +1,398 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PHP Agent Operations</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>PHP Agent (HTTP) - Complete Guide</h1>
+
+<p>PHP Agent enables file operations over HTTP when SSH access is unavailable. Ideal for shared hosting environments.</p>
+
+<h2>Overview</h2>
+
+<h3>What is PHP Agent?</h3>
+<ul>
+  <li>Single PHP file (<code>sftp.php</code>) deployed to web server</li>
+  <li>Provides file operations via HTTP API</li>
+  <li>Secure HMAC-SHA256 authentication</li>
+  <li>Supports file listing, upload, download, delete, rename, mkdir</li>
+  <li>No SSH account required - works with web hosting</li>
+</ul>
+
+<h3>Capabilities</h3>
+<ul>
+  <li><b>LIST:</b> Directory listing with file metadata</li>
+  <li><b>STAT:</b> File/directory information</li>
+  <li><b>GET:</b> Download files with range support</li>
+  <li><b>PUT:</b> Upload files with chunked transfer</li>
+  <li><b>DELETE:</b> Remove files</li>
+  <li><b>MKDIR:</b> Create directories (recursive)</li>
+  <li><b>RMDIR:</b> Remove directories</li>
+  <li><b>RENAME:</b> Rename/move files</li>
+  <li><b>HASH:</b> Compute file hashes (SHA256, etc.)</li>
+  <li><b>SHELL_EXEC:</b> Execute shell commands (if enabled)</li>
+</ul>
+
+<h2>Deployment Guide</h2>
+
+<h3>Step 1: Configure Plugin</h3>
+<ol>
+  <li>Open connection dialog</li>
+  <li>Select transfer mode: <b>PHP Agent (HTTP)</b></li>
+  <li>Enter URL: <code>https://example.com/sftp.php</code></li>
+  <li>Enter username (optional, for identification)</li>
+  <li>Enter password (will be used as PSK - Pre-Shared Key)</li>
+  <li>Save session</li>
+</ol>
+
+<h3>Step 2: Generate sftp.php</h3>
+<ol>
+  <li>After saving password, plugin generates <code>sftp.php</code></li>
+  <li>Located in plugin runtime directory (next to plugin DLL): <code>...\\plugins\\wfx\\sftpplug\\sftp.php</code> (build also copies it to <code>build\\bin\\sftp.php</code>)</li>
+  <li>Contains derived authentication constants</li>
+  <li>Ready for upload to server</li>
+</ol>
+
+<h3>Step 3: Upload to Server</h3>
+<ol>
+  <li>Use FTP, control panel, or other method</li>
+  <li>Upload <code>sftp.php</code> to web-accessible location</li>
+  <li>Note the full URL for plugin configuration</li>
+  <li>Ensure file permissions allow execution (755 typical)</li>
+</ol>
+
+<h3>Step 4: Test Connection</h3>
+<ol>
+  <li>Enter URL in plugin: <code>https://example.com/sftp.php</code></li>
+  <li>Click Connect</li>
+  <li>Plugin probes endpoint for capabilities</li>
+  <li>On success, ready for file operations</li>
+</ol>
+
+<h2>Authentication</h2>
+
+<h3>PSK (Pre-Shared Key)</h3>
+<p>Three configuration methods (in order of preference):</p>
+
+<ol>
+  <li><b>Environment Variable (Recommended):</b>
+    <pre>AGENT_PSK=your_secret_key_here</pre>
+    Environment keys checked: <code>TC_SFTP_AGENT_PSK</code>, <code>SFTP_AGENT_PSK</code>, <code>AGENT_PSK</code>
+  </li>
+  <li><b>Constant in sftp.php:</b>
+    <pre>const AGENT_PSK = 'your_secret_key_here';</pre>
+  </li>
+  <li><b>Salted Hash (for deployment):</b>
+    <pre>const AGENT_PSK_SALT = 'random_salt';
+const AGENT_PSK_SHA256 = 'sha256(salt:psk)';</pre>
+    Allows upload-only deployment without knowing plain PSK
+  </li>
+</ol>
+
+<h3>HMAC Authentication</h3>
+<p>Each request includes authentication headers:</p>
+<pre>
+X-SFTP-Auth: legacy_token (optional)
+X-SFTP-TS: timestamp
+X-SFTP-Nonce: random_nonce
+X-SFTP-Signature: HMAC-SHA256(base, psk)
+</pre>
+
+<p>Base string format:</p>
+<pre>
+METHOD\nOPERATION\nPATH\nTIMESTAMP\nNONCE
+</pre>
+
+<h3>Security Features</h3>
+<ul>
+  <li><b>Timestamp validation:</b> Requests expire after 300 seconds</li>
+  <li><b>Nonce replay protection:</b> Each nonce used once</li>
+  <li><b>HMAC-SHA256:</b> Cryptographic signature</li>
+  <li><b>Path traversal protection:</b> Root jail enforced</li>
+</ul>
+
+<h2>URL Format</h2>
+
+<h3>Basic URL</h3>
+<pre>
+https://example.com/sftp.php
+https://example.com/path/to/sftp.php
+https://example.com/sftp.php?path=/subdir
+</pre>
+
+<h3>With Port</h3>
+<pre>
+https://example.com:8443/sftp.php
+</pre>
+
+<h3>Path Parameter</h3>
+<p>Can specify path in URL or via parameter:</p>
+<pre>
+https://example.com/sftp.php?path=files
+https://example.com/sftp.php?path=%2Fvar%2Fwww
+</pre>
+
+<h2>Operations Reference</h2>
+
+<h3>PROBE - Capability Detection</h3>
+<p>Automatic on first connection:</p>
+<pre>
+GET https://example.com/sftp.php?op=PROBE
+
+Response:
+{
+  "ok": true,
+  "agent": { "name": "TC PHP Agent", "version": "1.0.1" },
+  "runtime": { "php_version": "8.2", "sapi": "apache2handler" },
+  "ini": { "upload_max_filesize": "256M", ... },
+  "capabilities": { "upload": true, "download": true, ... }
+}
+</pre>
+
+<h3>Upload Chunk Policy</h3>
+<ul>
+  <li><b>Auto mode:</b> uses <code>capabilities.recommended_chunk_size</code> from PROBE</li>
+  <li><b>Safety clamp:</b> plugin limits Auto to <code>1..64 MB</code></li>
+  <li><b>Fallback:</b> if recommendation is unavailable, Auto uses <code>1 MB</code></li>
+  <li><b>Manual:</b> <code>2 / 4 / 8 / 16 / 32 / 64 MB</code></li>
+</ul>
+
+<h3>LIST - Directory Listing</h3>
+<pre>
+GET https://example.com/sftp.php?op=LIST&path=/subdir
+
+Response (JSON):
+{
+  "ok": true,
+  "path": "subdir",
+  "items": [
+    { "name": "file.txt", "is_dir": false, "size": 1234, "mtime": 1234567890, "perms": "0644" }
+  ]
+}
+
+Response (Plain):
+F\t1234\t1234567890\tbase64(filename)
+D\t0\t1234567890\tbase64(dirname)
+</pre>
+
+<h3>GET - Download File</h3>
+<pre>
+GET https://example.com/sftp.php?op=GET&path=file.txt&offset=0&length=1024
+
+Headers:
+Content-Type: application/octet-stream
+Content-Length: 1024
+X-SFTP-File-Size: 5000
+X-SFTP-Offset: 0
+Accept-Ranges: bytes
+</pre>
+
+<h3>PUT - Upload File</h3>
+<pre>
+POST https://example.com/sftp.php?op=PUT&path=file.txt&offset=0
+
+Headers:
+Content-Type: multipart/form-data or raw POST data
+X-SFTP-Content-SHA256: sha256hash (optional verification)
+
+Response:
+{
+  "ok": true,
+  "path": "file.txt",
+  "written": 1024,
+  "size": 5000,
+  "sha256": "abc123...",
+  "part": true
+}
+</pre>
+
+<h3>FINALIZE - Complete Upload</h3>
+<pre>
+POST https://example.com/sftp.php?op=FINALIZE&path=file.txt&overwrite=1
+
+Response:
+{
+  "ok": true,
+  "path": "file.txt",
+  "size": 5000,
+  "finalized": true
+}
+</pre>
+
+<h3>DELETE - Remove File</h3>
+<pre>
+POST https://example.com/sftp.php?op=DELETE&path=file.txt
+
+Response:
+{ "ok": true, "deleted": true, "path": "file.txt" }
+</pre>
+
+<h3>MKDIR - Create Directory</h3>
+<pre>
+POST https://example.com/sftp.php?op=MKDIR&path=newdir&recursive=1&mode=0775
+
+Response:
+{ "ok": true, "created": true, "path": "newdir" }
+</pre>
+
+<h3>RMDIR - Remove Directory</h3>
+<pre>
+POST https://example.com/sftp.php?op=RMDIR&path=olddir&recursive=0
+
+Response:
+{ "ok": true, "removed": true, "path": "olddir", "recursive": false }
+</pre>
+
+<h3>RENAME - Move/Rename</h3>
+<pre>
+POST https://example.com/sftp.php?op=RENAME&from=old.txt&to=new.txt&overwrite=1
+
+Response:
+{ "ok": true, "renamed": true, "from": "old.txt", "to": "new.txt" }
+</pre>
+
+<h3>HASH - Compute File Hash</h3>
+<pre>
+GET https://example.com/sftp.php?op=HASH&path=file.txt&algo=sha256
+
+Response:
+{ "ok": true, "path": "file.txt", "algo": "sha256", "hash": "abc123..." }
+</pre>
+
+<h3>SHELL_EXEC - Execute Command</h3>
+<pre>
+POST https://example.com/sftp.php?op=SHELL_EXEC&cmd=ls+-la&cwd=/var/www
+
+Response:
+{
+  "ok": true,
+  "cwd": ".",
+  "cwd_abs": "/var/www",
+  "method": "shell_exec",
+  "exit_code": 0,
+  "stdout_b64": "base64_encoded_output",
+  "stderr_b64": "base64_encoded_errors"
+}
+</pre>
+
+<h2>PHP Shell Console</h2>
+
+<h3>Overview</h3>
+<p>Pseudo-terminal interface for command execution:</p>
+<ul>
+  <li>HTTP-based command execution</li>
+  <li>Working directory tracking</li>
+  <li>Command history (Up/Down arrows)</li>
+  <li>Output colorization</li>
+  <li>Basic completion suggestions</li>
+</ul>
+
+<h3>Opening Shell</h3>
+<ol>
+  <li>Connect with PHP Agent or PHP Shell mode</li>
+  <li>Click <b>Shell...</b> button</li>
+  <li>Plugin validates authentication first</li>
+  <li>Console opens with prompt showing host and path</li>
+</ol>
+
+<h3>Shell Features</h3>
+<ul>
+  <li><b>Command history:</b> Up/Down arrows</li>
+  <li><b>Tab completion:</b> Basic filename completion</li>
+  <li><b>Working directory:</b> Displayed in prompt</li>
+  <li><b>Output separation:</b> Command vs output coloring</li>
+</ul>
+
+<h3>Limitations</h3>
+<ul>
+  <li>Not a full PTY/TTY emulator</li>
+  <li>Interactive programs may not work (vi, top)</li>
+  <li>Some terminal escape sequences not handled</li>
+</ul>
+
+<h2>Configuration Options</h2>
+
+<h3>PHP Server Requirements</h3>
+<ul>
+  <li>PHP 7.4 or later (PHP 8.x recommended)</li>
+  <li>File functions enabled</li>
+  <li>Directory functions enabled</li>
+  <li>Hash extension available</li>
+  <li>JSON extension available</li>
+</ul>
+
+<h3>PHP INI Limits</h3>
+<ul>
+  <li><code>upload_max_filesize:</code> Maximum single upload</li>
+  <li><code>post_max_size:</code> Maximum POST data</li>
+  <li><code>max_execution_time:</code> Script timeout</li>
+  <li><code>memory_limit:</code> Memory per request</li>
+</ul>
+
+<h3>Agent Constants</h3>
+<pre>
+AGENT_NAME = 'TC PHP Agent'
+AGENT_VERSION = '1.0.0'
+AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET'
+AGENT_PSK_SALT = ''
+AGENT_PSK_SHA256 = ''
+AGENT_ROOT = __DIR__  (or custom path)
+AGENT_NONCE_TTL = 300
+AGENT_DEFAULT_CHUNK = 262144
+AGENT_MAX_LIST_ITEMS = 20000
+</pre>
+
+<h2>Troubleshooting</h2>
+
+<h3>HTTP 401 - Authentication Failed</h3>
+<ul>
+  <li>Verify password matches PSK in sftp.php</li>
+  <li>Check timestamp synchronization</li>
+  <li>Ensure HMAC signature computed correctly</li>
+</ul>
+
+<h3>HTTP 403 - Path Escape Attempt</h3>
+<ul>
+  <li>Requested path goes outside AGENT_ROOT</li>
+  <li>Adjust AGENT_ROOT if needed</li>
+  <li>Use relative paths within allowed root</li>
+</ul>
+
+<h3>HTTP 404 - Not Found</h3>
+<ul>
+  <li>Verify URL points to actual sftp.php location</li>
+  <li>Check file permissions (executable)</li>
+  <li>Ensure mod_rewrite not interfering</li>
+</ul>
+
+<h3>HTTP 503 - Service Unavailable</h3>
+<ul>
+  <li>AGENT_PSK not configured</li>
+  <li>Set environment variable or constant</li>
+  <li>Deploy properly generated sftp.php</li>
+</ul>
+
+<h3>Upload Fails</h3>
+<ul>
+  <li>Check PHP upload limits (upload_max_filesize)</li>
+  <li>Verify disk space on server</li>
+  <li>Check directory permissions</li>
+  <li>Review PHP error logs</li>
+</ul>
+
+<h3>Download Returns Empty File</h3>
+<ul>
+  <li>Verify file is readable</li>
+  <li>Check open_basedir restrictions</li>
+  <li>Ensure file exists at specified path</li>
+</ul>
+
+<div class="warn">
+  <b>Security Warning:</b> Always use HTTPS for PHP Agent in production. Plain HTTP exposes all traffic including authentication.
+</div>
+
+<div class="note">
+  <b>Tip:</b> Use environment variables for PSK in production. Never commit sftp.php with real secrets to version control.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

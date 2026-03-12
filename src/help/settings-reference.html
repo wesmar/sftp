@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Settings Reference</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Settings Reference (Complete Dialog Guide)</h1>
+
+<h2>Main Connection Dialog</h2>
+<p>The main dialog is accessed via <code>Net Connect</code> (Ctrl+F1) in Total Commander. It contains all connection and transfer settings.</p>
+
+<h3>Connection Section</h3>
+<ul>
+  <li><b>Connect to:</b> 
+    <ul>
+      <li>For SSH/SFTP: Enter hostname (e.g., <code>example.com</code>) or IP address</li>
+      <li>For PHP Agent/Shell: Enter full URL (e.g., <code>https://example.com/sftp.php</code>)</li>
+      <li>Supports custom ports: <code>host:2222</code> or <code>https://host:8443/sftp.php</code></li>
+      <li>IPv6 support: <code>[::1]:22</code></li>
+    </ul>
+  </li>
+  <li><b>Session:</b> Dropdown with saved sessions. Use F7 to create new, F8/Delete to remove.</li>
+  <li><b>User name:</b> SSH username (for SSH modes); optional label in PHP modes (not used for PHP auth)</li>
+  <li><b>Password:</b> 
+    <ul>
+      <li>SSH password authentication</li>
+      <li>PHP Agent HMAC authentication secret</li>
+      <li>Stored encrypted via Windows DPAPI when "Save password" is used</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Authentication Section</h3>
+<ul>
+  <li><b>Use SSH agent (Pageant):</b> 
+    <ul>
+      <li>Automatically tries keys loaded in Pageant</li>
+      <li>Non-intrusive: falls back to other methods if no suitable key</li>
+      <li>Shows detailed log of which keys were tried</li>
+    </ul>
+  </li>
+  <li><b>Public key file:</b> Optional path to public key (.pub, .pem)</li>
+  <li><b>Private key file:</b> 
+    <ul>
+      <li>Accepts PEM format (OpenSSH)</li>
+      <li>Accepts PPK format (PuTTY) - native conversion, no external tool needed</li>
+      <li>Supports encrypted keys with passphrase prompt</li>
+      <li>PPK v2 and v3 formats supported (argon2 for v3)</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Transfer Mode Section</h3>
+<ul>
+  <li><b>Transfer mode dropdown:</b>
+    <ul>
+      <li><code>SSH (SFTP/SCP)</code> - Standard SSH file transfer</li>
+      <li><b>Use SCP for data transfers</b> (checkbox) - SFTP for listing, SCP for transfers</li>
+      <li><b>Use SCP for everything (no SFTP)</b> (checkbox) - Pure SCP mode</li>
+      <li><b>Use shell transfer (for blocked hosts)</b> (checkbox) - Shell command pipeline</li>
+      <li><code>PHP Agent (HTTP)</code> - HTTP-based file operations</li>
+      <li><code>PHP Shell (HTTP)</code> - HTTP pseudo-terminal</li>
+      <li><code>LAN Pair (SMB-like)</code> - direct Windows-to-Windows pairing</li>
+    </ul>
+  </li>
+  <li><b>Compress data with ZLIB:</b> Enable SSH compression (may help on slow links)</li>
+  <li><b>Use shell transfer (for blocked hosts):</b> 
+    <ul>
+      <li>Enables cat/dd/base64 pipeline fallback</li>
+      <li>Use when SCP/SFTP are blocked by server policy</li>
+      <li>Supports resume with base64 alignment (3-byte boundaries)</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>Jump Host</h3>
+<ul>
+  <li><b>Use jump host:</b> Enables ProxyJump / bastion routing for SSH mode</li>
+  <li><b>Jump...</b> Opens dedicated Jump Host configuration dialog</li>
+  <li>Jump Host settings are only active for <code>SSH (SFTP/SCP)</code></li>
+  <li>Jump Host is disabled for PHP Agent, PHP Shell, and LAN Pair modes</li>
+</ul>
+
+<h3>LAN Pair Controls</h3>
+<ul>
+  <li><b>Role:</b> Auto / Receiver / Donor</li>
+  <li><b>Peer:</b> Detected LAN peer dropdown</li>
+  <li><b>Session timeout:</b> Minutes; <code>0</code> means no limit</li>
+  <li><b>Pair...</b> Starts pairing or role negotiation</li>
+</ul>
+
+<h3>Advanced Options</h3>
+<ul>
+  <li><b>Show entire directory listings in log:</b> Debug option for troubleshooting</li>
+  
+  
+  <li><b>Detailed log:</b> Enable verbose logging for troubleshooting</li>
+</ul>
+
+<h3>Character Encoding</h3>
+<ul>
+  <li><b>UTF-8 for filenames:</b> 
+    <ul>
+      <li>Auto-detect: Plugin tries to detect server encoding</li>
+      <li>Force UTF-8: Always use UTF-8 encoding</li>
+      <li>Force ANSI: Use system codepage</li>
+    </ul>
+  </li>
+  <li><b>Text file types:</b> Wildcard patterns for text mode transfers (e.g., <code>*.txt;*.log;*.ini</code>)</li>
+  <li><b>Transfer mode:</b>
+    <ul>
+      <li><b>Binary:</b> Raw byte transfer (default)</li>
+      <li><b>ASCII:</b> Convert line endings (CRLF ? LF)</li>
+      <li><b>Auto:</b> Use wildcard patterns to decide</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Proxy Configuration Dialog</h2>
+<p>Accessed via <b>Proxy...</b> button. Configure network proxy for SSH connections.</p>
+
+<h3>Proxy Types</h3>
+<ul>
+  <li><b>No proxy:</b> Direct connection</li>
+  <li><b>HTTP CONNECT:</b> HTTP proxy using CONNECT method</li>
+  <li><b>SOCKS4a:</b> SOCKS version 4a (supports domain names)</li>
+  <li><b>SOCKS5:</b> SOCKS version 5 (full authentication support)</li>
+  
+</ul>
+
+<h3>Proxy Settings</h3>
+<ul>
+  <li><b>Proxy server:</b> Hostname or IP, optional port (<code>proxy:1080</code>)</li>
+  <li><b>Username:</b> Proxy authentication username</li>
+  <li><b>Password:</b> Proxy authentication password (stored encrypted)</li>
+</ul>
+
+<h3>Proxy Error Messages</h3>
+<ul>
+  <li><code>Connection not allowed</code> - Proxy policy blocks destination</li>
+  <li><code>Network unreachable</code> - Target network not reachable via proxy</li>
+  <li><code>Host unreachable</code> - Specific host not reachable</li>
+  <li><code>Connection refused</code> - Target actively refused connection</li>
+  <li><code>TTL expired</code> - Routing loop or timeout</li>
+  <li><code>Command not supported</code> - Proxy doesn't support requested operation</li>
+  <li><code>Address type not supported</code> - IPv6/hostname not supported by proxy</li>
+</ul>
+
+<h2>Keyboard Shortcuts (Connection Dialog)</h2>
+<ul>
+  <li><code>F7</code> - Create new session (opens "New folder" dialog for naming)</li>
+  <li><code>F8 / Delete</code> - Delete selected session</li>
+  <li><code>Enter</code> - Connect with current settings</li>
+  <li><code>Alt+Enter</code> - Edit selected session properties</li>
+  <li><code>Ctrl+Down</code> - Open session dropdown</li>
+</ul>
+
+<h2>Session Storage</h2>
+<ul>
+  <li>Sessions stored in <code>sftpplug.ini</code> in Total Commander directory</li>
+  <li>Passwords encrypted with Windows DPAPI (user-specific)</li>
+  <li>Import from PuTTY/WinSCP registry available via <b>Import...</b> button</li>
+</ul>
+
+<div class="note">
+  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings. SCP sessions are imported with <code>scponly=1</code> and <code>scpfordata=1</code> flags.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Jump Host / ProxyJump</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Jump Host / ProxyJump</h1>
+
+<p>Jump Host support allows the plugin to reach the target SSH server through another SSH server (bastion host) without using external <code>ssh.exe</code>.</p>
+
+<h2>How it works</h2>
+<ol>
+  <li>TCP connect to the jump host</li>
+  <li>SSH handshake and authentication on the jump host</li>
+  <li>Open a direct TCP tunnel to the target host using SSH direct-tcpip</li>
+  <li>Run the normal target SSH session over that tunnel</li>
+</ol>
+
+<div class="ok">
+  <b>Use case:</b> Servers reachable only from a bastion/jump machine, common in segmented internal networks and production environments.
+</div>
+
+<h2>When to use Jump Host</h2>
+<ul>
+  <li><b>Use it only with SSH (SFTP/SCP)</b></li>
+  <li>Do <b>not</b> use it with PHP Agent</li>
+  <li>Do <b>not</b> use it with PHP Shell</li>
+  <li>Do <b>not</b> use it with LAN Pair</li>
+</ul>
+
+<h2>Main dialog behavior</h2>
+<ul>
+  <li><b>Use jump host</b> and <b>Jump...</b> are enabled only when <b>Transfer = SSH (SFTP/SCP)</b></li>
+  <li>For PHP and LAN Pair modes these controls are intentionally disabled</li>
+  <li>Jump-host settings remain stored in the profile even when the controls are currently disabled</li>
+</ul>
+
+<h2>Jump Host settings</h2>
+<ul>
+  <li><b>Host</b> - bastion hostname or IP</li>
+  <li><b>Port</b> - usually 22</li>
+  <li><b>User</b> - jump-host account</li>
+  <li><b>Password</b> - jump-host password, if used</li>
+  <li><b>Public/Private key</b> - separate key material for the jump host</li>
+  <li><b>Use SSH agent (Pageant)</b> - optional jump-host authentication via Pageant</li>
+</ul>
+
+<h2>Two independent authentication layers</h2>
+<p>Jump Host and target server are separate SSH identities:</p>
+<ul>
+  <li>the jump host can use one user/key/password</li>
+  <li>the target host can use another user/key/password</li>
+  <li>each side has its own fingerprint verification</li>
+</ul>
+
+<h2>Fingerprint handling</h2>
+<ul>
+  <li>Target host fingerprint is handled as usual</li>
+  <li>Jump host fingerprint is stored separately as <code>jumpfingerprint</code></li>
+  <li>On first use or fingerprint change, the plugin asks for confirmation</li>
+</ul>
+
+<h2>INI keys</h2>
+<p>Typical profile keys:</p>
+<pre>[MyServer]
+usejumphost=1
+jumphost=bastion.example.com
+jumpport=22
+jumpuser=ops-user
+jumppubkeyfile=C:\Keys\bastion.pub
+jumpprivkeyfile=C:\Keys\bastion.ppk
+jumpuseagent=1
+jumpfingerprint=AA BB CC DD ...
+</pre>
+
+<h2>Requirements and limits</h2>
+<ul>
+  <li>The jump host must allow direct TCP forwarding / direct-tcpip channels</li>
+  <li>A normal non-root user is sufficient if the SSH server allows this feature</li>
+  <li>Classic HTTP/SOCKS proxies and Jump Host are different layers; do not treat them as the same thing</li>
+</ul>
+
+<h2>Failure cases</h2>
+<ul>
+  <li>Jump host reachable, target unreachable from bastion</li>
+  <li>Authentication works on bastion, but direct-tcpip is disabled by server policy</li>
+  <li>Saved jump-host fingerprint changed</li>
+  <li>Wrong jump-host credentials with correct target credentials (or the reverse)</li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

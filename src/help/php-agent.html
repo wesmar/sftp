@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PHP Agent (HTTP)</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>PHP Agent (HTTP)</h1>
+
+<p>PHP Agent allows transfer operations without SSH account access. Ideal for shared hosting environments where only web access is available.</p>
+
+<h2>How it works</h2>
+<ul>
+  <li>Single PHP file (<code>sftp.php</code>) deployed to web server</li>
+  <li>Plugin communicates via HTTP with HMAC-SHA256 authentication</li>
+  <li>Supports full file operations: list, upload, download, delete, rename, mkdir</li>
+  <li>No SSH daemon needed - works with any PHP-enabled web server</li>
+</ul>
+
+<h2>Quick start</h2>
+<ol>
+  <li>In plugin, select transfer mode: <b>PHP Agent (HTTP)</b></li>
+  <li>Enter URL: <code>https://example.com/sftp.php</code></li>
+  <li>Enter username and password</li>
+  <li>Save session - plugin generates <code>sftp.php</code> with your auth settings</li>
+  <li>Upload <code>sftp.php</code> to your web server</li>
+  <li>Connect - plugin probes endpoint and verifies capabilities</li>
+</ol>
+
+<h2>Deployment flow</h2>
+<ol>
+  <li>Choose transfer mode <code>PHP Agent (HTTP)</code> (or <code>PHP Shell (HTTP)</code>)</li>
+  <li>Enter password in plugin options and save session</li>
+  <li>Plugin updates local <code>sftp.php</code> with generated auth material</li>
+  <li>Upload local <code>sftp.php</code> to server path used in connection URL</li>
+  <li>Test connection from plugin</li>
+</ol>
+
+<h2>URL format</h2>
+<pre>
+https://example.com/sftp.php
+https://example.com/path/to/sftp.php
+https://example.com:8443/sftp.php
+</pre>
+
+<h2>Authentication</h2>
+<h3>Client side (Total Commander)</h3>
+<ul>
+  <li>Password stored encrypted with DPAPI in <code>sftpplug.ini</code></li>
+  <li>Used to compute HMAC-SHA256 signatures for each request</li>
+  <li>Timestamp and nonce prevent replay attacks</li>
+</ul>
+
+<h3>Server side (sftp.php)</h3>
+<ul>
+  <li>PSK (Pre-Shared Key) configured via environment variable or constant</li>
+  <li>Optional: Salted hash for deployment without exposing plain PSK</li>
+  <li>HMAC verification on every request</li>
+</ul>
+
+<h2>Probe endpoint</h2>
+<p>The plugin probes endpoint capabilities before full use:</p>
+<ul>
+  <li>PHP version detection</li>
+  <li>INI limits (upload_max_filesize, memory_limit, etc.)</li>
+  <li>Recommended upload chunk size (<code>capabilities.recommended_chunk_size</code>)</li>
+  <li>Available operations (upload, download, shell_exec, etc.)</li>
+  <li>Filesystem permissions</li>
+</ul>
+
+<h2>Capabilities</h2>
+<ul>
+  <li><b>LIST:</b> Directory listing with metadata (name, size, mtime, permissions)</li>
+  <li><b>STAT:</b> File/directory information</li>
+  <li><b>GET:</b> Download with range support (resume)</li>
+  <li><b>PUT:</b> Upload with chunked transfer</li>
+  <li><b>DELETE:</b> Remove files</li>
+  <li><b>MKDIR:</b> Create directories (recursive)</li>
+  <li><b>RMDIR:</b> Remove directories</li>
+  <li><b>RENAME:</b> Rename/move files</li>
+  <li><b>HASH:</b> Compute file hashes (SHA256, etc.)</li>
+  <li><b>SHELL_EXEC:</b> Execute shell commands (if enabled on server)</li>
+</ul>
+
+<h2>PHP Shell Console</h2>
+<p>For servers with shell_exec enabled:</p>
+<ul>
+  <li>HTTP pseudo-terminal for command execution</li>
+  <li>Working directory tracking</li>
+  <li>Command history (Up/Down)</li>
+  <li>Basic completion suggestions</li>
+  <li>Colored output separation</li>
+</ul>
+<p>Access via <b>Shell...</b> button after connecting.</p>
+
+<h2>Security considerations</h2>
+<ul>
+  <li><b>Always use HTTPS</b> in production - plain HTTP exposes all traffic</li>
+  <li>PSK stored as salted hash option for deployment</li>
+  <li>Path traversal protection (root jail)</li>
+  <li>Timestamp validation (300 second window)</li>
+  <li>Nonce replay protection</li>
+</ul>
+
+<h2>Server requirements</h2>
+<ul>
+  <li>PHP 7.4 or later (PHP 8.x recommended)</li>
+  <li>File functions enabled (fopen, fread, fwrite, etc.)</li>
+  <li>Directory functions enabled (opendir, readdir, etc.)</li>
+  <li>Hash extension available</li>
+  <li>JSON extension available</li>
+  <li>For shell exec: shell_exec/proc_open not in disable_functions</li>
+</ul>
+
+<h2>PHP INI limits</h2>
+<p>Be aware of server PHP configuration:</p>
+<ul>
+  <li><code>upload_max_filesize</code> - Maximum single upload size</li>
+  <li><code>post_max_size</code> - Maximum POST data size</li>
+  <li><code>max_execution_time</code> - Script timeout</li>
+  <li><code>memory_limit</code> - Memory per request</li>
+  <li><code>open_basedir</code> - Directory restrictions</li>
+</ul>
+
+<h2>Chunk Selection (PHP Agent Upload)</h2>
+<ul>
+  <li><b>Auto:</b> Plugin reads <code>recommended_chunk_size</code> from PROBE and applies safety clamp <code>1..64 MB</code></li>
+  <li><b>Auto fallback:</b> When recommendation is missing/unavailable, plugin uses <code>1 MB</code></li>
+  <li><b>Manual options:</b> <code>2 / 4 / 8 / 16 / 32 / 64 MB</code></li>
+</ul>
+
+<h2>Troubleshooting</h2>
+<ul>
+  <li><b>401 Unauthorized:</b> Password doesn't match PSK, check sftp.php deployment</li>
+  <li><b>404 Not Found:</b> URL incorrect or sftp.php not at that path</li>
+  <li><b>503 Service Unavailable:</b> PSK not configured in sftp.php</li>
+  <li><b>500 Internal Error:</b> Check PHP error logs, file permissions</li>
+  <li><b>Upload fails:</b> Check upload_max_filesize, post_max_size, disk space</li>
+</ul>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="php-agent-operations.html">PHP Agent Operations Reference</a> - Complete API documentation</li>
+  <li><a href="php-shell.html">PHP Shell Console</a> - Terminal interface guide</li>
+  <li><a href="security.html">Security Model</a> - Security best practices</li>
+  <li><a href="troubleshooting-advanced.html">Advanced Troubleshooting</a> - PHP Agent issues</li>
+</ul>
+
+<div class="note">
+  <b>Tip:</b> For production deployment, set PSK via environment variable (TC_SFTP_AGENT_PSK) rather than editing sftp.php directly.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

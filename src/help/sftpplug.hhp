@@ -1,0 +1,32 @@
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=sftpplug.chm
+Contents file=sftpplug.hhc
+Index file=sftpplug.hhk
+Default topic=index.html
+Display compile progress=No
+Full-text search=Yes
+Language=0x409 English (United States)
+Title=SFTPplug Help - Comprehensive Guide
+
+[FILES]
+index.html
+quickstart.html
+settings-reference.html
+proxy-configuration.html
+encoding.html
+sessions.html
+authentication.html
+transfer-modes.html
+lan-pair.html
+jump-host.html
+shell-fallback.html
+shell-commands.html
+php-agent.html
+php-agent-operations.html
+php-shell.html
+import-migration.html
+security.html
+troubleshooting.html
+troubleshooting-advanced.html
+assets/style.css

@@ -1,0 +1,10 @@
+body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 20px; color: #111; background: #fff; }
+h1, h2, h3 { color: #0b4f9c; }
+code { background: #f1f4f8; padding: 1px 4px; border-radius: 3px; }
+pre { background: #f6f8fa; padding: 10px; border: 1px solid #d0d7de; overflow-x: auto; }
+.note { border-left: 4px solid #0b4f9c; padding: 8px 12px; background: #f3f8ff; }
+.warn { border-left: 4px solid #b00020; padding: 8px 12px; background: #fff5f5; }
+.ok { border-left: 4px solid #137333; padding: 8px 12px; background: #f2fff5; }
+.small { color: #666; font-size: 0.92em; }
+a { color: #0b4f9c; }
+ul li { margin-bottom: 4px; }

@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Shell Fallback</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Shell Fallback (cat/dd/base64)</h1>
+
+<p>This plugin includes shell-based transfer strategies for servers where SFTP/SCP are restricted or unreliable.</p>
+
+<h2>Why this matters</h2>
+<ul>
+  <li>Some hosts allow shell commands but block normal SFTP/SCP channels</li>
+  <li>Some tools (including standard clients) fail there; plugin can continue using shell pipelines</li>
+  <li>Shell fallback can succeed where typical tools often fail</li>
+</ul>
+
+<h2>Implemented paths</h2>
+<ul>
+  <li><b>Raw shell transfer:</b> <code>cat</code> stream paths for direct data movement</li>
+  <li><b>dd block transfer:</b> Controlled block-size transfers with offset support</li>
+  <li><b>Base64 chunk transfer:</b> Robust fallback for restrictive environments</li>
+  <li><b>Resume alignment:</b> Base64 resume aligns to 3-byte boundaries to keep integrity</li>
+  <li><b>SCP shell mode:</b> SCP protocol over shell channel</li>
+</ul>
+
+<h2>Commands used</h2>
+<p>The plugin uses standard Unix commands:</p>
+<ul>
+  <li><code>cat</code> - Raw file streaming</li>
+  <li><code>dd</code> - Block-level copy with offset</li>
+  <li><code>base64</code> - Encoding for text-only channels</li>
+  <li><code>ls</code>, <code>mkdir</code>, <code>rm</code>, <code>mv</code> - File operations</li>
+  <li><code>stat</code> - File metadata</li>
+</ul>
+
+<h2>When to enable</h2>
+<ul>
+  <li>Enable <code>Use shell transfer (for blocked hosts)</code> when SCP/SFTP fail due to host policy</li>
+  <li>Use together with SCP settings depending on host behavior</li>
+  <li>For maximum force behavior, use shell transfer force workflow</li>
+  <li>SFTP subsystem unavailable errors</li>
+  <li>SCP permission or protocol errors</li>
+</ul>
+
+<h2>Transfer methods</h2>
+
+<h3>Method 1: Raw cat</h3>
+<pre>
+Download: cat /remote/file.txt
+Upload:   cat > /remote/file.txt
+</pre>
+<p>Fast, no encoding overhead. Best for simple cases.</p>
+
+<h3>Method 2: dd with blocks</h3>
+<pre>
+Download: dd if=/remote/file.txt bs=16384 skip=N
+Upload:   dd of=/remote/file.txt bs=16384 seek=N conv=notrunc
+</pre>
+<p>Precise offset control for resume operations.</p>
+
+<h3>Method 3: Base64 encoding</h3>
+<pre>
+Download: base64 -w 0 /remote/file.txt
+Upload:   base64 -d > /remote/file.txt
+</pre>
+<p>Most robust - works through any text-only channel. 33% size overhead.</p>
+
+<h2>Performance considerations</h2>
+<ul>
+  <li><b>Raw cat:</b> Fastest, no overhead</li>
+  <li><b>dd:</b> Moderate overhead, good for resume</li>
+  <li><b>Base64:</b> 33% size increase, encoding/decoding CPU cost</li>
+  <li>Plugin auto-selects best method based on server capabilities</li>
+</ul>
+
+<h2>Security notes</h2>
+<ul>
+  <li>Filenames properly shell-escaped</li>
+  <li>Path traversal prevented</li>
+  <li>Commands executed within user's permission scope</li>
+</ul>
+
+<div class="warn">
+  <b>Note:</b> Shell fallback prioritizes compatibility over terminal semantics. Some interactive features may not work.
+</div>
+
+<h2>See also</h2>
+<ul>
+  <li><a href="shell-commands.html">Shell Command Reference</a> - Detailed command documentation</li>
+  <li><a href="transfer-modes.html">Transfer Modes Decision Guide</a></li>
+  <li><a href="troubleshooting-advanced.html">Advanced Troubleshooting</a></li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

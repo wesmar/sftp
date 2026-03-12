@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Character Encoding</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Character Encoding and Codepages</h1>
+
+<p>The plugin handles character encoding for filenames and file contents. Proper encoding settings ensure correct display of non-ASCII characters.</p>
+
+<h2>Filename Encoding</h2>
+
+<h3>UTF-8 Detection</h3>
+<p>The plugin can auto-detect server filename encoding:</p>
+<ul>
+  <li><b>Auto-detect:</b> Plugin tries UTF-8 first, falls back to ANSI if needed</li>
+  <li><b>Force UTF-8:</b> Always interpret filenames as UTF-8</li>
+  <li><b>Force ANSI:</b> Use system codepage (e.g., Windows-1250, Windows-1251)</li>
+</ul>
+
+<h3>Supported Codepages</h3>
+<p>For ANSI mode, the following codepages are supported:</p>
+<ul>
+  <li><b>Windows:</b> 1250 (Central European), 1251 (Cyrillic), 1252 (Western), 1253 (Greek), 1254 (Turkish), 1255 (Hebrew), 1256 (Arabic), 1257 (Baltic), 1258 (Vietnamese)</li>
+  <li><b>Asian:</b> 932 (Japanese), 936 (Simplified Chinese), 949 (Korean), 950 (Traditional Chinese)</li>
+  <li><b>Other:</b> 437 (DOS US), 850 (DOS Multilingual), 874 (Thai), 20866 (KOI8-R)</li>
+</ul>
+
+<h2>Transfer Mode</h2>
+
+<h3>Binary Mode</h3>
+<p>Raw byte transfer without modification. Use for:</p>
+<ul>
+  <li>Executable files</li>
+  <li>Archives (ZIP, RAR, 7z)</li>
+  <li>Images, audio, video</li>
+  <li>Most modern text files (UTF-8, UTF-16)</li>
+</ul>
+
+<h3>ASCII Mode</h3>
+<p>Converts line endings during transfer:</p>
+<ul>
+  <li>Upload: LF → CRLF (Unix → Windows)</li>
+  <li>Download: CRLF → LF (Windows → Unix)</li>
+  <li>Use for: Plain text files, scripts, configs</li>
+</ul>
+
+<h3>Auto Mode</h3>
+<p>Uses wildcard patterns to determine transfer mode automatically.</p>
+
+<h2>Text File Type Patterns</h2>
+<p>Configure which files use ASCII mode:</p>
+<ul>
+  <li>Default patterns: <code>*.txt;*.log;*.ini;*.cfg;*.xml;*.json</code></li>
+  <li>Multiple patterns separated by semicolons</li>
+  <li>Wildcards supported: <code>*</code> (any), <code>?</code> (single char)</li>
+  <li>Case-insensitive matching</li>
+</ul>
+
+<h3>Pattern Examples</h3>
+<pre>
+*.txt;*.log;*.ini          - Common text files
+*.c;*.h;*.cpp;*.hpp        - Source code files
+*.md;*.rst;*.adoc          - Documentation files
+*.htm;*.html;*.css;*.js    - Web files
+</pre>
+
+<h2>Line Ending Detection</h2>
+<p>The plugin can auto-detect line ending format:</p>
+<ul>
+  <li><b>LF (Unix):</b> 0x0A - Linux, macOS, modern Windows tools</li>
+  <li><b>CRLF (Windows):</b> 0x0D 0x0A - Traditional Windows</li>
+  <li><b>CR (Classic Mac):</b> 0x0D - Legacy Mac (pre-OS X)</li>
+</ul>
+
+<h2>UTF-8 BOM Handling</h2>
+<p>The plugin preserves UTF-8 BOM (Byte Order Mark) during transfers:</p>
+<ul>
+  <li>BOM detected at file start</li>
+  <li>Preserved during binary transfer</li>
+  <li>Handled correctly in ASCII mode</li>
+</ul>
+
+<h2>Unicode in Paths</h2>
+<p>Full Unicode support for:</p>
+<ul>
+  <li>Local paths (Windows UTF-16)</li>
+  <li>Remote paths (UTF-8 or configured codepage)</li>
+  <li>Session names (stored in INI as UTF-8)</li>
+</ul>
+
+<h2>Common Issues</h2>
+
+<h3>Garbled filenames after transfer</h3>
+<ul>
+  <li>Check UTF-8 setting matches server configuration</li>
+  <li>Try forcing UTF-8 or forcing ANSI</li>
+  <li>Verify correct codepage for ANSI mode</li>
+</ul>
+
+<h3>Text files have wrong line endings</h3>
+<ul>
+  <li>Ensure file matches text pattern for ASCII mode</li>
+  <li>Check if file is actually UTF-16 (needs binary)</li>
+  <li>Use binary mode for mixed-encoding files</li>
+</ul>
+
+<h3>Asian characters display incorrectly</h3>
+<ul>
+  <li>Use UTF-8 mode if server supports it</li>
+  <li>Select correct Asian codepage (932/936/949/950)</li>
+  <li>Ensure system has appropriate fonts installed</li>
+</ul>
+
+<div class="note">
+  <b>Best practice:</b> Modern servers typically use UTF-8. Start with UTF-8 auto-detect, then adjust if you see encoding issues.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

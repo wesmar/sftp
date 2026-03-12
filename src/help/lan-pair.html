@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>LAN Pair</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>LAN Pair (SMB-like)</h1>
+
+<p>LAN Pair is a Windows-to-Windows transfer mode for direct local-network pairing without relying on the system SMB stack. It is designed for practical file exchange between trusted machines on the same network.</p>
+
+<h2>What LAN Pair is for</h2>
+<ul>
+  <li>Quick transfer between two Windows machines on the same LAN</li>
+  <li>Cases where classic SMB pairing is inconvenient or blocked by local policy</li>
+  <li>Direct plugin-managed sessions inside Total Commander</li>
+</ul>
+
+<h2>What it is not</h2>
+<ul>
+  <li>It is not classic Windows file sharing</li>
+  <li>It does not enumerate normal SMB shares</li>
+  <li>It is not routed through SSH, SFTP, PHP Agent, or PHP Shell</li>
+</ul>
+
+<h2>Roles</h2>
+<ul>
+  <li><b>Auto</b> - discovery/listen mode; role is chosen by the user when a peer is detected</li>
+  <li><b>Receiver</b> - waits for an incoming paired client</li>
+  <li><b>Donor</b> - connects to the detected receiver</li>
+</ul>
+
+<div class="note">
+  <b>Important:</b> Auto mode does not silently decide roles for the user. When a matching peer is found, the plugin asks which role should be used.
+</div>
+
+<h2>Basic workflow</h2>
+<ol>
+  <li>Create or edit a session and set <b>Transfer = LAN Pair (SMB-like)</b>.</li>
+  <li>Set the session name. This name is also used as the visible peer label.</li>
+  <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b> in the role dropdown.</li>
+  <li>Optional: set <b>Session timeout</b> in minutes. <code>0</code> means no limit.</li>
+  <li>Click <b>Pair...</b>.</li>
+  <li>When the peer is found, confirm the role and continue.</li>
+</ol>
+
+<h2>Session timeout</h2>
+<ul>
+  <li><code>0</code> = no timeout</li>
+  <li><code>&gt;0</code> = idle/session timeout in minutes</li>
+  <li>The timeout is stored per session as <code>lanpairtimeout</code> in <code>sftpplug.ini</code></li>
+  <li>Timeout is checked between operations; active transfers are not force-aborted mid-stream</li>
+</ul>
+
+<h2>Saved settings</h2>
+<p>Typical LAN Pair session keys in <code>sftpplug.ini</code>:</p>
+<pre>[MyLAN]
+transfermode=3
+server=lanpair://peer/WORKSTATION-01
+lanpairrole=0
+lanpairpeer=WORKSTATION-01
+lanpairtimeout=0
+</pre>
+
+<h2>UI behavior</h2>
+<ul>
+  <li>In LAN Pair mode, SSH-specific controls are disabled</li>
+  <li>Key-file fields and Jump Host controls are not used</li>
+  <li>The lower permissions block is replaced by the LAN Pair session timeout field</li>
+</ul>
+
+<h2>Operational notes</h2>
+<ul>
+  <li>LAN Pair uses its own TCP/UDP discovery/session path</li>
+  <li>It does not require PHP, SSH, Pageant, or external SMB mapping</li>
+  <li>Resume support and chunked transfer behavior depend on the LAN Pair session engine, not on SFTP/SCP rules</li>
+</ul>
+
+<h2>Troubleshooting hints</h2>
+<ul>
+  <li>If peers do not appear, check whether both machines are on the same network segment</li>
+  <li>Discovery problems are separate from normal TCP connectivity</li>
+  <li>If classic SMB works but LAN Pair discovery does not, investigate UDP/broadcast visibility rather than filesystem permissions</li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Quick Start</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Quick Start</h1>
+<ol>
+  <li>Open connection dialog and enter host/URL.</li>
+  <li>Set username and authentication (password or key).</li>
+  <li>Choose transfer mode based on host capabilities.</li>
+  <li>Save named session and connect.</li>
+</ol>
+
+<h2>Three common scenarios</h2>
+<h3>A) Normal SSH server</h3>
+<ul>
+  <li>Transfer mode: SSH default.</li>
+  <li>Optional: Pageant or PEM/PPK key.</li>
+</ul>
+
+<h3>B) Restricted SSH host (SFTP/SCP issues)</h3>
+<ul>
+  <li>Start with SCP-for-data, then SCP-only if needed.</li>
+  <li>Enable shell transfer fallback for stubborn hosts.</li>
+</ul>
+
+<h3>C) Hosting without SSH account</h3>
+<ul>
+  <li>Use PHP Agent (HTTP).</li>
+  <li>Upload generated <code>sftp.php</code> and connect by URL.</li>
+</ul>
+
+<h3>D) SSH server only reachable through bastion</h3>
+<ul>
+  <li>Keep transfer mode as <b>SSH (SFTP/SCP)</b>.</li>
+  <li>Enable <b>Use jump host</b> and configure the bastion in <b>Jump...</b>.</li>
+  <li>Authenticate to jump host and target host independently.</li>
+</ul>
+
+<h3>E) Two Windows machines on the same LAN</h3>
+<ul>
+  <li>Use <b>LAN Pair (SMB-like)</b>.</li>
+  <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b>.</li>
+  <li>Click <b>Pair...</b> and confirm the role when the peer is found.</li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

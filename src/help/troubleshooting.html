@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Troubleshooting</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Troubleshooting</h1>
+
+<h2>Wrong credentials for PHP Agent</h2>
+<ul>
+  <li>Verify password in connection options.</li>
+  <li>Re-save session to regenerate local <code>sftp.php</code>.</li>
+  <li>Upload regenerated <code>sftp.php</code> again.</li>
+</ul>
+
+<h2>PHP Agent endpoint not found (HTTP 404)</h2>
+<ul>
+  <li>Check URL path and filename.</li>
+  <li>Ensure server URL points to uploaded <code>sftp.php</code>.</li>
+</ul>
+
+<h2>PHP Agent not configured (HTTP 503)</h2>
+<ul>
+  <li>Server script has no valid auth constants/environment values.</li>
+  <li>Deploy freshly generated script from plugin directory.</li>
+</ul>
+
+<h2>LIST/GET/PUT failures</h2>
+<ul>
+  <li>Check server <code>open_basedir</code>, upload limits, and file permissions.</li>
+  <li>Verify current working path and root restrictions.</li>
+  <li>Enable detailed log for diagnostics.</li>
+</ul>
+
+<h2>CHM does not open</h2>
+<ul>
+  <li>If file comes from internet, open file properties and click <code>Unblock</code>.</li>
+  <li>Keep <code>sftpplug.chm</code> local, next to plugin DLL.</li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

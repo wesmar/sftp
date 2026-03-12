@@ -1,0 +1,35 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD><meta name="GENERATOR" content="SFTPplug"></HEAD><BODY>
+<UL>
+  <LI><OBJECT type="text/sitemap"><param name="Name" value="SFTPplug Help"><param name="Local" value="index.html"></OBJECT>
+  <UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Quick Start"><param name="Local" value="quickstart.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Settings Reference"><param name="Local" value="settings-reference.html"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Proxy Configuration"><param name="Local" value="proxy-configuration.html"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Character Encoding"><param name="Local" value="encoding.html"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Session Management"><param name="Local" value="sessions.html"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Authentication Methods"><param name="Local" value="authentication.html"></OBJECT>
+    </UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Transfer Modes"><param name="Local" value="transfer-modes.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="LAN Pair"><param name="Local" value="lan-pair.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Jump Host / ProxyJump"><param name="Local" value="jump-host.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Shell Fallback"><param name="Local" value="shell-fallback.html"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Shell Command Reference"><param name="Local" value="shell-commands.html"></OBJECT>
+    </UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Agent (HTTP)"><param name="Local" value="php-agent.html"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Agent Operations"><param name="Local" value="php-agent-operations.html"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="PHP Shell Console"><param name="Local" value="php-shell.html"></OBJECT>
+    </UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Import from PuTTY / WinSCP"><param name="Local" value="import-migration.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Security Model"><param name="Local" value="security.html"></OBJECT>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Troubleshooting"><param name="Local" value="troubleshooting.html"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Advanced Troubleshooting"><param name="Local" value="troubleshooting-advanced.html"></OBJECT>
+    </UL>
+  </UL>
+</UL>
+</BODY></HTML>

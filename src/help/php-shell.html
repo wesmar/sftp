@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>PHP Shell Console</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>PHP Shell Console</h1>
+
+<p>Console-style pseudo-terminal over HTTP for remote command execution through <code>sftp.php</code>.</p>
+
+<h2>Features</h2>
+<ul>
+  <li>Prompt with host and working directory.</li>
+  <li>Command history (Up/Down).</li>
+  <li>Basic completion and list suggestions.</li>
+  <li>Colored output: prompt/command/output separation.</li>
+</ul>
+
+<h2>Open behavior</h2>
+<p>The <code>Shell...</code> button validates PHP auth first. On auth errors, console does not open and an explicit error is shown.</p>
+
+<h2>Known limits</h2>
+<ul>
+  <li>This is not a full PTY/TTY emulator.</li>
+  <li>Some terminal-native behaviors may differ from PuTTY/OpenSSH shell.</li>
+</ul>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

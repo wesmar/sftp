@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SFTPplug Help</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <h1>SFTPplug Help</h1>
+  <p class="small">Comprehensive manual for Total Commander SFTP/SCP/Shell/PHP Agent/LAN Pair/Jump Host plugin.</p>
+
+  <div class="note">
+    <b>Scope:</b> This help covers the complete plugin functionality: SSH authentication (password, public key, Pageant), SFTP/SCP transfer modes, shell fallback for blocked hosts, PHP Agent for HTTP-based file operations, LAN Pair, Jump Host (ProxyJump), proxy configuration, session management, and advanced troubleshooting.
+  </div>
+
+  <h2>Main Sections</h2>
+  
+  <h3>Getting Started</h3>
+  <ul>
+    <li><a href="quickstart.html">Quick Start</a> - Connect in three steps</li>
+    <li><a href="settings-reference.html">Settings Reference</a> - Complete dialog guide</li>
+    <li><a href="transfer-modes.html">Transfer Modes Decision Guide</a> - Choose the right mode</li>
+    <li><a href="lan-pair.html">LAN Pair</a> - Windows-to-Windows direct pairing</li>
+    <li><a href="jump-host.html">Jump Host / ProxyJump</a> - Reach target SSH through bastion host</li>
+  </ul>
+
+  <h3>Authentication &amp; Security</h3>
+  <ul>
+    <li><a href="authentication.html">Authentication Methods</a> - Password, keys, Pageant</li>
+    <li><a href="security.html">Security Model</a> - Encryption, credential handling</li>
+    <li><a href="proxy-configuration.html">Proxy Configuration</a> - HTTP, SOCKS proxy setup</li>
+  </ul>
+
+  <h3>Transfer Methods</h3>
+  <ul>
+    <li><a href="shell-fallback.html">Shell Fallback Overview</a> - When SFTP/SCP fail</li>
+    <li><a href="shell-commands.html">Shell Command Reference</a> - cat, dd, base64 details</li>
+    <li><a href="php-agent.html">PHP Agent (HTTP)</a> - File operations over HTTP</li>
+    <li><a href="php-agent-operations.html">PHP Agent Operations</a> - Complete API reference</li>
+    <li><a href="php-shell.html">PHP Shell Console</a> - HTTP pseudo-terminal</li>
+  </ul>
+
+  <h3>Configuration</h3>
+  <ul>
+    <li><a href="sessions.html">Session Management</a> - Save, import, organize</li>
+    <li><a href="encoding.html">Character Encoding</a> - UTF-8, codepages, line endings</li>
+    <li><a href="import-migration.html">Import from PuTTY / WinSCP</a> - Migrate sessions</li>
+  </ul>
+
+  <h3>Support</h3>
+  <ul>
+    <li><a href="troubleshooting.html">Troubleshooting</a> - Common issues</li>
+    <li><a href="troubleshooting-advanced.html">Advanced Troubleshooting</a> - In-depth diagnostics</li>
+  </ul>
+
+  <h2>Keyboard Shortcuts (Connection List)</h2>
+  <ul>
+    <li><code>F7</code> - Create new connection session</li>
+    <li><code>F8 / Del</code> - Delete selected session</li>
+    <li><code>Enter</code> - Connect with current settings</li>
+    <li><code>Alt+Enter</code> - Edit selected session options</li>
+    <li><code>Ctrl+Down</code> - Open session dropdown</li>
+    <li><code>Escape</code> - Cancel connection attempt</li>
+  </ul>
+
+  <h2>Feature Highlights</h2>
+  
+  <h3>SSH/SFTP/SCP</h3>
+  <ul>
+    <li>Full SFTP protocol support with resume capability</li>
+    <li>SCP transfer mode (including SCP-only for restrictive hosts)</li>
+    <li>Mixed mode: SFTP listing + SCP transfers</li>
+    <li>Native PPK key support (v2 and v3 with Argon2)</li>
+    <li>Pageant integration for key management</li>
+    <li>Proxy support: HTTP CONNECT, SOCKS4a, SOCKS5</li>
+    <li>SSH Jump Host / ProxyJump through bastion servers</li>
+  </ul>
+
+  <h3>Shell Fallback</h3>
+  <ul>
+    <li>Works when SFTP/SCP are blocked by server policy</li>
+    <li>Multiple methods: raw cat, dd blocks, base64 encoding</li>
+    <li>Automatic resume with proper alignment</li>
+    <li>Command escaping for special characters</li>
+    <li>Compatible with minimal shell environments</li>
+  </ul>
+
+  <h3>PHP Agent (HTTP)</h3>
+  <ul>
+    <li>No SSH account needed - works with web hosting</li>
+    <li>Secure HMAC-SHA256 authentication</li>
+    <li>Full file operations: CRUD + rename + hash</li>
+    <li>Chunked upload with resume support</li>
+    <li>Auto chunk from PROBE recommendation (safe clamp + fallback)</li>
+    <li>Capability probing before operations</li>
+    <li>Shell execution via HTTP (when enabled)</li>
+  </ul>
+
+  <h3>Character Encoding</h3>
+  <ul>
+    <li>UTF-8 auto-detection for international filenames</li>
+    <li>Multiple codepage support (1250-1258, Asian, etc.)</li>
+    <li>Text/binary/auto transfer modes</li>
+    <li>Line ending conversion (CRLF/LF)</li>
+    <li>UTF-8 BOM preservation</li>
+  </ul>
+
+  <h3>LAN Pair &amp; Jump Host</h3>
+  <ul>
+    <li>LAN Pair (SMB-like) for direct Windows-to-Windows pairing</li>
+    <li>Role-based pairing: Auto / Receiver / Donor</li>
+    <li>Per-session LAN Pair timeout with persistent INI storage</li>
+    <li>Jump Host / ProxyJump using SSH direct-tcpip without external ssh.exe</li>
+    <li>Separate fingerprint and authentication state for jump host and target host</li>
+  </ul>
+
+  <h3>Session Management</h3>
+  <ul>
+    <li>Unlimited saved sessions</li>
+    <li>Encrypted password storage (Windows DPAPI)</li>
+    <li>Import from PuTTY and WinSCP</li>
+    <li>Native PPK conversion (no external tools)</li>
+    <li>Proxy settings per session</li>
+  </ul>
+
+  <h2>Quick Reference</h2>
+  
+  <h3>Transfer Mode Selection</h3>
+  <ol>
+    <li>Start with <b>SSH (SFTP/SCP)</b> - works for most servers</li>
+    <li>If SFTP fails: try <b>Use SCP for data transfers</b></li>
+    <li>If SCP fails: try <b>Use SCP for everything</b></li>
+    <li>If still failing: enable <b>Shell transfer</b> fallback</li>
+    <li>No SSH access: use <b>PHP Agent (HTTP)</b></li>
+    <li>Need bastion access to SSH target: use <b>Jump Host</b></li>
+    <li>Need direct Windows-to-Windows local transfer: use <b>LAN Pair</b></li>
+  </ol>
+
+  <h3>Authentication Selection</h3>
+  <ol>
+    <li>Have SSH key? Use <b>Private key file</b> (PEM or PPK)</li>
+    <li>Using Pageant? Check <b>Use SSH agent</b></li>
+    <li>Only password? Enter in <b>Password</b> field</li>
+    <li>Hosting without SSH? Use <b>PHP Agent</b> mode</li>
+  </ol>
+
+  <h3>Common Ports</h3>
+  <ul>
+    <li>SSH/SFTP: 22 (default), often custom (2222, etc.)</li>
+    <li>HTTP: 80</li>
+    <li>HTTPS: 443</li>
+    <li>SOCKS proxy: 1080</li>
+    <li>HTTP proxy: 8080</li>
+  </ul>
+
+  <div class="ok">
+    <b>Practical tip:</b> If the host blocks SFTP/SCP, this plugin can still transfer files via shell command pipeline (<code>cat/dd/base64</code>) where typical tools often fail.
+  </div>
+
+  <h2>About This Plugin</h2>
+  <p>SFTPplug is a Total Commander filesystem plugin providing secure file transfer over SSH (SFTP, SCP), HTTP (PHP Agent), and direct local pairing (LAN Pair). It features comprehensive authentication support, Jump Host / ProxyJump support for bastion-based SSH access, shell fallback for restrictive hosts, and PHP-based agent mode for web hosting environments.</p>
+
+  <h2>Version Information</h2>
+  <ul>
+    <li>Plugin version: Check in Total Commander (Help → About plugin)</li>
+    <li>libssh2 version: Displayed in connection log</li>
+    <li>PHP Agent version: 1.0.1</li>
+  </ul>
+</body>
+</html>

@@ -146,6 +146,7 @@
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
     <ClCompile Include="..\src\core\SessionImport.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPoints.cpp" />
+    <ClCompile Include="..\src\core\DllExceptionBarrier.cpp" />
     <ClCompile Include="..\src\core\CoreUtils.cpp" />
     <ClCompile Include="..\src\core\PpkConverter.cpp" />
     <ClCompile Include="..\src\core\WindowsUserFeedback.cpp" />
@@ -181,6 +182,7 @@
     <ClInclude Include="..\src\include\SshBackendFactory.h" />
     <ClInclude Include="..\src\include\SessionImport.h" />
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
+    <ClInclude Include="..\src\include\DllExceptionBarrier.h" />
     <ClInclude Include="..\src\include\SshDynFunctions.h" />
     <ClInclude Include="..\src\include\CoreUtils.h" />
     <ClInclude Include="..\src\include\PpkConverter.h" />
