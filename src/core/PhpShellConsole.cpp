@@ -708,6 +708,13 @@ static void InitializeConsoleUi(HWND hwnd, ShellConsoleState* s)
         SendMessageA(s->hwndTerminal, WM_SETFONT, (WPARAM)s->font, TRUE);
 
     SendMessageA(s->hwndTerminal, EM_SETBKGNDCOLOR, 0, (LPARAM)s->colorBack);
+
+    CHARFORMAT2A cf{};
+    cf.cbSize = sizeof(cf);
+    cf.dwMask = CFM_COLOR;
+    cf.crTextColor = s->colorText;
+    SendMessageA(s->hwndTerminal, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+
     SetSelectionColor(s->hwndTerminal, s->colorText);
     SendMessageA(s->hwndTerminal, EM_SETLIMITTEXT, (WPARAM)0x7FFFFFFE, 0);
 
