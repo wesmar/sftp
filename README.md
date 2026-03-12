@@ -317,7 +317,7 @@ Implemented in `PpkConverter.cpp`. Converts PuTTY Private Key files to tradition
 
 | Component | Implementation |
 |-----------|---------------|
-| KDF | Argon2d / Argon2i / Argon2id, loaded from `argon2.dll` on demand |
+| KDF | Argon2d / Argon2i / Argon2id — statically linked (`argon2_a.lib`) |
 | Encryption | AES-256-CBC |
 | MAC | HMAC-SHA-256 over `(algorithm ‖ encryption ‖ comment ‖ public_blob ‖ private_blob_plain)` |
 | MAC key source | Argon2 output bytes 48–79 (encrypted keys); empty string (unencrypted keys) |
@@ -666,8 +666,7 @@ src/
       libssh2_publickey.h
   lib/
     libssh2.lib              # Static import lib
-    argon2_a.lib             # Static Argon2 lib
-    argon2.dll               # Loaded at runtime for PPK v3
+    argon2_a.lib             # Static Argon2 lib (statically linked)
   res/
     sftpplug.rc              # String tables: EN / PL / DE / FR / ES
     resource.h
@@ -720,7 +719,7 @@ Single-language mode strips unused RC language blocks before compile and restore
 | Architecture | x64 only |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
 | libssh2 | Statically linked (≥ 1.7.0 for SCP >2 GB) |
-| argon2.dll | Optional — required only for PPK v3 with Argon2 KDF |
+| **Dependencies** | libssh2 (statically linked), argon2 (statically linked via `argon2_a.lib`) |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, Winsock2 |
 
 ---
@@ -736,7 +735,7 @@ Distribution archive: `sftpplug.zip`
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `sftpplug.chm` | Full offline documentation |
 
-No external DLLs required in the distribution package. `argon2.dll` is loaded on demand only when a PPK v3 key with Argon2 KDF is used.
+No external DLLs required. Both libssh2 and Argon2 (`argon2_a.lib`) are statically linked into the binary.
 
 Open `sftpplug.zip` in Total Commander and press Enter to trigger the plugin install prompt.
 
