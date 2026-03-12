@@ -1,2 +1,0 @@
-const AGENT_PSK_SALT = '0388be41d0889b9b13d748dfafead386';
-const AGENT_PSK_SHA256 = 'd12eaedd1c0942844229620dedb44defd14af495b39b39ceb55edb364dfd86e6';
