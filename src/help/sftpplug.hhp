@@ -18,6 +18,7 @@ encoding.html
 sessions.html
 authentication.html
 transfer-modes.html
+transfer-resume.html
 lan-pair.html
 jump-host.html
 shell-fallback.html

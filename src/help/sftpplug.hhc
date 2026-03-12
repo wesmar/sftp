@@ -13,6 +13,9 @@
       <LI><OBJECT type="text/sitemap"><param name="Name" value="Authentication Methods"><param name="Local" value="authentication.html"></OBJECT>
     </UL>
     <LI><OBJECT type="text/sitemap"><param name="Name" value="Transfer Modes"><param name="Local" value="transfer-modes.html"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Transfer Resume"><param name="Local" value="transfer-resume.html"></OBJECT>
+    </UL>
     <LI><OBJECT type="text/sitemap"><param name="Name" value="LAN Pair"><param name="Local" value="lan-pair.html"></OBJECT>
     <LI><OBJECT type="text/sitemap"><param name="Name" value="Jump Host / ProxyJump"><param name="Local" value="jump-host.html"></OBJECT>
     <LI><OBJECT type="text/sitemap"><param name="Name" value="Shell Fallback"><param name="Local" value="shell-fallback.html"></OBJECT>

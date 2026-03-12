@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Transfer Resume</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Transfer Resume</h1>
+
+<p>The plugin supports resuming interrupted transfers in SFTP mode and partially in Shell Fallback mode. Resume behavior differs depending on the active transfer method.</p>
+
+<h2>SFTP (primary mode) — full resume support</h2>
+<p>SFTP resume works for both downloads and uploads.</p>
+
+<h3>Download resume</h3>
+<ol>
+  <li>Total Commander detects that a partial local file already exists at the destination.</li>
+  <li>TC passes a resume flag to the plugin.</li>
+  <li>The plugin queries the remote file size via SFTP <code>fstat</code> (with the <code>ATTR_SIZE</code> flag set — required for correct size retrieval).</li>
+  <li>The remote file handle is seeked to the end of the already-downloaded portion.</li>
+  <li>Transfer continues from that offset.</li>
+</ol>
+
+<h3>Upload resume</h3>
+<ol>
+  <li>TC detects a partial remote file.</li>
+  <li>The plugin opens the remote file for append and seeks to its current end.</li>
+  <li>Upload continues from the local file offset matching the remote file size.</li>
+</ol>
+
+<div class="note">
+  <b>Note:</b> Resume requires that the remote file has not been modified or truncated since the interrupted transfer. If the remote file size does not match the expected partial size, TC will prompt you to overwrite or skip.
+</div>
+
+<h2>SCP (native) — no mid-transfer resume</h2>
+<p>The SCP protocol does not support seeking into a remote file. If an SCP transfer is interrupted:</p>
+<ul>
+  <li>The transfer must restart from the beginning.</li>
+  <li>TC will prompt you to overwrite the partial destination file.</li>
+  <li>If you need resume support for large files on a server that only supports SCP, consider switching to <b>Shell Fallback (base64)</b> or requesting SFTP subsystem access from the server administrator.</li>
+</ul>
+
+<h2>Shell Fallback (base64) — chunked resume</h2>
+<p>Shell fallback transfers data in base64-encoded 1024-byte chunks. Resume is possible at chunk boundaries.</p>
+<ul>
+  <li>Base64 encoding works in groups of 3 bytes → 4 characters. Chunks are kept at multiples of 3 bytes (≤ 1024 bytes) so that resume always lands on a valid base64 boundary.</li>
+  <li>On resume, the plugin calculates the nearest safe boundary below the partial file size and restarts from there.</li>
+  <li>A small overlap (up to 3 bytes) may be re-transferred, which is harmless.</li>
+</ul>
+
+<div class="note">
+  <b>Performance note:</b> Shell fallback is significantly slower than SFTP or SCP due to base64 encoding overhead and shell command round-trips. Use it only when SFTP and SCP are both unavailable on the server.
+</div>
+
+<h2>PHP Agent — no resume</h2>
+<p>PHP Agent transfers (GET/PUT operations) do not support partial resume. If a transfer is interrupted, it must restart from the beginning. This is a limitation of the HTTP chunked transfer model used by the agent.</p>
+
+<h2>LAN Pair — full resume support</h2>
+<p>LAN Pair file transfers support resume at the session protocol level. If the session times out or the connection drops mid-transfer, you can reconnect and resume using TC's standard resume prompt.</p>
+
+<h2>Summary</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Mode</th><th>Download resume</th><th>Upload resume</th><th>Notes</th></tr>
+  <tr><td>SFTP</td><td>Yes</td><td>Yes</td><td>Full seek support via libssh2</td></tr>
+  <tr><td>SCP (native)</td><td>No</td><td>No</td><td>Protocol limitation</td></tr>
+  <tr><td>Shell Fallback</td><td>Partial</td><td>Partial</td><td>Chunk-boundary resume only</td></tr>
+  <tr><td>PHP Agent</td><td>No</td><td>No</td><td>HTTP transfer model limitation</td></tr>
+  <tr><td>LAN Pair</td><td>Yes</td><td>Yes</td><td>Session-level resume</td></tr>
+</table>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

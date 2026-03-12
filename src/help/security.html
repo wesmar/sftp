@@ -6,39 +6,70 @@
 
 <h2>Transport security</h2>
 <ul>
-  <li>Use HTTPS for all PHP Agent/Shell traffic.</li>
-  <li>Avoid plain HTTP on public networks.</li>
+  <li>SSH connections (SFTP, SCP, Shell fallback, Jump Host) are always encrypted by the SSH protocol.</li>
+  <li>Use HTTPS for all PHP Agent / PHP Shell traffic. Avoid plain HTTP on any network you do not fully control.</li>
+  <li>LAN Pair uses authenticated TCP sessions (PAIR1 protocol) within the local network.</li>
 </ul>
 
-<h2>Credential handling</h2>
+<h2>Password and credential storage</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Storage mode</th><th>INI format</th><th>Description</th></tr>
+  <tr><td>TC Master Password</td><td><code>password=!</code></td><td>Delegated to Total Commander's own CryptProc API</td></tr>
+  <tr><td>DPAPI</td><td><code>password=dpapi:&lt;base64&gt;</code></td><td>Windows CryptProtectData, bound to your Windows user account</td></tr>
+  <tr><td>Explicit plaintext</td><td><code>password=plain:&lt;text&gt;</code></td><td>Opt-in only; use only in isolated environments</td></tr>
+  <tr><td>Legacy XOR</td><td><code>&lt;decimal triplets&gt;</code></td><td>Read-only; used by very old plugin versions — never written for new sessions</td></tr>
+</table>
 <ul>
-  <li>Client side password is stored encrypted in <code>sftpplug.ini</code> (DPAPI).</li>
-  <li>Server side <code>sftp.php</code> can use salted hash constants for deployment simplicity.</li>
-  <li>Do not commit real production secrets to public repositories.</li>
-  <li>Jump Host credentials are separate from target-host credentials.</li>
+  <li>All decrypted password buffers are zeroed from memory (<code>SecureZeroMemory</code>) immediately after use.</li>
+  <li>Jump Host credentials are stored and encrypted separately from target-host credentials.</li>
+  <li>The PHP Agent PSK is stored as a salted SHA-256 hash inside <code>sftp.php</code> — the raw secret is not written to disk on the server.</li>
 </ul>
 
-<h2>SSH host identity</h2>
+<h2>SSH host identity verification</h2>
 <ul>
-  <li>Target host fingerprint is verified and stored for SSH sessions.</li>
-  <li>Jump Host / ProxyJump keeps a separate stored fingerprint for the bastion host.</li>
+  <li>The server's MD5 fingerprint is stored in <code>sftpplug.ini</code> on first connection.</li>
+  <li>On every subsequent connection the fingerprint is compared. A mismatch raises an explicit warning dialog — you must confirm before connecting.</li>
+  <li>Jump Host (bastion) keeps a separate stored fingerprint from the final target host.</li>
   <li>Accepting a new fingerprint should always be a deliberate decision.</li>
 </ul>
 
-<h2>LAN Pair trust model</h2>
+<h2>LAN Pair trust model and cryptography</h2>
 <ul>
-  <li>LAN Pair is intended for trusted local-network scenarios.</li>
-  <li>Session timeout is enforced between operations, not by killing an active transfer mid-stream.</li>
+  <li>Authentication uses PBKDF2-HMAC-SHA256 with <b>120,000 iterations</b> to derive a session key from the pairing password.</li>
+  <li>Both sides exchange HMAC-SHA256 challenge-response proofs over TCP. Neither the password nor the derived key is transmitted in plain form.</li>
+  <li>On first successful connection the server issues a trust token (<b>TOFU — Trust On First Use</b>). The plugin stores this token encrypted via Windows DPAPI, keyed per peer-pair and per Windows user account.</li>
+  <li>Subsequent connections use the stored DPAPI trust key — no password prompt.</li>
+  <li>Session timeout is enforced between operations; active transfers are never killed mid-stream.</li>
+  <li>All LAN Pair cryptography uses Windows BCrypt only — no third-party DLLs.</li>
+</ul>
+
+<h2>Plugin error isolation</h2>
+<p>Every exported plugin function is wrapped by an exception firewall. If an unexpected error occurs inside the plugin:</p>
+<ul>
+  <li>The exception is caught before it can reach Total Commander.</li>
+  <li>The current operation is aborted and an appropriate error code is returned to TC.</li>
+  <li>A diagnostic dialog is shown with the error type and call location.</li>
+  <li><b>Total Commander continues running normally</b> — a plugin bug cannot crash the host process.</li>
+</ul>
+
+<h2>Key file security</h2>
+<ul>
+  <li>Private key files (PEM/PPK) are read only at connection time and not stored in the session profile.</li>
+  <li>PPK v2 and v3 are converted to an in-memory PEM form — the conversion result is never written to disk.</li>
+  <li>Argon2 (PPK v3 key derivation) is statically compiled into the plugin — no separate DLL is involved.</li>
 </ul>
 
 <h2>Operational recommendations</h2>
 <ul>
-  <li>Restrict URL exposure where possible.</li>
-  <li>Rotate credentials periodically.</li>
-  <li>Keep PHP runtime and plugin up to date.</li>
+  <li>Use DPAPI password storage (default) rather than plain-text for all sessions.</li>
+  <li>Restrict access to the TC directory containing <code>sftpplug.ini</code> — it holds encrypted credentials.</li>
+  <li>Restrict URL exposure for PHP Agent deployments; use HTTPS with a valid certificate.</li>
+  <li>Rotate SSH keys and PHP Agent passwords periodically.</li>
+  <li>Do not commit <code>sftpplug.ini</code> or <code>sftp.php</code> with live credentials to public repositories.</li>
+  <li>Keep the plugin and PHP runtime up to date.</li>
 </ul>
 
-<div class="warn"><b>Important:</b> Security depends on TLS, server hardening, and secret management together.</div>
+<div class="warn"><b>Important:</b> Security depends on TLS configuration, server hardening, and secret management together — not on the plugin alone.</div>
 
 <p><a href="index.html">Back to index</a></p>
 </body>

@@ -20,33 +20,60 @@
   <li>It is not routed through SSH, SFTP, PHP Agent, or PHP Shell</li>
 </ul>
 
+<h2>Discovery and network ports</h2>
+<p>LAN Pair uses two ports:</p>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Port</th><th>Protocol</th><th>Purpose</th></tr>
+  <tr><td><b>45845</b></td><td>UDP (broadcast)</td><td>Peer discovery — both machines announce themselves on the local network every ~1.5 seconds</td></tr>
+  <tr><td><b>45846</b></td><td>TCP</td><td>Pairing handshake and file transfer session</td></tr>
+</table>
+<p>Both ports must be open in Windows Firewall on both machines. If peers do not appear in the discovery list, this is the first thing to check.</p>
+
+<div class="note">
+  <b>Firewall tip:</b> UDP broadcast (port 45845) is blocked between network segments and VLANs by default. LAN Pair discovery works reliably only within the same broadcast domain (same subnet/switch). If your machines are on different VLANs, peers will not be found via auto-discovery.
+</div>
+
+<h2>Trust model — first connection vs. subsequent connections</h2>
+<p>LAN Pair uses a <b>TOFU (Trust On First Use)</b> authentication model. You only need to enter a password once:</p>
+<ol>
+  <li><b>First connection:</b> A pairing password is required. Both sides must use the same password.</li>
+  <li>On success, the plugin derives a cryptographic trust key (PBKDF2-HMAC-SHA256, 120,000 iterations) and stores it encrypted on disk via Windows DPAPI — bound to your Windows user account.</li>
+  <li><b>Subsequent connections:</b> The stored trust key is used automatically. No password prompt appears.</li>
+</ol>
+<p>Trust is stored per peer pair. Removing a session or switching Windows accounts requires re-pairing with a password.</p>
+
+<div class="note">
+  <b>Note:</b> The pairing password can be left empty if both machines agree on an empty password. In that case, trust is still established cryptographically — but an empty password offers no brute-force resistance. Use a real password on any network you do not fully control.
+</div>
+
 <h2>Roles</h2>
 <ul>
-  <li><b>Auto</b> - discovery/listen mode; role is chosen by the user when a peer is detected</li>
-  <li><b>Receiver</b> - waits for an incoming paired client</li>
-  <li><b>Donor</b> - connects to the detected receiver</li>
+  <li><b>Auto</b> — discovery and listen mode; role is chosen by the user when a peer is detected</li>
+  <li><b>Receiver</b> — waits for an incoming paired client (acts as server)</li>
+  <li><b>Donor</b> — actively connects to a detected receiver (acts as client)</li>
 </ul>
 
 <div class="note">
-  <b>Important:</b> Auto mode does not silently decide roles for the user. When a matching peer is found, the plugin asks which role should be used.
+  <b>Important:</b> Auto mode does not silently decide roles. When a matching peer is found, the plugin asks which role to use.
 </div>
 
 <h2>Basic workflow</h2>
 <ol>
   <li>Create or edit a session and set <b>Transfer = LAN Pair (SMB-like)</b>.</li>
-  <li>Set the session name. This name is also used as the visible peer label.</li>
+  <li>Set the session name. This name is also shown as the visible peer label on the other machine.</li>
   <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b> in the role dropdown.</li>
   <li>Optional: set <b>Session timeout</b> in minutes. <code>0</code> means no limit.</li>
   <li>Click <b>Pair...</b>.</li>
-  <li>When the peer is found, confirm the role and continue.</li>
+  <li>On first use: enter the pairing password (must match on both sides).</li>
+  <li>When the peer is found and roles are confirmed, the session opens as a regular TC file panel.</li>
 </ol>
 
 <h2>Session timeout</h2>
 <ul>
   <li><code>0</code> = no timeout</li>
-  <li><code>&gt;0</code> = idle/session timeout in minutes</li>
+  <li><code>&gt;0</code> = session timeout in minutes, measured from the last operation</li>
   <li>The timeout is stored per session as <code>lanpairtimeout</code> in <code>sftpplug.ini</code></li>
-  <li>Timeout is checked between operations; active transfers are not force-aborted mid-stream</li>
+  <li>Timeout is checked before each operation; active file transfers are not interrupted mid-stream</li>
 </ul>
 
 <h2>Saved settings</h2>
@@ -61,24 +88,27 @@ lanpairtimeout=0
 
 <h2>UI behavior</h2>
 <ul>
-  <li>In LAN Pair mode, SSH-specific controls are disabled</li>
-  <li>Key-file fields and Jump Host controls are not used</li>
-  <li>The lower permissions block is replaced by the LAN Pair session timeout field</li>
+  <li>In LAN Pair mode, SSH-specific controls are disabled (key files, Jump Host, Pageant)</li>
+  <li>The lower section shows the LAN Pair session timeout field instead of Unix permissions</li>
+  <li>The connect button label changes to <b>Pair...</b></li>
 </ul>
 
 <h2>Operational notes</h2>
 <ul>
-  <li>LAN Pair uses its own TCP/UDP discovery/session path</li>
-  <li>It does not require PHP, SSH, Pageant, or external SMB mapping</li>
-  <li>Resume support and chunked transfer behavior depend on the LAN Pair session engine, not on SFTP/SCP rules</li>
+  <li>LAN Pair does not require PHP, SSH, Pageant, or any external SMB mapping</li>
+  <li>File operations (listing, download, upload, rename, delete, mkdir) are all supported</li>
+  <li>Both machines must run Total Commander with this plugin installed</li>
 </ul>
 
-<h2>Troubleshooting hints</h2>
-<ul>
-  <li>If peers do not appear, check whether both machines are on the same network segment</li>
-  <li>Discovery problems are separate from normal TCP connectivity</li>
-  <li>If classic SMB works but LAN Pair discovery does not, investigate UDP/broadcast visibility rather than filesystem permissions</li>
-</ul>
+<h2>Troubleshooting</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr>
+  <tr><td>Peers not found</td><td>Windows Firewall blocking UDP 45845 or machines on different subnets</td><td>Allow UDP 45845 inbound in Windows Firewall; verify both machines are on the same network segment</td></tr>
+  <tr><td>Connection refused</td><td>Windows Firewall blocking TCP 45846</td><td>Allow TCP 45846 inbound on the Receiver machine</td></tr>
+  <tr><td>Password rejected on first connect</td><td>Passwords do not match on both sides</td><td>Ensure both sides use exactly the same pairing password (case-sensitive)</td></tr>
+  <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user/machine and lost on reinstall</td><td>Re-pair with password; trust will be rebuilt automatically</td></tr>
+  <tr><td>Peers found but classic SMB works — LAN Pair does not</td><td>UDP broadcast not reaching the other machine (VLAN, managed switch isolation)</td><td>Check switch/VLAN settings; UDP broadcast must reach port 45845 on both sides</td></tr>
+</table>
 
 <p><a href="index.html">Back to index</a></p>
 </body>
