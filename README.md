@@ -18,6 +18,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - [Connection Management](#connection-management)
 - [LAN Pair Transport](#lan-pair-transport)
 - [PHP Agent and PHP Shell](#php-agent-and-php-shell)
+  - [Command History](#command-history)
 - [Remote File Operations](#remote-file-operations)
 - [Shell Engineering Details](#shell-engineering-details)
 - [Module Map](#module-map)
@@ -43,7 +44,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **Shell Fallback** | `cat` / `dd` / `base64` chunk pipeline for servers blocking SFTP subsystem and `scp`. Operates over a hidden interactive SSH channel. |
 | **Jump Host (ProxyJump)** | Bastion-routed SSH via `direct-tcpip` tunneling. No external `ssh.exe` required. |
 | **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. |
-| **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Maintains command history and working-directory context. |
+| **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Persistent command history (Up/Down arrows, 128-entry ring buffer) stored in `%APPDATA%\GHISLER\shell_history.txt`. Maintains working-directory context across requests. |
 | **LAN Pair** | Direct Windows-to-Windows pairing mode. Custom PAIR1 authentication protocol, LAN2 file-transfer command protocol, UDP broadcast peer discovery. |
 
 ### Authentication Methods
@@ -535,7 +536,61 @@ Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`
 
 ### PHP Shell (HTTP)
 
-Uses the same `sftp.php` endpoint but routes commands through `SHELL_EXEC`. Maintains command history and working-directory awareness across requests. Provides a pseudo-terminal experience for operational tasks on hosts with no SSH access.
+Uses the same `sftp.php` endpoint but routes commands through `SHELL_EXEC`. Maintains working-directory awareness across requests. Provides a pseudo-terminal experience for operational tasks on hosts with no SSH access.
+
+#### Command History
+
+The shell console maintains a **persistent** command history that survives session restarts and plugin reloads.
+
+**Navigation**
+
+| Key | Action |
+|-----|--------|
+| `↑` Up arrow | Recall previous command |
+| `↓` Down arrow | Move forward through history (↓ after reaching the end clears the input line) |
+
+**Storage location**
+
+```
+%APPDATA%\GHISLER\shell_history.txt
+```
+
+This is the same directory Total Commander uses for its own configuration, keeping all related data in one place. The file is a plain UTF-8 text file, one command per line, and can be opened or inspected in any text editor.
+
+**Capacity — ring buffer**
+
+The file holds a maximum of **128 entries**. When the 129th command is added, the oldest entry is dropped from the top. The file is always rewritten in full on every addition — at 128 short lines this is a negligible I/O cost and eliminates any possibility of stale data from a partial write.
+
+**Duplicate suppression**
+
+Consecutive identical commands are not added to history (equivalent to bash `HISTCONTROL=ignoredups`). Running the same command twice in a row records it only once.
+
+**Clearing history**
+
+History can be cleared from inside the shell console without leaving it:
+
+```bash
+history -c
+```
+
+or equivalently:
+
+```bash
+clear history
+```
+
+Both commands erase all entries from memory **and** delete `shell_history.txt` from disk immediately. The cursor resets to an empty state. This is equivalent to `history -c` in bash and is the recommended way to clear sensitive command traces (e.g. after typing a password inline).
+
+> **Note:** `exit` and `logout` close the console window but do **not** clear history — existing entries are preserved for the next session.
+
+**Power-loss and crash safety**
+
+Each write uses an atomic two-step pattern:
+
+1. The new content is written to a temporary file (`shell_history.txt.tmp`) in the same directory.
+2. `MoveFileExA` with `MOVEFILE_REPLACE_EXISTING` renames the temp file over the real file.
+
+On NTFS, a rename within the same volume is a single metadata operation. If power is lost or the process is killed between steps 1 and 2, the previous `shell_history.txt` remains intact — it is never truncated or partially overwritten. The worst-case outcome is a leftover `.tmp` file containing the most recent history, which can be renamed manually if needed.
 
 ### PHP Agent Deployment
 
@@ -669,7 +724,8 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `SftpShell.cpp` | Shell channel execution, EAGAIN guards | |
 | `TransferUtils.cpp` | Progress, rate, shared transfer helpers | |
 | `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP) | |
-| `PhpShellConsole.cpp` | PHP Shell pseudo-terminal | |
+| `PhpShellConsole.cpp` | PHP Shell pseudo-terminal; keyboard input, Tab completion, Up/Down history navigation | |
+| `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
 | `PpkConverter.cpp` | PPK v2/v3 → PEM conversion | BCrypt + Argon2; no tools |
 | `PasswordCrypto.cpp` | DPAPI encrypt/decrypt, legacy XOR read | `DataBlob` RAII |
 | `SessionImport.cpp` | PuTTY / WinSCP registry → INI | Non-destructive merge |
@@ -703,6 +759,7 @@ src/
     sftp_php74.php             # PHP 7.4 compatibility variant
   core/
     *.cpp                      # All plugin modules (see Module Map)
+    ShellHistory.cpp           # Persistent command history manager
   help/
     index.html
     authentication.html
@@ -732,6 +789,7 @@ src/
     ISshBackend.h              # Pure-virtual SSH backend interface
     SftpInternal.h             # Connection state structs
     DllExceptionBarrier.h      # ABI exception firewall
+    ShellHistory.h             # Persistent command history interface
     CoreUtils.h
     LanPair.h                  # smb:: namespace, PAIR1/LAN2 types
     LanPairSession.h
@@ -896,6 +954,7 @@ UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugi
 - `ConnectionGuard` RAII — leak-free connection lifecycle in `FsFindFirstW`
 - `UpdateCertSectionState` — unified cert section control for all transport modes
 - x64 packaging and TC auto-install
+- PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 
 ### In Progress
 
