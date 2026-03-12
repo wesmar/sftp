@@ -2,6 +2,7 @@
 #include "PhpShellConsole.h"
 #include "PhpAgentClient.h"
 #include "PluginEntryPoints.h"
+#include "ShellHistory.h"
 
 #include <richedit.h>
 #include <array>
@@ -24,7 +25,8 @@ struct ShellConsoleState {
     COLORREF colorText = RGB(245, 245, 245);
     COLORREF colorPrompt = RGB(0, 220, 0);
     COLORREF colorCommand = RGB(255, 210, 40);
-    std::vector<std::string> history;
+    std::vector<std::string> history;   // in-memory shadow (owned by shellHistory)
+    ShellHistory shellHistory;          // persistent history manager
     size_t historyCursor = 0;
     LONG inputStart = 0;
     std::string promptUser;
@@ -507,8 +509,19 @@ static void ExecuteCommand(ShellConsoleState* s)
         return;
     }
 
-    if (s->history.empty() || s->history.back() != cmd)
-        s->history.push_back(cmd);
+    // Clear command history (in memory and on disk).
+    if (cmd == "history -c" || cmd == "clear history") {
+        s->shellHistory.Clear();
+        s->history.clear();
+        s->historyCursor = 0;
+        AppendTerminal(s->hwndTerminal, "History cleared.\r\n", s->colorText);
+        PrintPrompt(s);
+        return;
+    }
+
+    // Add to persistent history; then sync the local shadow vector used for navigation.
+    s->shellHistory.Add(cmd);
+    s->history = s->shellHistory.Entries(); // keep shadow in sync
     s->historyCursor = s->history.size();
 
     bool isCdCommand = false;
@@ -722,8 +735,14 @@ static void InitializeConsoleUi(HWND hwnd, ShellConsoleState* s)
     s->oldTerminalProc = (WNDPROC)SetWindowLongPtrA(s->hwndTerminal, GWLP_WNDPROC, (LONG_PTR)TerminalEditProc);
 
     LayoutControls(hwnd, s);
+
+    // Load persistent history from disk; initialize the navigation shadow vector.
+    s->shellHistory.Load();
+    s->history = s->shellHistory.Entries();
+    s->historyCursor = s->history.size();
+
     AppendTerminal(s->hwndTerminal, "PHP Shell Console ready.\r\n", s->colorText);
-    AppendTerminal(s->hwndTerminal, "Type commands and press Enter. Use Up/Down for history.\r\n\r\n", s->colorText);
+    AppendTerminal(s->hwndTerminal, "Type commands and press Enter. Use Up/Down for history. Type 'history -c' to clear history.\r\n\r\n", s->colorText);
     PrintPrompt(s);
     SetFocus(s->hwndTerminal);
 }

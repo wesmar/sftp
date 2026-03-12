@@ -152,6 +152,7 @@
     <ClCompile Include="..\src\core\WindowsUserFeedback.cpp" />
     <ClCompile Include="..\src\core\PhpAgentClient.cpp" />
     <ClCompile Include="..\src\core\PhpShellConsole.cpp" />
+    <ClCompile Include="..\src\core\ShellHistory.cpp" />
     <ClCompile Include="..\src\core\SessionPostAuth.cpp" />
     <ClCompile Include="..\src\core\AuthMethodParser.cpp" />
     <ClCompile Include="..\src\core\ConnectionLifecycle.cpp" />
@@ -190,6 +191,7 @@
     <ClInclude Include="..\src\include\WindowsUserFeedback.h" />
     <ClInclude Include="..\src\include\PhpAgentClient.h" />
     <ClInclude Include="..\src\include\PhpShellConsole.h" />
+    <ClInclude Include="..\src\include\ShellHistory.h" />
     <ClInclude Include="..\src\include\ProxyNegotiator.h" />
     <ClInclude Include="..\src\include\ConnectionDialog.h" />
     <ClInclude Include="..\src\include\ScpTransfer.h" />
