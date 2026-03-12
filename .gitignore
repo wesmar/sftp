@@ -1,0 +1,38 @@
+# Skrypty lokalne (nie wchodzą do repo)
+git-push.sh
+release-update.sh
+
+# Pliki środowiskowe
+.env
+.env.*
+
+# Build outputs (generowane przez build.ps1 / MSBuild)
+build/bin/sftpplug.zip
+build/bin/sftpplug-installer.zip
+build/bin/*.wfx64
+build/bin/*.wfx
+build/bin/tc-installer/64/
+
+# MSBuild intermediate / output directories
+build/x64/
+build/Debug/
+build/Release/
+*.user
+
+# IDE
+.vs/
+*.aps
+*.ncb
+*.suo
+*.sdf
+*.opensdf
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Archiwa lokalne
+*.7z
+*.tar.gz

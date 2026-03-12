@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_PropertySheetDisplayName>SFTPplug</_PropertySheetDisplayName>
+    <TargetName>sftpplug</TargetName>
+    <IntDir>$(SolutionDir).intermediates\$(ProjectName)\$(Platform)_$(Configuration)\</IntDir>
+    <LibDir>$(SolutionDir)lib\$(Platform)_$(Configuration)\</LibDir>
+    <BinDir>$(SolutionDir)bin\$(Platform)_$(Configuration)\</BinDir>
+    <ExtDir>$(SolutionDir)..\ext\</ExtDir>
+    <SrcDir>$(SolutionDir)..\src\</SrcDir>
+    <OutDir>$(BinDir)</OutDir>
+    <TargetExt>.wfx</TargetExt>
+  </PropertyGroup>
+  
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <WarningLevel>Level3</WarningLevel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <CompileAs>Default</CompileAs>
+      <ForcedIncludeFiles>global.h</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories Condition="'$(SFTP_ALLINONE)'!='1'">
+        $(SrcDir)include;
+        $(SrcDir)include\third_party;
+        $(SrcDir);
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(SFTP_ALLINONE)'=='1'">
+        $(SrcDir)include;
+        $(SrcDir)include\third_party;
+        $(SrcDir);
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4244;4267;4996;26812;26451</DisableSpecificWarnings>
+      <PreprocessorDefinitions Condition="'$(SFTP_ALLINONE)'!='1'">_USRDLL;_WIN32_WINNT=0x0600;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(SFTP_ALLINONE)'=='1'">_USRDLL;_WIN32_WINNT=0x0600;SFTP_ALLINONE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <SpectreMitigation>Spectre</SpectreMitigation>
+    </ClCompile>
+    
+    <ResourceCompile>
+      <Culture>0x0807</Culture>
+    </ResourceCompile>
+    
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies Condition="'$(SFTP_ALLINONE)'!='1'">Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(SFTP_ALLINONE)'=='1'">Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;libssh2.lib;argon2_a.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <ModuleDefinitionFile>sftpplug.def</ModuleDefinitionFile>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <CETCompat>true</CETCompat>
+      <DynamicBase>true</DynamicBase>
+      <HighEntropyVA>true</HighEntropyVA>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

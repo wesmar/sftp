@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{D4509863-80BC-4A16-80E0-E9B2EAC08186}</ProjectGuid>
+    <RootNamespace>sftpplug</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>SFTPplug</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <!-- Configuration Type -->
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <!-- Platform Toolset Selection -->
+  <PropertyGroup Label="Configuration" Condition="'$(PlatformToolset)'==''">
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <!-- C++ Standard -->
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <!-- Debug Configuration -->
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <!-- Release Configuration -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <!-- Import Props -->
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <!-- Property Sheet -->
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="SFTPplug.vsprops" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <!-- Output Settings -->
+  <PropertyGroup>
+    <_ProjectFileVersion>18.0.0.0</_ProjectFileVersion>
+    <TargetName>sftpplug</TargetName>
+    <TargetExt>.wfx</TargetExt>
+    <OutDir>$(BinDir)</OutDir>
+    <IntDir>$(IntDir)</IntDir>
+  </PropertyGroup>
+  <!-- Debug Settings -->
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;SFTP_ALLINONE;LIBSSH2_WINCNG;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ConformanceMode>true</ConformanceMode>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4018;4244;4267;4834;4996;26812;26451</DisableSpecificWarnings>
+      <AdditionalOptions>/Zc:gotoScope- /Zc:strictStrings- /Brepro %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>..\php\deps\lib;..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>argon2_a.lib;libssh2.lib;crypt32.lib;bcrypt.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalOptions>/ignore:4017 /BREPRO %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Release Settings -->
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\src\include;..\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;SFTP_ALLINONE;LIBSSH2_WINCNG;LIBSSH2_STATIC;LIBSSH2_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ConformanceMode>true</ConformanceMode>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4018;4244;4267;4834;4996;26812;26451</DisableSpecificWarnings>
+      <AdditionalOptions>/Zc:gotoScope- /Zc:strictStrings- /Brepro %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <Link>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>..\php\deps\lib;..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>argon2_a.lib;libssh2.lib;crypt32.lib;bcrypt.lib;winhttp.lib;ws2_32.lib;iphlpapi.lib;shlwapi.lib;user32.lib;gdi32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalOptions>/ignore:4017 /BREPRO %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- x64 Settings -->
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
+    <Link>
+      <TargetMachine>MachineX64</TargetMachine>
+      <MinimumRequiredVersion>6.00</MinimumRequiredVersion>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Source Files -->
+  <ItemGroup>
+    <ClCompile Include="..\src\core\UnicodeHelpers.cpp" />
+    <ClCompile Include="..\src\core\UtfConversion.cpp" />
+    <ClCompile Include="..\src\core\FtpDirectoryParser.cpp" />
+    <ClCompile Include="..\src\core\ServerRegistry.cpp" />
+    <ClCompile Include="..\src\core\SftpConnection.cpp" />
+    <ClCompile Include="..\src\core\ProxyNegotiator.cpp" />
+    <ClCompile Include="..\src\core\ConnectionDialog.cpp" />
+    <ClCompile Include="..\src\core\SftpAuth.cpp" />
+    <ClCompile Include="..\src\core\ScpTransfer.cpp" />
+    <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp" />
+    <ClCompile Include="..\src\core\SftpTransfer.cpp" />
+    <ClCompile Include="..\src\core\TransferUtils.cpp" />
+    <ClCompile Include="..\src\core\SftpRemoteOps.cpp" />
+    <ClCompile Include="..\src\core\SftpShell.cpp" />
+    <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
+    <ClCompile Include="..\src\core\SessionImport.cpp" />
+    <ClCompile Include="..\src\core\PluginEntryPoints.cpp" />
+    <ClCompile Include="..\src\core\CoreUtils.cpp" />
+    <ClCompile Include="..\src\core\PpkConverter.cpp" />
+    <ClCompile Include="..\src\core\WindowsUserFeedback.cpp" />
+    <ClCompile Include="..\src\core\PhpAgentClient.cpp" />
+    <ClCompile Include="..\src\core\PhpShellConsole.cpp" />
+    <ClCompile Include="..\src\core\SessionPostAuth.cpp" />
+    <ClCompile Include="..\src\core\AuthMethodParser.cpp" />
+    <ClCompile Include="..\src\core\ConnectionLifecycle.cpp" />
+    <ClCompile Include="..\src\core\PasswordCrypto.cpp" />
+    <ClCompile Include="..\src\core\PhpAgentScriptConfig.cpp" />
+    <ClCompile Include="..\src\core\ConnectionNetwork.cpp" />
+    <ClCompile Include="..\src\core\ProfileSettings.cpp" />
+    <ClCompile Include="..\src\core\JumpHostConnection.cpp" />
+    <ClCompile Include="..\src\core\PluginHelp.cpp" />
+    <ClCompile Include="..\src\core\SshSessionInit.cpp" />
+    <ClCompile Include="..\src\core\ConnectionAuth.cpp" />
+    <ClCompile Include="..\src\core\SshLibraryLoader.cpp" />
+    <ClCompile Include="..\src\core\LanPair.cpp" />
+    <ClCompile Include="..\src\core\LanPairSession.cpp" />
+  </ItemGroup>
+  <!-- Header Files -->
+  <ItemGroup>
+    <ClInclude Include="..\src\include\UnicodeHelpers.h" />
+    <ClInclude Include="..\src\include\UtfConversion.h" />
+    <ClInclude Include="..\src\include\fsplugin.h" />
+    <ClInclude Include="..\src\include\FtpDirectoryParser.h" />
+    <ClInclude Include="..\src\include\global.h" />
+    <ClInclude Include="..\src\include\ServerRegistry.h" />
+    <ClInclude Include="..\src\include\SftpClient.h" />
+    <ClInclude Include="..\src\include\SftpInternal.h" />
+    <ClInclude Include="..\src\include\ISshBackend.h" />
+    <ClInclude Include="..\src\include\Libssh2Backend.h" />
+    <ClInclude Include="..\src\include\SshBackendFactory.h" />
+    <ClInclude Include="..\src\include\SessionImport.h" />
+    <ClInclude Include="..\src\include\PluginEntryPoints.h" />
+    <ClInclude Include="..\src\include\SshDynFunctions.h" />
+    <ClInclude Include="..\src\include\CoreUtils.h" />
+    <ClInclude Include="..\src\include\PpkConverter.h" />
+    <ClInclude Include="..\src\include\IUserFeedback.h" />
+    <ClInclude Include="..\src\include\WindowsUserFeedback.h" />
+    <ClInclude Include="..\src\include\PhpAgentClient.h" />
+    <ClInclude Include="..\src\include\PhpShellConsole.h" />
+    <ClInclude Include="..\src\include\ProxyNegotiator.h" />
+    <ClInclude Include="..\src\include\ConnectionDialog.h" />
+    <ClInclude Include="..\src\include\ScpTransfer.h" />
+    <ClInclude Include="..\src\include\ScpTransferInternal.h" />
+    <ClInclude Include="..\src\include\SessionPostAuth.h" />
+    <ClInclude Include="..\src\include\AuthMethodParser.h" />
+    <ClInclude Include="..\src\include\ConnectionLifecycle.h" />
+    <ClInclude Include="..\src\include\ConnectionNetwork.h" />
+    <ClInclude Include="..\src\include\ProfileSettings.h" />
+    <ClInclude Include="..\src\include\ITransportStream.h" />
+    <ClInclude Include="..\src\include\JumpHostConnection.h" />
+    <ClInclude Include="..\src\include\SshSessionInit.h" />
+    <ClInclude Include="..\src\include\ConnectionAuth.h" />
+    <ClInclude Include="..\src\include\SshLibraryLoader.h" />
+    <ClInclude Include="..\src\include\LanPair.h" />
+    <ClInclude Include="..\src\include\LanPairSession.h" />
+    <ClInclude Include="..\src\include\third_party\libssh2.h" />
+    <ClInclude Include="..\src\include\third_party\libssh2_sftp.h" />
+    <ClInclude Include="..\src\include\third_party\libssh2_config.h" />
+    <ClInclude Include="..\src\include\third_party\libssh2_error.h" />
+    <ClInclude Include="..\src\res\resource.h" />
+  </ItemGroup>
+  <!-- Module Definition -->
+  <ItemGroup>
+    <None Include="sftpplug.def" />
+  </ItemGroup>
+  <!-- Resource Files -->
+  <ItemGroup>
+    <ResourceCompile Include="..\src\res\sftpplug.rc" />
+  </ItemGroup>
+  <!-- Icons -->
+  <ItemGroup>
+    <Image Include="..\src\res\icon1.ico" />
+    <Image Include="..\src\res\icon2.ico" />
+    <Image Include="..\src\res\icon3.ico" />
+    <Image Include="..\src\res\icon4.ico" />
+    <Image Include="..\src\res\iconconnection.ico" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

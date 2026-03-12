@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Transfer Modes</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Transfer Modes Decision Guide</h1>
+
+<h2>1) SSH (SFTP/SCP)</h2>
+<p>Use first when regular SSH access works. Best default for most servers.</p>
+
+<h2>2) Use SCP for data transfers</h2>
+<p>Use when listing via SFTP works, but upload/download over SFTP is unstable.</p>
+
+<h2>3) Use SCP for everything (no SFTP)</h2>
+<p>Use when SFTP subsystem is blocked or broken, but SCP command path is available.</p>
+
+<h2>4) Use shell transfer (for blocked hosts)</h2>
+<p>Use when even SCP is problematic. Plugin can switch to shell stream/chunk strategies.</p>
+
+<h2>5) PHP Agent (HTTP)</h2>
+<p>Use when no shell/SSH account is available. Requires uploaded <code>sftp.php</code>.</p>
+
+<h2>6) PHP Shell (HTTP)</h2>
+<p>Use for command execution and maintenance through HTTP pseudo-terminal.</p>
+
+<h2>7) LAN Pair (SMB-like)</h2>
+<p>Use for direct Windows-to-Windows pairing on the local network. This mode does not use SSH, PHP, or the system SMB stack.</p>
+
+<h2>Jump Host note</h2>
+<p>Jump Host / ProxyJump is not a separate transfer mode. It is an SSH transport extension for the standard <b>SSH (SFTP/SCP)</b> mode when the target host is reachable only through a bastion server.</p>
+
+<h2>Fast practical selection</h2>
+<ol>
+  <li>Start with SSH default.</li>
+  <li>If transfer fails: enable SCP for data.</li>
+  <li>If still failing: SCP only.</li>
+  <li>If host blocks channels: shell transfer fallback.</li>
+  <li>If SSH unavailable: PHP Agent/PHP Shell.</li>
+  <li>If target SSH is behind a bastion: keep SSH mode and enable Jump Host.</li>
+  <li>If you need local Windows-to-Windows pairing: use LAN Pair.</li>
+</ol>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Shell Fallback Commands</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Shell Fallback - Command Reference</h1>
+
+<p>When SFTP/SCP are blocked, the plugin can use shell command pipelines for file transfers. This page documents the shell commands used.</p>
+
+<h2>Overview</h2>
+
+<h3>Why Shell Fallback?</h3>
+<ul>
+  <li>Some hosts disable SFTP subsystem</li>
+  <li>SCP may be restricted by administrator</li>
+  <li>Shell access often still available</li>
+  <li>Plugin uses standard Unix commands for transfer</li>
+</ul>
+
+<h3>When to Enable</h3>
+<ul>
+  <li>SFTP connection fails with "Subsystem request failed"</li>
+  <li>SCP transfers fail with permission errors</li>
+  <li>Host policy blocks standard transfer methods</li>
+  <li>Enable: <b>Use shell transfer (for blocked hosts)</b></li>
+</ul>
+
+<h2>Transfer Methods</h2>
+
+<h3>Method 1: Raw cat Stream</h3>
+<p>Direct streaming for simple cases:</p>
+
+<h4>Download</h4>
+<pre>
+cat /remote/path/file.txt
+</pre>
+<ul>
+  <li>Outputs file content to stdout</li>
+  <li>Plugin captures and writes to local file</li>
+  <li>Fast, no encoding overhead</li>
+</ul>
+
+<h4>Upload</h4>
+<pre>
+cat > /remote/path/file.txt
+</pre>
+<ul>
+  <li>Plugin sends file content to stdin</li>
+  <li>Shell redirects to target file</li>
+  <li>Simple but effective</li>
+</ul>
+
+<h3>Method 2: dd with Block Size</h3>
+<p>Controlled block transfer:</p>
+
+<h4>Download with Offset</h4>
+<pre>
+dd if=/remote/path/file.txt bs=16384 skip=10
+</pre>
+<ul>
+  <li><code>if=</code> Input file path</li>
+  <li><code>bs=</code> Block size (16384 bytes)</li>
+  <li><code>skip=</code> Blocks to skip (for resume)</li>
+  <li>Precise control over read position</li>
+</ul>
+
+<h4>Upload with Append</h4>
+<pre>
+dd of=/remote/path/file.txt bs=16384 seek=10 conv=notrunc
+</pre>
+<ul>
+  <li><code>of=</code> Output file path</li>
+  <li><code>seek=</code> Blocks to seek (for resume)</li>
+  <li><code>conv=notrunc</code> Don't truncate existing file</li>
+  <li>Good for large file resume</li>
+</ul>
+
+<h3>Method 3: Base64 Encoding</h3>
+<p>Most robust fallback for restrictive environments:</p>
+
+<h4>Download with Base64</h4>
+<pre>
+base64 -w 0 /remote/path/file.txt
+</pre>
+<ul>
+  <li>Encodes binary to ASCII</li>
+  <li><code>-w 0</code> No line wrapping (single line)</li>
+  <li>Plugin decodes base64 locally</li>
+  <li>Handles any file type safely</li>
+</ul>
+
+<h4>Upload with Base64</h4>
+<pre>
+base64 -d > /remote/path/file.txt
+</pre>
+<ul>
+  <li>Plugin encodes file to base64</li>
+  <li>Shell decodes and writes to file</li>
+  <li><code>-d</code> Decode mode</li>
+  <li>Works through any text-only channel</li>
+</ul>
+
+<h2>Resume Strategies</h2>
+
+<h3>Base64 Resume Alignment</h3>
+<p>Base64 encoding has special handling for resume:</p>
+<ul>
+  <li>Base64 encodes 3 bytes → 4 characters</li>
+  <li>Resume must align to 3-byte boundaries</li>
+  <li>Plugin calculates correct skip position</li>
+  <li>Ensures decoded output is byte-perfect</li>
+</ul>
+
+<h3>Resume Example</h3>
+<pre>
+# File is 10000 bytes, already have 3000
+# 3000 bytes = 1000 blocks of 3 bytes
+# Base64: 1000 * 4 = 4000 characters to skip
+
+base64 -w 0 file.txt | tail -c +4001 | base64 -d >> partial.file
+</pre>
+
+<h2>Directory Operations</h2>
+
+<h3>List Directory</h3>
+<pre>
+ls -la /remote/path/
+</pre>
+<ul>
+  <li>Detailed listing with permissions</li>
+  <li>Plugin parses output for file info</li>
+  <li>Handles spaces in filenames</li>
+</ul>
+
+<h3>Create Directory</h3>
+<pre>
+mkdir -p /remote/path/newdir
+</pre>
+<ul>
+  <li><code>-p</code> Create parent directories</li>
+  <li>Recursive creation</li>
+  <li>No error if exists</li>
+</ul>
+
+<h3>Remove File</h3>
+<pre>
+rm -f /remote/path/file.txt
+</pre>
+<ul>
+  <li><code>-f</code> Force, no prompt</li>
+  <li>Silent success</li>
+</ul>
+
+<h3>Remove Directory</h3>
+<pre>
+rm -rf /remote/path/olddir
+</pre>
+<ul>
+  <li><code>-r</code> Recursive</li>
+  <li><code>-f</code> Force</li>
+  <li>Use with caution</li>
+</ul>
+
+<h3>Rename/Move</h3>
+<pre>
+mv /remote/path/old.txt /remote/path/new.txt
+</pre>
+<ul>
+  <li>Works across same filesystem</li>
+  <li>Atomic on same partition</li>
+</ul>
+
+<h3>Get File Info</h3>
+<pre>
+stat /remote/path/file.txt
+</pre>
+<ul>
+  <li>Shows size, permissions, timestamps</li>
+  <li>Plugin parses for metadata</li>
+</ul>
+
+<h2>Shell Detection</h2>
+
+<h3>Available Commands</h3>
+<p>Plugin tests for command availability:</p>
+<pre>
+which cat
+which dd
+which base64
+which ls
+which mkdir
+which rm
+which mv
+which stat
+</pre>
+
+<h3>Fallback Order</h3>
+<ol>
+  <li>Try SFTP native operations</li>
+  <li>Try SCP commands</li>
+  <li>Try shell cat/dd</li>
+  <li>Try base64 encoding</li>
+  <li>Last resort: chunked base64</li>
+</ol>
+
+<h2>SCP Shell Mode</h2>
+
+<h3>SCP with Shell Fallback</h3>
+<p>Some hosts need shell for SCP operations:</p>
+
+<h4>SCP Send</h4>
+<pre>
+scp -t /remote/path/file.txt
+</pre>
+<ul>
+  <li><code>-t</code> Target mode (receive file)</li>
+  <li>Plugin sends file metadata + content</li>
+  <li>Server acknowledges each step</li>
+</ul>
+
+<h4>SCP Receive</h4>
+<pre>
+scp -f /remote/path/file.txt
+</pre>
+<ul>
+  <li><code>-f</code> From mode (send file)</li>
+  <li>Server sends metadata + content</li>
+  <li>Plugin acknowledges receipt</li>
+</ul>
+
+<h3>SCP Shell Protocol</h3>
+<pre>
+# Plugin sends:
+T1234567890 0 1234567890 0  (timestamps)
+C0644 1234 file.txt  (file mode, size, name)
+[...file content...]
+\0  (null terminator)
+
+# Server responds with:
+\0  (OK)
+\1error  (Error)
+\2fatal error  (Fatal)
+</pre>
+
+<h2>Error Handling</h2>
+
+<h3>Command Not Found</h3>
+<ul>
+  <li>Plugin tries alternative commands</li>
+  <li>Example: no base64 → try uuencode</li>
+  <li>Last resort: report error</li>
+</ul>
+
+<h3>Permission Denied</h3>
+<ul>
+  <li>Check remote file permissions</li>
+  <li>Verify user has write access</li>
+  <li>Try alternative location</li>
+</ul>
+
+<h3>Command Timeout</h3>
+<ul>
+  <li>Default timeout: 20 seconds</li>
+  <li>Large files may need more time</li>
+  <li>Plugin sends keepalive during transfer</li>
+</ul>
+
+<h3>Partial Transfer</h3>
+<ul>
+  <li>Connection interrupted mid-transfer</li>
+  <li>Plugin detects incomplete file</li>
+  <li>Resume from last good position</li>
+  <li>Base64 resume aligned to boundaries</li>
+</ul>
+
+<h2>Performance Considerations</h2>
+
+<h3>Base64 Overhead</h3>
+<ul>
+  <li>Base64 increases size by ~33%</li>
+  <li>Encoding/decoding CPU cost</li>
+  <li>Use only when necessary</li>
+  <li>Still faster than no transfer at all</li>
+</ul>
+
+<h3>Block Size Tuning</h3>
+<ul>
+  <li>Default: 16384 bytes (16 KB)</li>
+  <li>Larger blocks: more efficient</li>
+  <li>Smaller blocks: better for slow links</li>
+  <li>Auto-tuned based on connection</li>
+</ul>
+
+<h3>Latency Impact</h3>
+<ul>
+  <li>Shell commands round-trip latency</li>
+  <li>Pipelining where possible</li>
+  <li>Batch small operations</li>
+</ul>
+
+<h2>Security Notes</h2>
+
+<h3>Command Injection Protection</h3>
+<ul>
+  <li>Filenames properly escaped</li>
+  <li>Shell metacharacters quoted</li>
+  <li>Path traversal prevented</li>
+</ul>
+
+<h3>Shell Quoting</h3>
+<pre>
+# Filename with spaces:
+cat "/remote/path/my file.txt"
+
+# Filename with special chars:
+cat '/remote/path/file$var.txt'
+</pre>
+
+<div class="warn">
+  <b>Note:</b> Shell fallback prioritizes compatibility over terminal semantics. Some interactive features may not work.
+</div>
+
+<div class="note">
+  <b>Tip:</b> If shell transfer works but is slow, try enabling compression in SSH settings or use base64 for binary files only.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

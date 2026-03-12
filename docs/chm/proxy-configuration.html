@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Proxy Configuration</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Proxy Configuration</h1>
+
+<p>The plugin supports various proxy types for SSH connections. Configure proxy settings via the <b>Proxy...</b> button in the main connection dialog.</p>
+
+<h2>Supported Proxy Types</h2>
+
+<h3>No Proxy</h3>
+<p>Direct connection to the target server. Default setting.</p>
+
+<h3>HTTP CONNECT Proxy</h3>
+<ul>
+  <li>Uses HTTP CONNECT method to tunnel SSH through HTTP proxy</li>
+  <li>Supports authentication (Basic)</li>
+  <li>Example: <code>proxy.company.com:8080</code></li>
+  <li>Username/password stored encrypted</li>
+</ul>
+
+<h3>SOCKS4a Proxy</h3>
+<ul>
+  <li>SOCKS version 4a protocol</li>
+  <li>Supports domain name resolution (the "a" suffix)</li>
+  <li>No authentication support</li>
+  <li>Example: <code>socks4a://proxy:1080</code></li>
+</ul>
+
+<h3>SOCKS5 Proxy</h3>
+<ul>
+  <li>Full SOCKS version 5 protocol</li>
+  <li>Supports authentication (username/password)</li>
+  <li>Supports IPv4, IPv6, and domain names</li>
+  <li>Example: <code>socks5://user:pass@proxy:1080</code></li>
+</ul>
+
+<h3>System Default Proxy</h3>
+<p>Uses Windows system proxy settings from Internet Options.</p>
+
+<h2>Proxy Configuration Fields</h2>
+
+<ul>
+  <li><b>Proxy server:</b> 
+    <ul>
+      <li>Format: <code>hostname</code> or <code>hostname:port</code></li>
+      <li>Default ports: 8080 (HTTP), 1080 (SOCKS)</li>
+    </ul>
+  </li>
+  <li><b>Username:</b> Optional proxy authentication username</li>
+  <li><b>Password:</b> Optional proxy authentication password (encrypted storage)</li>
+</ul>
+
+<h2>Proxy Error Codes</h2>
+
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Error</th><th>Meaning</th><th>Solution</th></tr>
+  <tr><td>Connection not allowed</td><td>Proxy policy blocks destination</td><td>Check proxy ACL rules</td></tr>
+  <tr><td>Network unreachable</td><td>Target network not routable</td><td>Verify network configuration</td></tr>
+  <tr><td>Host unreachable</td><td>Specific host not reachable</td><td>Check host availability</td></tr>
+  <tr><td>Connection refused</td><td>Target actively refused</td><td>Verify service is running</td></tr>
+  <tr><td>TTL expired</td><td>Routing loop or timeout</td><td>Check routing configuration</td></tr>
+  <tr><td>Command not supported</td><td>Proxy doesn't support operation</td><td>Try different proxy type</td></tr>
+  <tr><td>Address type not supported</td><td>IPv6/hostname not supported</td><td>Use IPv4 or different proxy</td></tr>
+</table>
+
+<h2>Proxy Authentication</h2>
+<p>When proxy requires authentication:</p>
+<ol>
+  <li>Enter username in <b>Username</b> field</li>
+  <li>Enter password in <b>Password</b> field</li>
+  <li>Password is stored encrypted via DPAPI</li>
+  <li>For SOCKS5, authentication is negotiated during connection</li>
+</ol>
+
+<h2>Proxy with SSH Key Authentication</h2>
+<p>Proxy settings are independent of SSH authentication. You can use:</p>
+<ul>
+  <li>Proxy + password authentication</li>
+  <li>Proxy + public key authentication</li>
+  <li>Proxy + Pageant (SSH agent)</li>
+</ul>
+
+<h2>Troubleshooting</h2>
+
+<h3>Proxy connection fails immediately</h3>
+<ul>
+  <li>Verify proxy server is reachable: <code>telnet proxy:port</code></li>
+  <li>Check proxy type matches server capability</li>
+  <li>Verify credentials if authentication required</li>
+</ul>
+
+<h3>Connection works without proxy but not with</h3>
+<ul>
+  <li>Check proxy server logs for denied connections</li>
+  <li>Verify proxy allows CONNECT to target port (usually 22)</li>
+  <li>Try SOCKS5 if HTTP CONNECT fails</li>
+</ul>
+
+<h3>SOCKS5 authentication fails</h3>
+<ul>
+  <li>Ensure SOCKS5 (not SOCKS4a) is selected</li>
+  <li>Verify username/password are correct</li>
+  <li>Check if proxy requires specific authentication method</li>
+</ul>
+
+<div class="note">
+  <b>Security note:</b> Proxy passwords are stored encrypted, but the proxy connection itself may not be encrypted. Use SOCKS5 or HTTPS proxy for sensitive environments.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

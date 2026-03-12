@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Session Management</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Session Management</h1>
+
+<p>The plugin provides comprehensive session management for storing and organizing connection configurations.</p>
+
+<h2>Saved Sessions</h2>
+
+<h3>Creating a Session</h3>
+<ol>
+  <li>Open connection dialog (Ctrl+F1)</li>
+  <li>Enter connection settings (host, username, authentication, etc.)</li>
+  <li>Press <code>F7</code> or click in session field</li>
+  <li>Enter session name in the dialog (Total Commander shows "New folder" - this is expected)</li>
+  <li>Settings are automatically saved under that name</li>
+</ol>
+
+<h3>Editing a Session</h3>
+<ol>
+  <li>Select session from dropdown</li>
+  <li>Press <code>Alt+Enter</code></li>
+  <li>Modify settings as needed</li>
+  <li>Changes are saved automatically</li>
+</ol>
+
+<h3>Deleting a Session</h3>
+<ul>
+  <li>Select session from dropdown</li>
+  <li>Press <code>F8</code> or <code>Delete</code></li>
+  <li>Confirm deletion</li>
+</ul>
+
+<h2>Keyboard Shortcuts</h2>
+
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><code>F7</code></td><td>Create new session</td></tr>
+  <tr><td><code>F8 / Delete</code></td><td>Delete selected session</td></tr>
+  <tr><td><code>Enter</code></td><td>Connect with current settings</td></tr>
+  <tr><td><code>Alt+Enter</code></td><td>Edit selected session</td></tr>
+  <tr><td><code>Ctrl+Down</code></td><td>Open session dropdown</td></tr>
+  <tr><td><code>Escape</code></td><td>Cancel connection attempt</td></tr>
+</table>
+
+<h2>Session Storage</h2>
+
+<h3>Storage Location</h3>
+<ul>
+  <li>Sessions stored in <code>sftpplug.ini</code></li>
+  <li>Located in Total Commander configuration directory</li>
+  <li>Typically: <code>%APPDATA%\GHISLER\</code> or TC installation directory</li>
+</ul>
+
+<h3>Stored Information</h3>
+<ul>
+  <li>Hostname and port</li>
+  <li>Username</li>
+  <li>Encrypted password (if saved)</li>
+  <li>Transfer mode settings</li>
+  <li>Proxy configuration</li>
+  <li>Codepage/encoding settings</li>
+  <li>Key file paths</li>
+  <li>Advanced options (compression, shell transfer, etc.)</li>
+  <li>LAN Pair role, peer, and timeout</li>
+  <li>Jump Host / ProxyJump settings</li>
+</ul>
+
+<h3>Password Security</h3>
+<ul>
+  <li>Passwords encrypted with Windows DPAPI</li>
+  <li>Encryption is user-specific (cannot be used by other users)</li>
+  <li>Passwords not stored in plain text</li>
+  <li>Optional: Don't save password, prompt each time</li>
+</ul>
+
+<h2>Import Sessions</h2>
+
+<h3>Import from PuTTY</h3>
+<ol>
+  <li>Click <b>Import...</b> button</li>
+  <li>Select "PuTTY" as source</li>
+  <li>Sessions imported from registry: <code>HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions</code></li>
+  <li>Imported: hostname, port, username, key settings</li>
+</ol>
+
+<h3>Import from WinSCP</h3>
+<ol>
+  <li>Click <b>Import...</b> button</li>
+  <li>Select "WinSCP" as source</li>
+  <li>Sessions imported from registry: <code>HKEY_CURRENT_USER\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
+  <li>Imported: hostname, port, username, key paths, protocol settings</li>
+</ol>
+
+<h3>Protocol Mapping</h3>
+<ul>
+  <li><b>WinSCP SFTP:</b> Imported as SSH (SFTP/SCP) mode</li>
+  <li><b>WinSCP SCP:</b> Imported with <code>scponly=1</code> and <code>scpfordata=1</code></li>
+  <li><b>Unsupported protocols:</b> Skipped with summary report</li>
+</ul>
+
+<h3>Key File Compatibility</h3>
+<ul>
+  <li>Imported key paths preserved as-is</li>
+  <li>Supports both <code>.pem</code> and <code>.ppk</code> extensions</li>
+  <li>PPK files converted natively (no puttygen needed)</li>
+  <li>May need to verify key paths after import</li>
+</ul>
+
+<h2>After Import Checklist</h2>
+<ol>
+  <li>Open imported session with <code>Alt+Enter</code></li>
+  <li>Verify transfer mode matches server capabilities</li>
+  <li>Check proxy settings if applicable</li>
+  <li>Verify key file paths are valid</li>
+  <li>Test connection</li>
+  <li>Adjust SCP/Shell options for restrictive hosts</li>
+</ol>
+
+<h2>Session Organization Tips</h2>
+
+<h3>Naming Conventions</h3>
+<pre>
+production-server1      - Clear environment prefix
+dev-db-backup           - Purpose in name
+clientname-project      - Client/project based
+aws-eu-west-web         - Cloud provider + region
+</pre>
+
+<h3>Session Groups</h3>
+<p>Use naming patterns for logical grouping:</p>
+<ul>
+  <li>Sessions appear alphabetically in dropdown</li>
+  <li>Prefix with category for grouping</li>
+  <li>Example: <code>AWS-</code>, <code>Azure-</code>, <code>Local-</code></li>
+</ul>
+
+<h2>Session Limits</h2>
+<ul>
+  <li>No hard limit on number of sessions</li>
+  <li>Practical limit: INI file size (typically fine for hundreds)</li>
+  <li>Each session ~500-1000 bytes in INI</li>
+</ul>
+
+<h2>Troubleshooting</h2>
+
+<h3>Session not saved</h3>
+<ul>
+  <li>Check INI file is writable</li>
+  <li>Verify Total Commander has write permissions</li>
+  <li>Check disk space</li>
+</ul>
+
+<h3>Password not remembered</h3>
+<ul>
+  <li>Ensure "Save password" was selected</li>
+  <li>DPAPI requires same Windows user</li>
+  <li>Re-enter password and save again</li>
+</ul>
+
+<h3>Import fails</h3>
+<ul>
+  <li>Verify source sessions exist in registry</li>
+  <li>Check registry permissions</li>
+  <li>Run Total Commander as administrator if needed</li>
+</ul>
+
+<div class="note">
+  <b>Tip:</b> Export your <code>sftpplug.ini</code> periodically for backup. Sessions are portable between machines (passwords require same Windows user).
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

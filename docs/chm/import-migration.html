@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Import from PuTTY/WinSCP</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Import from PuTTY / WinSCP</h1>
+
+<h2>What import reads</h2>
+<ul>
+  <li>Registry sessions from PuTTY and WinSCP in current user profile.</li>
+  <li>Host, port, username, selected key path, and selected SSH-agent usage flags.</li>
+</ul>
+
+<h2>Protocol mapping</h2>
+<ul>
+  <li>WinSCP SFTP sessions import as normal SSH mode.</li>
+  <li>WinSCP SCP sessions import with <code>scponly=1</code> and <code>scpfordata=1</code>.</li>
+  <li>Unsupported WinSCP protocols are skipped and reported in summary.</li>
+</ul>
+
+<h2>Key compatibility</h2>
+<ul>
+  <li>Imported key paths may include <code>.pem</code> or <code>.ppk</code>.</li>
+  <li>Plugin supports native PPK conversion for authentication workflow.</li>
+</ul>
+
+<h2>After import checklist</h2>
+<ol>
+  <li>Open imported session with <code>Alt+Enter</code>.</li>
+  <li>Verify transfer mode and proxy.</li>
+  <li>Test connection and adjust SCP/Shell options if host is restrictive.</li>
+</ol>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

@@ -1,0 +1,469 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Advanced Troubleshooting</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Advanced Troubleshooting</h1>
+
+<p>Comprehensive guide for diagnosing and resolving connection and transfer issues.</p>
+
+<h2>Connection Problems</h2>
+
+<h3>Cannot Connect to Host</h3>
+
+<h4>Symptoms</h4>
+<ul>
+  <li>"Connection refused" error</li>
+  <li>"Network is unreachable"</li>
+  <li>Timeout waiting for response</li>
+</ul>
+
+<h4>Diagnosis Steps</h4>
+<ol>
+  <li><b>Verify host is reachable:</b>
+    <pre>ping hostname</pre>
+  </li>
+  <li><b>Check SSH port is open:</b>
+    <pre>telnet hostname 22</pre>
+    Or: <pre>Test-NetConnection hostname -Port 22</pre>
+  </li>
+  <li><b>Verify hostname format:</b>
+    <ul>
+      <li>No protocol prefix needed: <code>example.com</code> not <code>ssh://example.com</code></li>
+      <li>Custom port: <code>example.com:2222</code></li>
+      <li>IPv6: <code>[::1]:22</code></li>
+    </ul>
+  </li>
+  <li><b>Check firewall rules:</b>
+    <ul>
+      <li>Windows Firewall may block outgoing SSH</li>
+      <li>Corporate firewall may block port 22</li>
+      <li>Try alternative port if available</li>
+    </ul>
+  </li>
+</ol>
+
+<h3>Connection Times Out</h3>
+
+<h4>Common Causes</h4>
+<ul>
+  <li>Network latency or packet loss</li>
+  <li>Server under heavy load</li>
+  <li>Intermediate firewall dropping packets</li>
+  <li>MTU issues on network path</li>
+</ul>
+
+<h4>Solutions</h4>
+<ul>
+  <li>Increase connection timeout in settings</li>
+  <li>Enable SSH keepalive</li>
+  <li>Try from different network</li>
+  <li>Contact server administrator</li>
+</ul>
+
+<h3>Connection Reset by Peer</h3>
+
+<h4>Symptoms</h4>
+<ul>
+  <li>Connection established then immediately closed</li>
+  <li>"Connection reset by peer" error</li>
+</ul>
+
+<h4>Causes</h4>
+<ul>
+  <li>Server rejected authentication method</li>
+  <li>Max connections exceeded on server</li>
+  <li>Server configuration issue</li>
+  <li>Incompatible SSH protocol version</li>
+</ul>
+
+<h4>Solutions</h4>
+<ul>
+  <li>Check server logs for rejection reason</li>
+  <li>Try different authentication method</li>
+  <li>Wait and retry (may be rate limiting)</li>
+  <li>Verify server supports SSH 2.0</li>
+</ul>
+
+<h2>Authentication Problems</h2>
+
+<h3>Password Authentication Fails</h3>
+
+<h4>Check These</h4>
+<ul>
+  <li>Password is correct (case-sensitive)</li>
+  <li>Account is not locked</li>
+  <li>Password hasn't expired</li>
+  <li>Server allows password authentication</li>
+</ul>
+
+<h4>Server Configuration</h4>
+<p>Some servers disable password auth:</p>
+<pre>
+# In /etc/ssh/sshd_config
+PasswordAuthentication yes  # Must be enabled
+</pre>
+
+<h3>Public Key Authentication Fails</h3>
+
+<h4>Verify Key Setup</h4>
+<ol>
+  <li><b>Public key on server:</b>
+    <pre>cat ~/.ssh/authorized_keys</pre>
+    Ensure your public key is present
+  </li>
+  <li><b>Permissions on server:</b>
+    <pre>
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+    </pre>
+  </li>
+  <li><b>Private key format:</b>
+    <ul>
+      <li>PEM: OpenSSH format</li>
+      <li>PPK: PuTTY format (native conversion)</li>
+      <li>Check key file is not corrupted</li>
+    </ul>
+  </li>
+  <li><b>Key passphrase:</b>
+    <ul>
+      <li>Enter when prompted</li>
+      <li>Use Pageant to cache unlocked key</li>
+    </ul>
+  </li>
+</ol>
+
+<h4>PPK Conversion Issues</h4>
+<ul>
+  <li><b>PPK v3 requires argon2.dll:</b> Ensure DLL is in plugin directory</li>
+  <li><b>Corrupted PPK:</b> Try opening in PuTTYgen</li>
+  <li><b>Wrong format:</b> Plugin auto-detects, but may fail with unusual keys</li>
+</ul>
+
+<h3>Pageant Not Working</h3>
+
+<h4>Checklist</h4>
+<ul>
+  <li>Pageant is running (check system tray)</li>
+  <li>Key is loaded in Pageant (right-click → View Keys)</li>
+  <li>"Use SSH agent (Pageant)" is checked in plugin</li>
+  <li>Plugin can communicate with Pageant</li>
+</ul>
+
+<h4>Debug Pageant</h4>
+<ol>
+  <li>Open Pageant key list</li>
+  <li>Note key fingerprint</li>
+  <li>Enable detailed logging in plugin</li>
+  <li>Check which keys plugin sees</li>
+  <li>Verify server accepts that key type</li>
+</ol>
+
+<h2>SFTP/SCP Problems</h2>
+
+<h3>SFTP Subsystem Not Available</h3>
+
+<h4>Symptoms</h4>
+<ul>
+  <li>"Subsystem request failed"</li>
+  <li>"SFTP initialization failed"</li>
+</ul>
+
+<h4>Solutions</h4>
+<ol>
+  <li>Try SCP mode instead</li>
+  <li>Enable "Use SCP for everything"</li>
+  <li>Enable shell transfer fallback</li>
+  <li>Contact admin to enable SFTP subsystem</li>
+</ol>
+
+<h4>Server Configuration</h4>
+<pre>
+# In /etc/ssh/sshd_config
+Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
+</pre>
+
+<h3>SCP Transfers Fail</h3>
+
+<h4>Common Issues</h4>
+<ul>
+  <li><b>Permissions:</b> No write permission in target directory</li>
+  <li><b>Disk space:</b> Server disk full</li>
+  <li><b>File size:</b> Exceeds server limits</li>
+  <li><b>Filename encoding:</b> Non-ASCII names</li>
+</ul>
+
+<h4>SCP Protocol Issues</h4>
+<ul>
+  <li>Some servers have buggy SCP implementation</li>
+  <li>Try "Use SCP for data transfers" (mixed mode)</li>
+  <li>Enable shell transfer as fallback</li>
+</ul>
+
+<h3>Transfer Speed Slow</h3>
+
+<h4>Diagnosis</h4>
+<ul>
+  <li>Check network bandwidth: speed test</li>
+  <li>Monitor CPU usage (compression overhead)</li>
+  <li>Check server load</li>
+  <li>Test with different file sizes</li>
+</ul>
+
+<h4>Optimization</h4>
+<ul>
+  <li><b>Disable compression:</b> May help on fast networks</li>
+  <li><b>Increase block size:</b> Larger transfers more efficient</li>
+  <li><b>Use binary mode:</b> ASCII conversion adds overhead</li>
+  <li><b>Parallel transfers:</b> Multiple small files</li>
+</ul>
+
+<h2>PHP Agent Problems</h2>
+
+<h3>HTTP 401 Unauthorized</h3>
+
+<h4>Causes</h4>
+<ul>
+  <li>Password doesn't match PSK in sftp.php</li>
+  <li>Timestamp too far from server time</li>
+  <li>Nonce replay detected</li>
+  <li>Signature computation error</li>
+</ul>
+
+<h4>Solutions</h4>
+<ol>
+  <li>Regenerate sftp.php with correct password</li>
+  <li>Upload new sftp.php to server</li>
+  <li>Check system time synchronization</li>
+  <li>Verify HMAC-SHA256 implementation</li>
+</ol>
+
+<h3>HTTP 404 Not Found</h3>
+
+<h4>Check</h4>
+<ul>
+  <li>URL is correct and complete</li>
+  <li>sftp.php exists at that path</li>
+  <li>File permissions allow execution</li>
+  <li>Web server configured for PHP</li>
+</ul>
+
+<h4>Test URL</h4>
+<pre>
+curl -I https://example.com/sftp.php
+</pre>
+Should return HTTP 200 or 401 (not 404)
+
+<h3>HTTP 503 Service Unavailable</h3>
+
+<h4>Meaning</h4>
+<ul>
+  <li>AGENT_PSK not configured</li>
+  <li>sftp.php not properly deployed</li>
+</ul>
+
+<h4>Fix</h4>
+<ol>
+  <li>Set PSK via environment variable:
+    <pre>export AGENT_PSK=your_secret</pre>
+  </li>
+  <li>Or edit sftp.php constant:
+    <pre>const AGENT_PSK = 'your_secret';</pre>
+  </li>
+  <li>Re-upload sftp.php</li>
+</ol>
+
+<h3>Upload Fails with HTTP 500</h3>
+
+<h4>Check PHP Limits</h4>
+<ul>
+  <li><code>upload_max_filesize</code> in php.ini</li>
+  <li><code>post_max_size</code> in php.ini</li>
+  <li><code>max_execution_time</code></li>
+  <li><code>memory_limit</code></li>
+</ul>
+
+<h4>Check Server Logs</h4>
+<pre>
+# Apache
+tail -f /var/log/apache2/error.log
+
+# Nginx
+tail -f /var/log/nginx/error.log
+
+# PHP
+tail -f /var/log/php/error.log
+</pre>
+
+<h3>Directory Listing Empty</h3>
+
+<h4>Possible Causes</h4>
+<ul>
+  <li>AGENT_ROOT set incorrectly</li>
+  <li>open_basedir restriction</li>
+  <li>Directory permissions</li>
+  <li>SELinux/AppArmor blocking</li>
+</ul>
+
+<h4>Debug</h4>
+<pre>
+# Check what PHP sees
+php -r "var_dump(scandir('.'));"
+</pre>
+
+<h2>Character Encoding Issues</h2>
+
+<h3>Garbled Filenames</h3>
+
+<h4>Diagnosis</h4>
+<ul>
+  <li>Note which characters are wrong</li>
+  <li>Check server's default encoding</li>
+  <li>Try forcing UTF-8 or ANSI</li>
+</ul>
+
+<h4>Solutions</h4>
+<ul>
+  <li>Set UTF-8 for filenames</li>
+  <li>Select correct codepage for ANSI</li>
+  <li>Check server SSH configuration</li>
+</ul>
+
+<h3>Text File Content Corrupted</h3>
+
+<h4>Check Transfer Mode</h4>
+<ul>
+  <li>Binary: Raw bytes (no conversion)</li>
+  <li>ASCII: Line ending conversion</li>
+  <li>Auto: Based on file patterns</li>
+</ul>
+
+<h4>Line Ending Issues</h4>
+<ul>
+  <li>Windows expects CRLF</li>
+  <li>Unix expects LF</li>
+  <li>Classic Mac used CR</li>
+  <li>Use appropriate mode for target</li>
+</ul>
+
+<h2>Proxy Issues</h2>
+
+<h3>Proxy Connection Fails</h3>
+
+<h4>Verify Proxy Settings</h4>
+<ul>
+  <li>Proxy hostname correct</li>
+  <li>Proxy port correct</li>
+  <li>Proxy type matches server</li>
+  <li>Credentials if required</li>
+</ul>
+
+<h4>Test Proxy</h4>
+<pre>
+# HTTP proxy
+curl --proxy http://proxy:8080 https://example.com
+
+# SOCKS proxy
+curl --socks5 proxy:1080 https://example.com
+</pre>
+
+<h3>SOCKS5 Authentication Fails</h3>
+
+<h4>Check</h4>
+<ul>
+  <li>Username/password correct</li>
+  <li>SOCKS5 selected (not SOCKS4a)</li>
+  <li>Proxy supports username/password auth</li>
+</ul>
+
+<h2>Logging and Debugging</h2>
+
+<h3>Enable Detailed Logging</h3>
+<ol>
+  <li>Check "Detailed log" in plugin settings</li>
+  <li>Check "Show entire directory listings in log"</li>
+  <li>Reproduce the issue</li>
+  <li>Review Total Commander log window</li>
+</ol>
+
+<h3>Log Analysis</h3>
+<h4>Connection Log</h4>
+<pre>
+CONN: Connecting to hostname:22
+CONN: Socket connected
+CONN: SSH session initialized
+CONN: Server banner: SSH-2.0-OpenSSH_8.9
+CONN: Userauth list: publickey,password
+</pre>
+
+<h4>Transfer Log</h4>
+<pre>
+XFER: Downloading /remote/file.txt
+XFER: Size: 1234567 bytes
+XFER: Using SFTP method
+XFER: Progress: 50%
+XFER: Complete
+</pre>
+
+<h3>Network Capture</h3>
+<p>For advanced debugging, use Wireshark:</p>
+<ol>
+  <li>Start capture on network interface</li>
+  <li>Filter: <code>tcp.port == 22</code></li>
+  <li>Reproduce issue</li>
+  <li>Stop capture and analyze</li>
+</ol>
+
+<h2>Recent Bug Fixes (March 2026)</h2>
+
+<h3>SFTP Resume Not Working</h3>
+<p><b>Symptom:</b> Resume upload always starts from beginning instead of last position.</p>
+<p><b>Cause:</b> Missing LIBSSH2_SFTP_ATTR_SIZE flag in fstat request.</p>
+<p><b>Fix:</b> Added flag to request file size from server. Update to latest version.</p>
+
+<h3>Setstat After SCP Upload</h3>
+<p><b>Symptom:</b> Potential crash when setting timestamps after SCP upload in SCP-only mode.</p>
+<p><b>Cause:</b> Missing null check for sftpsession before calling setstat.</p>
+<p><b>Fix:</b> Added guard to check sftpsession != nullptr. Update to latest version.</p>
+
+<h3>Tilde Symlink Downloaded as File</h3>
+<p><b>Symptom:</b> Clicking "~" (home symlink) opens download dialog instead of opening folder.</p>
+<p><b>Cause:</b> Stale shell session after PHP→SCP mode switch, TC interpreted FS_EXEC_YOURSELF as "download file".</p>
+<p><b>Fix:</b> Added reconnect+retry logic and safety net in FsGetFileW. Update to latest version.</p>
+
+<h3>Debug Logging Performance</h3>
+<p><b>Symptom:</b> Slow file transfers in Release build.</p>
+<p><b>Cause:</b> Debug logging was enabled by default, creating C:\temp\sftpplug_debug.log on every operation.</p>
+<p><b>Fix:</b> Debug logging now disabled in Release builds (NDEBUG defined). No action needed.</p>
+
+<h2>Getting Help</h2>
+
+<h3>Information to Provide</h3>
+<ul>
+  <li>Plugin version</li>
+  <li>Total Commander version</li>
+  <li>Windows version</li>
+  <li>Server type and version</li>
+  <li>Detailed error messages</li>
+  <li>Log output (with sensitive data removed)</li>
+  <li>Steps to reproduce</li>
+</ul>
+
+<h3>Common Error Codes</h3>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Code</th><th>Meaning</th></tr>
+  <tr><td>LIBSSH2_ERROR_SOCKET_NONE (-2)</td><td>Socket not initialized</td></tr>
+  <tr><td>LIBSSH2_ERROR_BANNER_RECV (-3)</td><td>Server banner not received</td></tr>
+  <tr><td>LIBSSH2_ERROR_KEY_EXCHANGE_FAILURE (-4)</td><td>KEX failed</td></tr>
+  <tr><td>LIBSSH2_ERROR_TIMEOUT (-10)</td><td>Operation timed out</td></tr>
+  <tr><td>LIBSSH2_ERROR_AUTHENTICATION_FAILED (-18)</td><td>Auth failed</td></tr>
+  <tr><td>LIBSSH2_ERROR_SFTP_PROTOCOL (-26)</td><td>SFTP protocol error</td></tr>
+  <tr><td>LIBSSH2_ERROR_SOCKET_DISCONNECT (-13)</td><td>SSH disconnected</td></tr>
+</table>
+
+<div class="note">
+  <b>Tip:</b> Many issues are server-side. Check server logs (/var/log/auth.log, /var/log/secure) for SSH daemon messages.
+</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>

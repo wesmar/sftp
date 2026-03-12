@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Security Model</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Security Model</h1>
+
+<h2>Transport security</h2>
+<ul>
+  <li>Use HTTPS for all PHP Agent/Shell traffic.</li>
+  <li>Avoid plain HTTP on public networks.</li>
+</ul>
+
+<h2>Credential handling</h2>
+<ul>
+  <li>Client side password is stored encrypted in <code>sftpplug.ini</code> (DPAPI).</li>
+  <li>Server side <code>sftp.php</code> can use salted hash constants for deployment simplicity.</li>
+  <li>Do not commit real production secrets to public repositories.</li>
+  <li>Jump Host credentials are separate from target-host credentials.</li>
+</ul>
+
+<h2>SSH host identity</h2>
+<ul>
+  <li>Target host fingerprint is verified and stored for SSH sessions.</li>
+  <li>Jump Host / ProxyJump keeps a separate stored fingerprint for the bastion host.</li>
+  <li>Accepting a new fingerprint should always be a deliberate decision.</li>
+</ul>
+
+<h2>LAN Pair trust model</h2>
+<ul>
+  <li>LAN Pair is intended for trusted local-network scenarios.</li>
+  <li>Session timeout is enforced between operations, not by killing an active transfer mid-stream.</li>
+</ul>
+
+<h2>Operational recommendations</h2>
+<ul>
+  <li>Restrict URL exposure where possible.</li>
+  <li>Rotate credentials periodically.</li>
+  <li>Keep PHP runtime and plugin up to date.</li>
+</ul>
+
+<div class="warn"><b>Important:</b> Security depends on TLS, server hardening, and secret management together.</div>
+
+<p><a href="index.html">Back to index</a></p>
+</body>
+</html>
