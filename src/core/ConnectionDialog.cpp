@@ -2149,7 +2149,7 @@ INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPa
                 serverfieldchangedbyuser = true;
             break;
         case IDC_SESSIONCOMBO:
-            if (HIWORD(wParam) == CBN_SELCHANGE || HIWORD(wParam) == CBN_CLOSEUP)
+            if (HIWORD(wParam) == CBN_SELCHANGE)
                 OnSessionChangedCommand(hWnd, dlgCtx, dlgIniFileName);
             break;
         case IDC_CERTHELP:

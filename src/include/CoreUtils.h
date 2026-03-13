@@ -19,7 +19,23 @@
 #define FIN_IF(_cond_,_code_) do { if ((_cond_)) { hr = _code_; goto fin; } } while(0)
 #define FIN(_code_)           do { hr = _code_; goto fin; } while(0)
 
-#define LoadStr(s, i)  LoadStringA(hinst, (i), (s), static_cast<int>(countof(s)) - 1)
+// LoadStr — type-safe replacements for the old macro.
+// Passing buf.data() to the macro caused sizeof(char*)/sizeof(char)=8 on x64,
+// silently truncating every loaded string to 6 characters.
+extern HINSTANCE hinst; // defined in PluginEntryPoints.cpp
+
+template<size_t N>
+inline int LoadStr(std::array<char, N>& arr, UINT id) {
+    return LoadStringA(hinst, id, arr.data(), static_cast<int>(N) - 1);
+}
+template<size_t N>
+inline int LoadStr(char (&arr)[N], UINT id) {
+    return LoadStringA(hinst, id, arr, static_cast<int>(N) - 1);
+}
+// For raw char* cases where only a runtime size is available
+inline int LoadStr(char* p, size_t n, UINT id) {
+    return LoadStringA(hinst, id, p, static_cast<int>(n) - 1);
+}
 
 // ============================================================================
 // Modern String Utilities

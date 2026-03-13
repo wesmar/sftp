@@ -94,7 +94,7 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM lParam)
         OnCancel();
         return 1;
     case IDC_SESSIONCOMBO:
-        if (HIWORD(wParam) == CBN_SELCHANGE || HIWORD(wParam) == CBN_CLOSEUP)
+        if (HIWORD(wParam) == CBN_SELCHANGE)
             OnSessionChanged();
         break;
     case IDC_TRANSFERMODE:

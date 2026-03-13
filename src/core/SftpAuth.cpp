@@ -219,7 +219,7 @@ static void BuildUserAtServerTitle(char* out, size_t outLen, int prefixResId, pC
     if (!out || outLen == 0)
         return;
     out[0] = 0;
-    LoadStr(out, prefixResId);
+    LoadStr(out, outLen, prefixResId);
     if (!cs)
         return;
     strlcat(out, cs->user.c_str(), outLen - 1);
@@ -235,7 +235,8 @@ static bool PreparePrivateKeyForAuth(
     bool* outRemoveConvertedPrivateKey,
     char* outConvertedPrivateKey,
     size_t convertedLen,
-    char* ioPromptBuf)
+    char* ioPromptBuf,
+    size_t ioPromptBufLen)
 {
     if (!cs || !ioPrivKeyFile || !ioPubKeyPtr || !outRemoveConvertedPrivateKey || !outConvertedPrivateKey || !ioPromptBuf)
         return false;
@@ -256,7 +257,7 @@ static bool PreparePrivateKeyForAuth(
         std::array<char, 256> ppkPassBuf{};
         title[0] = 0;
         ppkPassBuf[0] = 0;
-        LoadStr(ioPromptBuf, IDS_KEYPASSPHRASE);
+        LoadStr(ioPromptBuf, ioPromptBufLen, IDS_KEYPASSPHRASE);
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, cs);
         if (RequestProc(PluginNumber, RT_Password, title.data(), ioPromptBuf, ppkPassBuf.data(), ppkPassBuf.size() - 1)) {
             converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPassBuf.data(), outConvertedPrivateKey, convertedLen - 1, &convErr);
@@ -378,9 +379,9 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
         if (auth < 0)
             return finish(-IDS_AGENT_NOIDENTITY);
         std::array<char, 128> str1{}, str2{}, str3{};
-        LoadStr(str1.data(), IDS_AGENT_TRYING1);
-        LoadStr(str2.data(), IDS_AGENT_TRYING2);
-        LoadStr(str3.data(), IDS_AGENT_TRYING3);
+        LoadStr(str1, IDS_AGENT_TRYING1);
+        LoadStr(str2, IDS_AGENT_TRYING2);
+        LoadStr(str3, IDS_AGENT_TRYING3);
         ShowStatus((std::string(str1.data()) + ConnectSettings->user + str2.data() + identity->comment + str3.data()).c_str());
         const SYSTICKS authStart = get_sys_ticks();
         while ((auth = agent->userauth(ConnectSettings->user.c_str(), identity)) == LIBSSH2_ERROR_EAGAIN) {
@@ -461,7 +462,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
 
     if (!PreparePrivateKeyForAuth(ConnectSettings, privkeyfile.data(), privkeyfile.size(), &pubkeyfileptr,
                                   &removeConvertedPrivateKey, convertedPrivateKey.data(), convertedPrivateKey.size(),
-                                  buf.data())) {
+                                  buf.data(), buf.size())) {
         clearPassphrase();
         return -LIBSSH2_ERROR_FILE;
     }
@@ -500,7 +501,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         AUTH_LOG("Key is encrypted, requesting passphrase");
         std::array<char, 250> title{};
         BuildUserAtServerTitle(title.data(), title.size(), IDS_PASSPHRASE, ConnectSettings);
-        LoadStr(buf.data(), IDS_KEYPASSPHRASE);
+        LoadStr(buf, IDS_KEYPASSPHRASE);
         if (!ConnectSettings->password.empty()) {
             AUTH_LOG("Using stored password");
             std::string secondPassword;
@@ -522,7 +523,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
     if (pubkeyfileptr && _stricmp(pubkeyfile.data(), privkeyfile.data()) == 0)
         pubkeyfileptr = nullptr;
 
-    LoadStr(buf.data(), IDS_AUTH_PUBKEY);
+    LoadStr(buf, IDS_AUTH_PUBKEY);
     pConnectSettings cs = ConnectSettings;
     int auth;
     const char* passphrasePtr = isencrypted ? passphrase.data() : nullptr;
@@ -561,7 +562,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         ConnectSettings->session->lastError(&errMsg, &errLen, false);
         SftpLogLastError("libssh2_userauth_publickey_fromfile: ", auth);
         std::array<char, 1024> loadedMsg{};
-        LoadStr(loadedMsg.data(), IDS_ERR_AUTH_PUBKEY);
+        LoadStr(loadedMsg, IDS_ERR_AUTH_PUBKEY);
         std::string uiMsg;
         if (loadedMsg[0] == 0 || _stricmp(loadedMsg.data(), "Error:") == 0 || strstr(loadedMsg.data(), "%s"))
             uiMsg = "Error: Authentication by client certificate failed!";

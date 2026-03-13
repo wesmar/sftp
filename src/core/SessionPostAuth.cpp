@@ -25,13 +25,13 @@ int SftpSessionDetectUtf8(pConnectSettings ConnectSettings)
     int hr = 0;
 
     reply[0] = 0;
-    if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $LC_ALL $LC_CTYPE $LANG", reply.data(), reply.size()-1) == 0) {
+    if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $LC_ALL $LC_CTYPE $LANG", reply.data(), reply.size()-1, 3000, 8000) == 0) {
         ToUpperInPlace(reply.data());
         if (strstr(reply.data(), "UTF-8")) {
             hr = AUTODETECT_ON;
         } else {
             reply[0] = 0;
-            if (SftpQuoteCommand2(ConnectSettings, nullptr, "locale", reply.data(), reply.size()-1) == 0) {
+            if (SftpQuoteCommand2(ConnectSettings, nullptr, "locale", reply.data(), reply.size()-1, 3000, 8000) == 0) {
                 ToUpperInPlace(reply.data());
                 if (strstr(reply.data(), "UTF-8"))
                     hr = AUTODETECT_ON;
@@ -48,14 +48,14 @@ int SftpSessionDetectLineBreaks(pConnectSettings ConnectSettings)
     int hr = 0;
 
     reply[0] = 0;
-    if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $OSTYPE", reply.data(), reply.size()-1) == 0) {
+    if (SftpQuoteCommand2(ConnectSettings, nullptr, "echo $OSTYPE", reply.data(), reply.size()-1, 3000, 8000) == 0) {
         ToUpperInPlace(reply.data());
         if (strstr(reply.data(), "LINUX") || strstr(reply.data(), "UNIX") || strstr(reply.data(), "AIX")) {
             hr = AUTODETECT_ON;
         } else {
             global_detectcrlf = -1;
             reply[0] = 0;
-            if (SftpQuoteCommand2(ConnectSettings, nullptr, "ls -l", reply.data(), reply.size()-1) == 0) {
+            if (SftpQuoteCommand2(ConnectSettings, nullptr, "ls -l", reply.data(), reply.size()-1, 3000, 8000) == 0) {
                 if (global_detectcrlf == 0)
                     hr = 1;
             }

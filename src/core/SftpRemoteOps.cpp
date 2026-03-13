@@ -142,12 +142,12 @@ bool ParseScpListingLine(pConnectSettings cs, const char* line, WIN32_FIND_DATAW
 int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdataptr)
 {
     {
-        std::string statusBuf(wdirtypemax, '\0');
-        LoadStr(statusBuf.data(), IDS_GET_DIR);
-        size_t len = strlen(statusBuf.c_str());
+        std::array<char, wdirtypemax> statusBuf{};
+        LoadStr(statusBuf, IDS_GET_DIR);
+        size_t len = strlen(statusBuf.data());
         if (len < statusBuf.size() - 1)
             walcopy(statusBuf.data() + len, remotedir, static_cast<int>(statusBuf.size() - len - 1));
-        ShowStatus(statusBuf.c_str());
+        ShowStatus(statusBuf.data());
     }
 
     for (int i = 0; i < 10; ++i) {
@@ -474,7 +474,7 @@ int SftpFindClose(pConnectSettings cs, LPVOID davdataptr)
 int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
 {
     std::array<char, MAX_PATH> msgBuf{};
-    LoadStr(msgBuf.data(), IDS_MK_DIR);
+    LoadStr(msgBuf, IDS_MK_DIR);
     std::wstring display(wdirtypemax, L'\0');
     awlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
     display.resize(wcslen(display.c_str()));
@@ -557,7 +557,7 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
 int SftpDeleteFileW(pConnectSettings cs, LPCWSTR RemoteName, bool isdir)
 {
     std::array<char, MAX_PATH> msgBuf{};
-    LoadStr(msgBuf.data(), IDS_DELETE);
+    LoadStr(msgBuf, IDS_DELETE);
     std::wstring display(wdirtypemax, L'\0');
     awlcopy(display.data(), msgBuf.data(), wdirtypemax - 1);
     display.resize(wcslen(display.c_str()));

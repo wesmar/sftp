@@ -19,8 +19,8 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
     std::array<char, 128> title{};
     std::array<char, 128> buf1{};
     std::array<char, 128> newpass{};
-    LoadStr(title.data(), IDS_PASS_TITLE);
-    LoadStr(buf1.data(), IDS_PASS_CHANGE_REQUEST);
+    LoadStr(title, IDS_PASS_TITLE);
+    LoadStr(buf1, IDS_PASS_CHANGE_REQUEST);
     newpass[0] = 0;
     if (newpw)
         *newpw = nullptr;
@@ -65,7 +65,7 @@ int NegotiateProxy(
 
     progress = 20; // PROG_SOCKET_CONNECT
     std::array<char, 250> progressbuf{};
-    LoadStr(progressbuf.data(), IDS_PROXY_CONNECT);
+    LoadStr(progressbuf, IDS_PROXY_CONNECT);
     if (ProgressProc(PluginNumber, progressbuf.data(), "-", progress))
         return -40;
 
@@ -109,7 +109,7 @@ int PerformAuthentication(
         SYSTICKS authListStart = get_sys_ticks();
         do {
             userauthlist = ConnectSettings->session->userauthList(ConnectSettings->user.c_str(), (UINT)ConnectSettings->user.size());
-            LoadStr(buf.data(), IDS_USER_AUTH_LIST);
+            LoadStr(buf, IDS_USER_AUTH_LIST);
             if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                 break;
             if (get_ticks_between(authListStart) > SSH_PROBE_TIMEOUT_MS) {
@@ -177,7 +177,7 @@ int PerformAuthentication(
 
         if (canKeyboardAuth && !preferPasswordFirst) {
             ShowStatusId(IDS_AUTH_KEYBDINT_FOR, ConnectSettings->user.c_str(), true);
-            LoadStr(buf.data(), IDS_AUTH_KEYBDINT);
+            LoadStr(buf, IDS_AUTH_KEYBDINT);
             pConnectSettings cs = ConnectSettings;
             cs->InteractivePasswordSent = false;
             const SYSTICKS authStart = get_sys_ticks();
@@ -221,7 +221,7 @@ int PerformAuthentication(
             }
 
             ShowStatusId(IDS_AUTH_PASSWORD_FOR, ConnectSettings->user.c_str(), true);
-            LoadStr(buf.data(), IDS_AUTH_PASSWORD);
+            LoadStr(buf, IDS_AUTH_PASSWORD);
             const SYSTICKS authStart = get_sys_ticks();
             while (1) {
                 auth = ConnectSettings->session->userauthPassword(ConnectSettings->user.c_str(), (unsigned)ConnectSettings->user.size(), passphrase.c_str(), (unsigned)passphrase.length(), &newpassfunc);
@@ -247,7 +247,7 @@ int PerformAuthentication(
             // Retry keyboard-interactive after password failure for servers that expose
             // both methods but only accept one depending on account policy.
             ShowStatusId(IDS_AUTH_KEYBDINT_FOR, ConnectSettings->user.c_str(), true);
-            LoadStr(buf.data(), IDS_AUTH_KEYBDINT);
+            LoadStr(buf, IDS_AUTH_KEYBDINT);
             pConnectSettings cs = ConnectSettings;
             cs->InteractivePasswordSent = false;
             const SYSTICKS authStart = get_sys_ticks();

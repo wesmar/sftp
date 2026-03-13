@@ -176,7 +176,7 @@ void ShowMessageIdEx(int errorid, LPCSTR p1, int p2, bool silent)
     if (errorid < 0)
         return;
     std::array<char, 256> loadedStr{};
-    LoadStr(loadedStr.data(), errorid);
+    LoadStr(loadedStr, errorid);
     std::string msg = loadedStr.data();
     if (p1) {
         auto pos = msg.find("%s");
@@ -468,7 +468,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
         return SFTP_FAILED;
     if (!loadAgent && ConnectSettings->useagent) {
         std::array<char, 128> msgTemplate{};
-        LoadStr(msgTemplate.data(), IDS_SSH2_TOO_OLD);
+        LoadStr(msgTemplate, IDS_SSH2_TOO_OLD);
         std::string msg = msgTemplate.data();
         auto pos = msg.find("%s");
         if (pos != std::string::npos)
@@ -487,7 +487,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     int loop;
     SYSTICKS lasttime = get_sys_ticks();
     auto fail = [&](int code) -> int {
-        return CleanupFailedConnect(ConnectSettings, code, buf.data(), &progress, &loop, &lasttime);
+        return CleanupFailedConnect(ConnectSettings, code, &progress, &loop, &lasttime);
     };
 
     {
@@ -512,6 +512,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
         }
         return fail(-13);
     }
+    ShowStatus("========================================");
     ShowStatusId(IDS_CONNECT_TO, ConnectSettings->server, true);
 
     progress = PROG_SOCKET_CONNECT;
@@ -567,7 +568,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     if (hr != 0) return fail(hr);
 
     progress = PROG_AUTH_START;
-    LoadStr(buf.data(), IDS_SSH_LOGIN);
+    LoadStr(buf, IDS_SSH_LOGIN);
     if (ProgressProc(PluginNumber, buf.data(), "-", progress))
         return fail(-80);
 
@@ -598,7 +599,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
 
     progress = PROG_DONE;
 
-    LoadStr(buf.data(), IDS_GET_DIRECTORY);
+    LoadStr(buf, IDS_GET_DIRECTORY);
     if (ProgressProc(PluginNumber, buf.data(), "-", progress))
         return fail(SFTP_FAILED);
 

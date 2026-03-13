@@ -8,7 +8,6 @@ bool EnsureUserNameIfMissing(pConnectSettings cs);
 int CleanupFailedConnect(
     pConnectSettings cs,
     int code,
-    char* progressTextBuf,
     int* ioProgress,
     int* ioLoop,
     SYSTICKS* ioLastTime);

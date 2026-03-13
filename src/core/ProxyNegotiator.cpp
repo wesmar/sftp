@@ -46,12 +46,12 @@ int SftpConnectProxyHttp(pConnectSettings ConnectSettings, LPCSTR progressbuf, i
         std::array<char, 256> passphrase{};
         strlcpy(passphrase.data(), proxyPass, passphrase.size()-1);
 
-        LoadStr(buf1.data(), IDS_PROXY_PASSWORD_FOR);
+        LoadStr(buf1, IDS_PROXY_PASSWORD_FOR);
         strlcpy(title.data(), buf1.data(), title.size()-1);
         strlcat(title.data(), proxyUser, title.size()-1);
         strlcat(title.data(), "@", title.size()-1);
         strlcat(title.data(), proxyServer, title.size()-1);
-        LoadStr(buf1.data(), IDS_PROXY_PASSWORD);
+        LoadStr(buf1, IDS_PROXY_PASSWORD);
         if (passphrase[0] == 0)
             RequestProc(PluginNumber, RT_Password, title.data(), buf1.data(), passphrase.data(), passphrase.size()-1);
 
@@ -184,7 +184,7 @@ int SftpConnectProxySocks5(pConnectSettings ConnectSettings, int connecttoport, 
         mysend(ConnectSettings->sock, buf.data(), nrbytes, 0, progressbuf, progress, ploop, plasttime);
         nrbytes = myrecv(ConnectSettings->sock, buf.data(), 2, 0, progressbuf, progress, ploop, plasttime);
         if (nrbytes != 2 || buf[1] != 0) {
-            LoadStr(buf.data(), IDS_SOCKS5PROXYERR);
+            LoadStr(buf, IDS_SOCKS5PROXYERR);
             ShowError(buf.data());
             return -2;
         }
@@ -236,18 +236,18 @@ int SftpConnectProxySocks5(pConnectSettings ConnectSettings, int connecttoport, 
     if (nrbytes != 4 || buf[0] != SOCKS5_VERSION || buf[1] != 0) {
         //ShowErrorId(IDS_VIA_PROXY_CONNECT);
         switch(buf[1]) {
-            case 1: LoadStr(buf.data(), IDS_GENERALSOCKSFAILURE); break;
-            case 2: LoadStr(buf.data(), IDS_CONNNOTALLOWED); break;
-            case 3: LoadStr(buf.data(), IDS_NETUNREACHABLE); break;
-            case 4: LoadStr(buf.data(), IDS_HOSTUNREACHABLE); break;
-            case 5: LoadStr(buf.data(), IDS_CONNREFUSED); break;
-            case 6: LoadStr(buf.data(), IDS_TTLEXPIRED); break;
-            case 7: LoadStr(buf.data(), IDS_CMDNOTSUPPORTED); break;
-            case 8: LoadStr(buf.data(), IDS_ADDRTYPENOTSUPPORTED); break;
+            case 1: LoadStr(buf, IDS_GENERALSOCKSFAILURE); break;
+            case 2: LoadStr(buf, IDS_CONNNOTALLOWED); break;
+            case 3: LoadStr(buf, IDS_NETUNREACHABLE); break;
+            case 4: LoadStr(buf, IDS_HOSTUNREACHABLE); break;
+            case 5: LoadStr(buf, IDS_CONNREFUSED); break;
+            case 6: LoadStr(buf, IDS_TTLEXPIRED); break;
+            case 7: LoadStr(buf, IDS_CMDNOTSUPPORTED); break;
+            case 8: LoadStr(buf, IDS_ADDRTYPENOTSUPPORTED); break;
             default:
             {
                 std::array<char, MAX_PATH> buf2{};
-                LoadStr(buf2.data(), IDS_UNKNOWNSOCKERR);
+                LoadStr(buf2, IDS_UNKNOWNSOCKERR);
                 sprintf_s(buf.data(), buf.size(), buf2.data(), buf[1]);
             }
         }

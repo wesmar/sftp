@@ -178,7 +178,7 @@ void ShowTransferStart(bool scp, LPCWSTR name, int resId)
 {
     std::array<char, MAX_PATH> abuf{};
     std::array<WCHAR, wdirtypemax> wbuf{};
-    LoadStr(abuf.data(), resId);
+    LoadStr(abuf, resId);
     awlcopy(wbuf.data(), abuf.data(), wdirtypemax - 1);
     if (scp)
         wcslcat(wbuf.data(), L" (SCP)", wdirtypemax);
@@ -208,7 +208,7 @@ bool ResolveScpPolicy(pConnectSettings cs, int64_t filesize, bool resume, bool i
         }
         if (cs->scponly) {
             std::array<char, 256> err{};
-            LoadStr(err.data(), IDS_NO_2GB_SUPPORT);
+            LoadStr(err, IDS_NO_2GB_SUPPORT);
             if (!AskUserYesNo(cs, "SFTP Error", err.data()))
                 return false;
             cs->scpserver64bittemporary = true;
