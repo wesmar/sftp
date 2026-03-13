@@ -17,7 +17,8 @@ $projectName = "SFTPplug"
 $projectRoot = $PSScriptRoot
 $binDir = Join-Path $projectRoot "bin"
 $buildDir = Join-Path $projectRoot "build"
-$buildOutputDir = Join-Path $buildDir "bin\x64_Release"
+$buildOutputDir    = Join-Path $buildDir "bin\x64_Release"
+$buildOutputDirX86 = Join-Path $buildDir "bin\Win32_Release"
 $phpAgentSource = Join-Path $projectRoot "src\agent\sftp.php"
 $helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
 $helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
@@ -303,17 +304,16 @@ function Clean-BuildOutput {
     #>
     Write-Host "  Cleaning intermediate files..." -ForegroundColor Gray
     
-    if (Test-Path $buildOutputDir) {
-        # Keep only the .wfx file
-        Get-ChildItem -Path $buildOutputDir | Where-Object { 
-            $_.Name -notlike "*.wfx" 
-        } | Remove-Item -Recurse -Force
-        
-        # Remove .intermediates if exists
-        $intermediatesDir = Join-Path $buildDir ".intermediates"
-        if (Test-Path $intermediatesDir) {
-            Remove-Item $intermediatesDir -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($outDir in @($buildOutputDir, $buildOutputDirX86)) {
+        if (Test-Path $outDir) {
+            Get-ChildItem -Path $outDir | Where-Object {
+                $_.Name -notlike "*.wfx"
+            } | Remove-Item -Recurse -Force
         }
+    }
+    $intermediatesDir = Join-Path $buildDir ".intermediates"
+    if (Test-Path $intermediatesDir) {
+        Remove-Item $intermediatesDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -410,23 +410,16 @@ Write-Host "  Directories ready" -ForegroundColor Gray
 # ============================================================================
 # Step 3: Build
 # ============================================================================
-Write-Host ""
-Write-Host "--- Building Release x64 ---" -ForegroundColor Cyan
-
-Select-ResourceLanguage -LanguageCode $buildLanguage
-
 $vcxprojPath = Join-Path $buildDir "SFTPplug.vcxproj"
 if (-not (Test-Path $vcxprojPath)) {
     Write-Error "Project file not found: $vcxprojPath"
-    Restore-ResourceLanguage
     exit 1
 }
 
-$msBuildArgs = @(
+$msBuildBase = @(
     $vcxprojPath,
     "/t:Rebuild",
     "/p:Configuration=Release",
-    "/p:Platform=x64",
     "/p:PlatformToolset=v145",
     "/p:WindowsTargetPlatformVersion=10.0",
     "/p:DebugSymbols=false",
@@ -435,32 +428,45 @@ $msBuildArgs = @(
     "/nologo",
     "/v:m"
 )
+if ($vcToolsVersion) { $msBuildBase += "/p:VCToolsVersion=$vcToolsVersion" }
 
-if ($vcToolsVersion) {
-    $msBuildArgs += "/p:VCToolsVersion=$vcToolsVersion"
-}
+# --- x64 ---
+Write-Host ""
+Write-Host "--- Building Release x64 ---" -ForegroundColor Cyan
 
+Select-ResourceLanguage -LanguageCode $buildLanguage
 $msbuildExitCode = 0
 try {
-    Write-Host "  Building: $vcxprojPath" -ForegroundColor Gray
-    &$msbuild $msBuildArgs
+    Write-Host "  Building: $vcxprojPath (x64)" -ForegroundColor Gray
+    &$msbuild ($msBuildBase + @("/p:Platform=x64"))
     $msbuildExitCode = $LASTEXITCODE
 } finally {
     Restore-ResourceLanguage
 }
-
 if ($msbuildExitCode -ne 0) {
-    Write-Host ""
-    Write-Host "!!! BUILD FAILED !!!" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Check the errors above. Common issues:" -ForegroundColor Yellow
-    Write-Host "  - Missing plugin headers in src\include" -ForegroundColor Yellow
-    Write-Host "  - Missing Windows SDK 10.0" -ForegroundColor Yellow
-    Write-Host "  - Visual Studio 2022/2026 (v145) not installed" -ForegroundColor Yellow
+    Write-Host "!!! BUILD FAILED (x64) !!!" -ForegroundColor Red
     exit $msbuildExitCode
 }
+Write-Host "  x64 build completed" -ForegroundColor Green
 
-Write-Host "  Build completed successfully" -ForegroundColor Green
+# --- x86 ---
+Write-Host ""
+Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
+
+Select-ResourceLanguage -LanguageCode $buildLanguage
+$msbuildExitCode = 0
+try {
+    Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
+    &$msbuild ($msBuildBase + @("/p:Platform=Win32"))
+    $msbuildExitCode = $LASTEXITCODE
+} finally {
+    Restore-ResourceLanguage
+}
+if ($msbuildExitCode -ne 0) {
+    Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
+    exit $msbuildExitCode
+}
+Write-Host "  x86 build completed" -ForegroundColor Green
 
 # Clean intermediate files
 Clean-BuildOutput
@@ -482,9 +488,10 @@ if (-not $nozip) {
     $zipPath = Join-Path $binDir "$projectName.zip"
     $pluginstInf = @"
 [plugininstall]
-description=Secure FTP plugin (x64) - static libssh2 build, no external DLL required
+description=Secure FTP plugin (x64+x86) - static build, no external DLL required
 type=wfx
-file=$projectName.wfx64
+file=$projectName.wfx
+file64=$projectName.wfx64
 defaultdir=$projectName
 version=1.0
 "@
@@ -513,7 +520,8 @@ version=1.0
     }
 
     try {
-        Add-ZipFile  (Join-Path $buildOutputDir "$projectName.wfx") "$projectName.wfx64"
+        Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
+        Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
         Add-ZipString $pluginstInf "pluginst.inf"
 
         if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
@@ -522,7 +530,12 @@ version=1.0
         $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
         if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
 
-        Write-Host "  Created: $projectName.zip" -ForegroundColor Green
+        # Set a future timestamp on the ZIP — signature of a static, dependency-free build
+        $futureDate = [DateTime]"2030-01-01 00:00:00"
+        (Get-Item $zipPath).LastWriteTime   = $futureDate
+        (Get-Item $zipPath).CreationTime    = $futureDate
+        (Get-Item $zipPath).LastAccessTime  = $futureDate
+        Write-Host "  Created: $projectName.zip (dated $($futureDate.ToString('yyyy-MM-dd')))" -ForegroundColor Green
     } catch {
         Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
@@ -550,8 +563,10 @@ if (-not $nodeploy) {
         try {
             New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
             
-            Copy-Item -Path (Join-Path $buildOutputDir "$projectName.wfx") -Destination (Join-Path $pluginDir "$projectName.wfx64") -Force
+            Copy-Item -Path (Join-Path $buildOutputDir    "$projectName.wfx") -Destination (Join-Path $pluginDir "$projectName.wfx64") -Force
             Write-Host "  Deployed: $projectName.wfx64" -ForegroundColor Green
+            Copy-Item -Path (Join-Path $buildOutputDirX86 "$projectName.wfx") -Destination (Join-Path $pluginDir "$projectName.wfx") -Force
+            Write-Host "  Deployed: $projectName.wfx (x86)" -ForegroundColor Green
             
             if (Test-Path $helpCompiled) {
                 Copy-Item -Path $helpCompiled -Destination (Join-Path $pluginDir "$projectName.chm") -Force

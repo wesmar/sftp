@@ -9,7 +9,6 @@
 // - MAC key: from Argon2 output (bytes 48-79) for encrypted keys, empty string for unencrypted
 
 #pragma comment(lib, "bcrypt.lib")
-#pragma comment(lib, "argon2_a.lib")
 
 #include "global.h"
 #include "PpkConverter.h"
