@@ -131,19 +131,21 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-class DpapiSecretStore {
-public:
-    static bool saveSecret(const std::string& key,
-                           const std::string& secret,
-                           PairError* err = nullptr);
+// Free functions in a namespace — no class needed, no instance state.
+namespace DpapiSecretStore {
 
-    static bool loadSecret(const std::string& key,
-                           std::string* outSecret,
-                           PairError* err = nullptr);
+bool saveSecret(const std::string& key,
+                const std::string& secret,
+                PairError* err = nullptr);
 
-    static bool deleteSecret(const std::string& key,
-                             PairError* err = nullptr);
-};
+bool loadSecret(const std::string& key,
+                std::string* outSecret,
+                PairError* err = nullptr);
+
+bool deleteSecret(const std::string& key,
+                  PairError* err = nullptr);
+
+} // namespace DpapiSecretStore
 
 // Planned command channel — type tags used in LAN2 wire protocol
 enum class PairCommandType : uint8_t {

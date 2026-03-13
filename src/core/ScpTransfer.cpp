@@ -17,12 +17,10 @@
 
 namespace {
 
-constexpr size_t SFTP_MAX_READ_SIZE   = 30000;
-constexpr size_t SFTP_MAX_WRITE_SIZE  = 30000;
-constexpr size_t SFTP_SCP_BLOCK_SIZE  = 16384;
+// SFTP_MAX_READ_SIZE, SFTP_MAX_WRITE_SIZE, SFTP_SCP_BLOCK_SIZE,
+// SFTP_SCP_READ_IDLE_TIMEOUT_MS, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS
+// are defined in ScpTransferInternal.h
 constexpr int SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS = 20000;
-constexpr int SFTP_SCP_READ_IDLE_TIMEOUT_MS = 20000;
-constexpr int SFTP_SCP_WRITE_IDLE_TIMEOUT_MS = 20000;
 constexpr int64_t SFTP_SPEED_STATS_MIN_BYTES = 300LL * 1000LL * 1000LL;
 constexpr int RECV_BLOCK_SIZE = 32768;
 constexpr int SCP_IO_POLL_SLEEP_MS = 10;
