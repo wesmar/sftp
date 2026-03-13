@@ -170,9 +170,10 @@ bool  ReadChannelLine(ISshChannel* channel,
                       LPSTR line,   size_t linelen,
                       LPSTR msgbuf, size_t msgbuflen,
                       LPSTR errbuf, size_t errbuflen,
-                      SOCKET sock = INVALID_SOCKET);
+                      SOCKET sock = INVALID_SOCKET,
+                      DWORD idleTimeoutMs  = 10000,
+                      DWORD totalTimeoutMs = 45000);
 
-int  SftpQuoteCommand2 (pConnectSettings ConnectSettings, LPCSTR  remotedir, LPCSTR  cmd, LPSTR reply, size_t replylen);
 int  SftpQuoteCommand2W(pConnectSettings ConnectSettings, LPCWSTR remotedir, LPCWSTR cmd, LPSTR reply, size_t replylen);
 
 // ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ bool EnsureUserNameIfMissing(pConnectSettings cs)
         return true;
 
     std::array<char, 250> titleLoaded{};
-    LoadStr(titleLoaded.data(), IDS_USERNAME_FOR);
+    LoadStr(titleLoaded, IDS_USERNAME_FOR);
     const std::string title = std::string(titleLoaded.data()) + cs->server;
     std::array<char, MAX_PATH> userBuf{};
     if (!RequestProc(PluginNumber, RT_UserName, title.c_str(), nullptr, userBuf.data(), static_cast<int>(userBuf.size() - 1)))
@@ -72,20 +72,20 @@ bool EnsureUserNameIfMissing(pConnectSettings cs)
 int CleanupFailedConnect(
     pConnectSettings cs,
     int code,
-    char* progressTextBuf,
     int* ioProgress,
     int* ioLoop,
     SYSTICKS* ioLastTime)
 {
-    if (!code || !cs || !progressTextBuf || !ioProgress || !ioLoop || !ioLastTime)
+    if (!code || !cs || !ioProgress || !ioLoop || !ioLastTime)
         return code;
 
+    std::array<char, 512> progressTextBuf{};
     LoadStr(progressTextBuf, IDS_DISCONNECTING);
     int rc = 0;
     if (cs->sftpsession) {
         do {
             rc = cs->sftpsession->shutdown();
-            if (ProgressLoop(progressTextBuf, *ioProgress, 90, ioLoop, ioLastTime))
+            if (ProgressLoop(progressTextBuf.data(), *ioProgress, 90, ioLoop, ioLastTime))
                 break;
             WaitForTransportReadable(cs);
         } while (rc == LIBSSH2_ERROR_EAGAIN);
@@ -96,7 +96,7 @@ int CleanupFailedConnect(
         int rc2 = 0;
         do {
             rc2 = cs->session->disconnect("Shutdown");
-            if (ProgressLoop(progressTextBuf, *ioProgress, 100, ioLoop, ioLastTime))
+            if (ProgressLoop(progressTextBuf.data(), *ioProgress, 100, ioLoop, ioLastTime))
                 break;
             WaitForTransportReadable(cs);
         } while (rc2 == LIBSSH2_ERROR_EAGAIN);

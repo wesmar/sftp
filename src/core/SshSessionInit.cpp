@@ -72,7 +72,7 @@ int InitializeSshSession(
 {
     std::array<char, 1024> buf{};
     progress = 30; // PROG_SESSION_INIT
-    LoadStr(buf.data(), IDS_INITSSH2);
+    LoadStr(buf, IDS_INITSSH2);
     if (ProgressProc(PluginNumber, buf.data(), "-", progress))
         return -50;
 
@@ -101,7 +101,7 @@ int InitializeSshSession(
     }
 
     loop = 30;
-    LoadStr(buf.data(), IDS_SET_COMPRESSION);
+    LoadStr(buf, IDS_SET_COMPRESSION);
     LPCSTR ses_prefs = ConnectSettings->compressed ? "zlib,none" : "none";
     int err;
     while ((err = ConnectSettings->session->methodPref(LIBSSH2_METHOD_COMP_CS, ses_prefs)) == LIBSSH2_ERROR_EAGAIN) {
@@ -119,7 +119,7 @@ int InitializeSshSession(
     SftpLogLastError("libssh2_session_method_pref2: ", err);
 
     progress = 40; // PROG_SESSION_STARTUP
-    LoadStr(buf.data(), IDS_SESSION_STARTUP);
+    LoadStr(buf, IDS_SESSION_STARTUP);
     int auth;
     while ((auth = ConnectSettings->session->startup((int)ConnectSettings->sock)) == LIBSSH2_ERROR_EAGAIN) {
         if (ProgressLoop(buf.data(), progress, progress + 20, &loop, &lasttime))
@@ -158,10 +158,10 @@ int VerifyServerFingerprint(pConnectSettings ConnectSettings)
         std::array<char, 4 * MAX_PATH> msg1{};
         std::array<char, MAX_PATH> msg2{};
         if (ConnectSettings->savedfingerprint.empty())
-            LoadStr(msg1.data(), IDS_CONNECTION_FIRSTTIME);
+            LoadStr(msg1, IDS_CONNECTION_FIRSTTIME);
         else
-            LoadStr(msg1.data(), IDS_FINGERPRINT_CHANGED);
-        LoadStr(msg2.data(), IDS_FINGERPRINT);
+            LoadStr(msg1, IDS_FINGERPRINT_CHANGED);
+        LoadStr(msg2, IDS_FINGERPRINT);
         const std::string prompt = std::string(msg1.data()) + msg2.data() + fingerprintHex;
 
         bool verified = false;

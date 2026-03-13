@@ -177,7 +177,8 @@ int  SftpSetDateTimeW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPFI
 void SftpGetLastActivePathW(pConnectSettings ConnectSettings, LPWSTR RelativePath, size_t maxlen);
 bool SftpChmodW(pConnectSettings ConnectSettings, LPCWSTR RemoteName, LPCWSTR chmod);
 bool SftpLinkFolderTargetW(pConnectSettings ConnectSettings, LPWSTR RemoteName, size_t maxlen);
-int  SftpQuoteCommand2(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd, LPSTR reply, size_t replylen);
+int  SftpQuoteCommand2(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd, LPSTR reply, size_t replylen,
+                       DWORD idleTimeoutMs = 10000, DWORD totalTimeoutMs = 45000);
 int  SftpQuoteCommand2W(pConnectSettings ConnectSettings, LPCWSTR remotedir, LPCWSTR cmd, LPSTR reply, size_t replylen);
 bool SftpQuoteCommand(pConnectSettings ConnectSettings, LPCSTR remotedir, LPCSTR cmd);
 void SftpShowPropertiesW(pConnectSettings ConnectSettings, LPCWSTR remotename);

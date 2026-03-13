@@ -410,11 +410,9 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
 
 bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
                      char* msgbuf, size_t msgbuflen,
-                     char* errbuf, size_t errbuflen, SOCKET sock)
+                     char* errbuf, size_t errbuflen, SOCKET sock,
+                     DWORD idleTimeoutMs, DWORD totalTimeoutMs)
 {
-    constexpr DWORD kIdleTimeoutMs = 10000;
-    constexpr DWORD kTotalTimeoutMs = 45000;
-
     const auto start = std::chrono::steady_clock::now();
     auto lastData = start;
     bool endReceived = false;
@@ -425,7 +423,7 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
         const auto now = std::chrono::steady_clock::now();
         const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastData).count();
         const auto total = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-        if (idle > kIdleTimeoutMs || total > kTotalTimeoutMs)
+        if (idle > static_cast<long long>(idleTimeoutMs) || total > static_cast<long long>(totalTimeoutMs))
             return false;
 
         const size_t prevLen = strlen(msgbuf);
@@ -493,7 +491,8 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
 }
 
 int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cmd,
-                      char* reply, size_t replylen)
+                      char* reply, size_t replylen,
+                      DWORD idleTimeoutMs, DWORD totalTimeoutMs)
 {
     if (reply && replylen > 0)
         reply[0] = '\0';
@@ -551,7 +550,8 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
 
     while (ReadChannelLine(channel.get(), line.data(), line.size(),
                            msgbuf.data(), msgbuf.size(),
-                           errbuf.data(), errbuf.size(), cs->sock))
+                           errbuf.data(), errbuf.size(), cs->sock,
+                           idleTimeoutMs, totalTimeoutMs))
     {
         StripEscapeSequences(line);
         if (!reply) {
