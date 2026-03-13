@@ -3,6 +3,9 @@
   <PropertyGroup>
     <_PropertySheetDisplayName>SFTPplug</_PropertySheetDisplayName>
     <TargetName>sftpplug</TargetName>
+    <!-- Map MSBuild Platform name to lib suffix -->
+    <LibSuffix Condition="'$(Platform)'=='x64'">x64</LibSuffix>
+    <LibSuffix Condition="'$(Platform)'=='Win32'">x86</LibSuffix>
     <IntDir>$(SolutionDir).intermediates\$(ProjectName)\$(Platform)_$(Configuration)\</IntDir>
     <LibDir>$(SolutionDir)lib\$(Platform)_$(Configuration)\</LibDir>
     <BinDir>$(SolutionDir)bin\$(Platform)_$(Configuration)\</BinDir>
@@ -51,17 +54,16 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalLibraryDirectories>$(SolutionDir)..\src\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies Condition="'$(SFTP_ALLINONE)'!='1'">Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(SFTP_ALLINONE)'=='1'">Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;libssh2.lib;argon2_a.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Ws2_32.lib;Iphlpapi.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ModuleDefinitionFile>sftpplug.def</ModuleDefinitionFile>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
       <DataExecutionPrevention>true</DataExecutionPrevention>
-      <CETCompat>true</CETCompat>
+      <CETCompat Condition="'$(Platform)'=='x64'">true</CETCompat>
       <DynamicBase>true</DynamicBase>
-      <HighEntropyVA>true</HighEntropyVA>
+      <HighEntropyVA Condition="'$(Platform)'=='x64'">true</HighEntropyVA>
     </Link>
   </ItemDefinitionGroup>
 </Project>

@@ -12,7 +12,7 @@
 
 ![SFTP Plugin](images/sftp01.jpg)
 
-**Version 1.0.0.0** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64.
+**Version 1.0.0.0** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
 Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
 
@@ -89,6 +89,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Automatic CRLF/LF conversion on text-mode transfers.
 - Symlink tracking including `~` home directory shortcut protection.
 - Multi-language UI embedded in a single binary: English, Polish, German, French, Spanish.
+- Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
 - Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
 
@@ -359,7 +360,7 @@ Implemented in `PpkConverter.cpp`. Converts PuTTY Private Key files to tradition
 
 | Component | Implementation |
 |-----------|---------------|
-| KDF | Argon2d / Argon2i / Argon2id — statically linked (`argon2_a.lib`) |
+| KDF | Argon2d / Argon2i / Argon2id — statically linked (argon2, /MT) |
 | Encryption | AES-256-CBC |
 | MAC | HMAC-SHA-256 over `(algorithm ‖ encryption ‖ comment ‖ public_blob ‖ private_blob_plain)` |
 | MAC key source | Argon2 output bytes 48–79 (encrypted keys); empty string (unencrypted keys) |
@@ -756,11 +757,11 @@ Remote `locale` command output is parsed to determine the server's character enc
 ## Source Tree
 
 ```
-build.ps1                      # PowerShell build script (multi-language or single-language)
+build.ps1                      # PowerShell build script (multi-language or single-language; x64 + x86)
 bin/
   SFTPplug.zip                 # Release archive (TC auto-install) — only file produced here
 build/
-  SFTPplug.vcxproj             # MSVC project (C++20 / C17, x64 Release)
+  SFTPplug.vcxproj             # MSVC project (C++20 / C17, x64 Release + x86 Release)
   SFTPplug.sln
   SFTPplug.vsprops
 src/
@@ -809,21 +810,36 @@ src/
       libssh2_sftp.h
       libssh2_publickey.h
   lib/
-    libssh2.lib                # Static import lib
-    argon2_a.lib               # Static Argon2 lib (statically linked)
+    argon2_a_x64.lib           # Argon2 static lib — x64, /MT (rebuilt from source)
+    argon2_a_x86.lib           # Argon2 static lib — x86, /MT (rebuilt from source)
+    libssh2_x64.lib            # libssh2 static lib — x64, WinCNG, /MT (rebuilt from source)
+    libssh2_x86.lib            # libssh2 static lib — x86, WinCNG, /MT (rebuilt from source)
   res/
     sftpplug.rc                # String tables: EN / PL / DE / FR / ES
     resource.h
     icon*.ico
+third_party/
+  build.ps1                    # Builds all dependency libs (argon2 + libssh2, x64 + x86, /MT)
+  argon/
+    vs2026/
+      Argon2Static/
+        Argon2Static.vcxproj   # MSVC project: argon2_a_x64.lib / argon2_a_x86.lib, /MT
+    build/
+      x64/argon2_a_x64.lib    # (build artifact — excluded from git)
+      x86/argon2_a_x86.lib    # (build artifact — excluded from git)
+  libssh2/
+    ...                        # libssh2 source (excluded from git via .gitignore)
+    bld_x64/                   # (build artifact — excluded from git)
+    bld_x86/                   # (build artifact — excluded from git)
 ```
 
 ---
 
 ## Build System
 
-`build.ps1` (project root) compiles the plugin using MSBuild with the MSVC v145 toolset.
+`build.ps1` (project root) compiles the plugin using MSBuild with the MSVC v145 toolset. Both x64 and x86 targets are built by default and packaged together in a single ZIP.
 
-**Default (all languages in one binary):**
+**Default (all languages in one binary, x64 + x86):**
 
 ```powershell
 .\build.ps1
@@ -839,10 +855,12 @@ src/
 .\build.ps1 -es   # Spanish
 ```
 
-Single-language mode strips unused RC language blocks before compile and restores them afterward.
+Single-language mode strips unused RC language blocks before compile and restores them afterward. Both x64 and x86 are still built.
 
 **Output after a successful build:**
 - `bin\SFTPplug.zip` — only file remaining in `bin\`; auto-deployed to TC plugin directory
+- ZIP contains both `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86)
+- ZIP file timestamp is set to `2030-01-01 00:00:00` (dependency-free release marker)
 - Intermediate files (`build\bin\`, `build\.intermediates\`) are fully removed
 
 **Release configuration:**
@@ -856,6 +874,20 @@ Single-language mode strips unused RC language blocks before compile and restore
 - `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
 - `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `C:\temp\sftpplug_debug.log`
 
+**Rebuilding dependency libraries (`third_party/build.ps1`):**
+
+All dependency static libs (argon2 and libssh2) can be rebuilt from source:
+
+```powershell
+.\third_party\build.ps1           # Build all (argon2 + libssh2, x64 + x86)
+.\third_party\build.ps1 -argon    # argon2 only
+.\third_party\build.ps1 -libssh2  # libssh2 only
+.\third_party\build.ps1 -x64only  # x64 only
+.\third_party\build.ps1 -x86only  # x86 only
+```
+
+Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`). The script verifies `/MT` (`LIBCMT`) linkage in every output lib before copying.
+
 ---
 
 ## System Requirements
@@ -863,11 +895,11 @@ Single-language mode strips unused RC language blocks before compile and restore
 | Component | Requirement |
 |-----------|-------------|
 | Windows | Windows 7 or later (Windows 10/11 recommended) |
-| Total Commander | Version 9.0 or later, x64 |
-| Architecture | x64 only |
+| Total Commander | Version 9.0 or later (x64 or x86) |
+| Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
-| libssh2 | Statically linked (≥ 1.7.0 for SCP >2 GB) |
-| **Dependencies** | libssh2 (statically linked), argon2 (statically linked via `argon2_a.lib`) |
+| libssh2 | Statically linked (≥ 1.11.1), built with WinCNG backend |
+| **Dependencies** | None — libssh2 and argon2 statically linked with `/MT` (no VC++ Redistributable required) |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
 ---
@@ -878,13 +910,14 @@ Distribution archive: `SFTPplug.zip`
 
 | File | Purpose |
 |------|---------|
-| `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and Argon2) |
-| `pluginst.inf` | Total Commander auto-install descriptor |
+| `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and Argon2, `/MT`) |
+| `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and Argon2, `/MT`) |
+| `pluginst.inf` | Total Commander auto-install descriptor (`file=` x86, `file64=` x64) |
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `SFTPplug.chm` | Full offline documentation |
 | `readme.txt` | Package notes |
 
-No external DLLs required. Both libssh2 and Argon2 (`argon2_a.lib`) are statically linked into the binary.
+No external DLLs required. libssh2 and Argon2 are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
 
 Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin install prompt.
 
@@ -926,6 +959,7 @@ UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugi
 | Removed leftover debug print statements | Clean release logs |
 | Documented legacy XOR key in source | Prevents accidental refactoring that would break existing profiles |
 | `argon2_a.lib` and `libssh2.lib` rebuilt with `/MT` | Plugin loads on clean systems — no VC++ Redistributable or external DLLs required |
+| Added x86 (Win32) build | Single ZIP ships both `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86); `pluginst.inf` updated with `file64=` / `file=` entries; TC auto-installs correct architecture |
 | Documented base64 3-byte alignment requirement | Explains chunk size constraint in shell fallback |
 | `UpdateCertSectionState` consolidation | Single authoritative function controls cert section enable/disable state for SSH, PHP Agent, PHP Shell, and LAN Pair modes — replaces scattered `EnableControlsPageant` + `UpdateKeyControlsForPrivateKey` calls |
 | `ConnectionGuard` RAII | Guarantees connection cleanup on every error/early-return path in `FsFindFirstW` |
@@ -964,7 +998,7 @@ UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugi
 - `DllExceptionBarrier` — ABI exception firewall with DbgHelp stack trace
 - `ConnectionGuard` RAII — leak-free connection lifecycle in `FsFindFirstW`
 - `UpdateCertSectionState` — unified cert section control for all transport modes
-- x64 packaging and TC auto-install
+- x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 
 ### In Progress
