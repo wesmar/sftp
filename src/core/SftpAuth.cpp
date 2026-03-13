@@ -534,7 +534,6 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
     while ((auth = cs->session->userauthPubkeyFromFile(cs->user.c_str(), (unsigned)cs->user.size(), pubkeyfileptr, privkeyfile.data(), passphrasePtr)) == LIBSSH2_ERROR_EAGAIN) {
         if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
             break;
-        // Timeout after 30 seconds
         if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
             ShowStatus("Public key authentication timed out.");
             auth = LIBSSH2_ERROR_TIMEOUT;

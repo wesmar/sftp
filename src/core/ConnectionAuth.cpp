@@ -112,7 +112,7 @@ int PerformAuthentication(
             LoadStr(buf.data(), IDS_USER_AUTH_LIST);
             if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                 break;
-            if (get_ticks_between(authListStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
+            if (get_ticks_between(authListStart) > SSH_PROBE_TIMEOUT_MS) {
                 ShowStatus("Getting authentication methods timed out, using fallback.");
                 break;
             }
