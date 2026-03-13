@@ -33,6 +33,10 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# third_party build artifacts (rebuilt by third_party/build.ps1)
+third_party/libssh2/bld*/
+third_party/argon/build/
+
 # Archiwa lokalne
 *.7z
 *.tar.gz
