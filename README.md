@@ -1,5 +1,15 @@
 # Secure FTP Plugin for Total Commander
 
+> [!CAUTION]
+> **2026-03-13 — Visual C++ Redistributable dependency removed**
+>
+> Previous builds reported *"Error loading plugin file! The plugin probably needs some DLLs missing"*
+> on clean systems without Visual C++ Redistributable installed (`MSVCRT.dll` / `vcruntime140.dll`).
+>
+> Root cause: `argon2_a.lib` and `libssh2.lib` were compiled with `/MD` (dynamic CRT).
+> Fixed: both libraries rebuilt from source with `/MT` — fully static C runtime.
+> **The plugin requires no external DLLs or VC++ Redistributable.**
+
 ![SFTP Plugin](images/sftp01.jpg)
 
 **Version 1.0.0.0** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64.
@@ -838,7 +848,7 @@ Single-language mode strips unused RC language blocks before compile and restore
 **Release configuration:**
 - Standard: `stdcpp20` (C++20), `stdc17` (C17)
 - Optimization: `MaxSpeed`
-- Runtime library: `MultiThreadedDLL`
+- Runtime library: `MultiThreaded` (`/MT`, static CRT — no VC++ Redistributable required)
 - Whole program optimization: enabled
 - `NDEBUG` defined → `SFTP_DEBUG_ENABLED=0`, `SFTP_DEBUG_TO_FILE=0`
 
@@ -915,6 +925,7 @@ UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugi
 | `AUTODETECT_PENDING` changed from `char -1` to `int8_t` | Removes signed-char UB on platforms where `char` is unsigned |
 | Removed leftover debug print statements | Clean release logs |
 | Documented legacy XOR key in source | Prevents accidental refactoring that would break existing profiles |
+| `argon2_a.lib` and `libssh2.lib` rebuilt with `/MT` | Plugin loads on clean systems — no VC++ Redistributable or external DLLs required |
 | Documented base64 3-byte alignment requirement | Explains chunk size constraint in shell fallback |
 | `UpdateCertSectionState` consolidation | Single authoritative function controls cert section enable/disable state for SSH, PHP Agent, PHP Shell, and LAN Pair modes — replaces scattered `EnableControlsPageant` + `UpdateKeyControlsForPrivateKey` calls |
 | `ConnectionGuard` RAII | Guarantees connection cleanup on every error/early-return path in `FsFindFirstW` |
