@@ -53,7 +53,8 @@ extern const bool SSH_ScpNeedQuote;
 constexpr int SSH_AUTH_PASSWORD         = 0x01;
 constexpr int SSH_AUTH_KEYBOARD         = 0x02;
 constexpr int SSH_AUTH_PUBKEY           = 0x04;
-constexpr int SSH_AUTH_STAGE_TIMEOUT_MS = 30000;
+constexpr int SSH_AUTH_STAGE_TIMEOUT_MS = 10000; // interactive stages (password prompt etc.)
+constexpr int SSH_PROBE_TIMEOUT_MS      =  3000; // silent server probe (userauthList)
 
 // ---------------------------------------------------------------------------
 // Shared timing constants (used across SftpConnection.cpp, SftpAuth.cpp, etc.)
