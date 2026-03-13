@@ -736,9 +736,11 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     return true;
 }
 
-bool DpapiSecretStore::saveSecret(const std::string& key,
-                                  const std::string& secret,
-                                  PairError* err) {
+namespace DpapiSecretStore {
+
+bool saveSecret(const std::string& key,
+                const std::string& secret,
+                PairError* err) {
     const auto encrypted = dpapiProtect(std::span<const uint8_t>(
         reinterpret_cast<const uint8_t*>(secret.data()), secret.size()));
     if (!encrypted) {
@@ -770,9 +772,9 @@ bool DpapiSecretStore::saveSecret(const std::string& key,
     return true;
 }
 
-bool DpapiSecretStore::loadSecret(const std::string& key,
-                                  std::string* outSecret,
-                                  PairError* err) {
+bool loadSecret(const std::string& key,
+                std::string* outSecret,
+                PairError* err) {
     if (!outSecret) {
         setErr(err, ERROR_INVALID_PARAMETER, "outSecret is null");
         return false;
@@ -809,8 +811,8 @@ bool DpapiSecretStore::loadSecret(const std::string& key,
     return true;
 }
 
-bool DpapiSecretStore::deleteSecret(const std::string& key,
-                                    PairError* err) {
+bool deleteSecret(const std::string& key,
+                  PairError* err) {
     const auto path = secretsDir() / (sanitizeKey(key) + ".bin");
     std::error_code ec;
     const bool ok = std::filesystem::remove(path, ec);
@@ -820,5 +822,7 @@ bool DpapiSecretStore::deleteSecret(const std::string& key,
     }
     return true;
 }
+
+} // namespace DpapiSecretStore
 
 } // namespace smb

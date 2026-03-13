@@ -49,30 +49,36 @@ private:
     DATA_BLOB blob_{};
 };
 
-// Base64 encoding/decoding using Windows CryptoAPI
-class Base64 {
-public:
-    static std::optional<std::string> Encode(const std::vector<BYTE>& data) {
-        DWORD needed = 0;
-        if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &needed))
-            return std::nullopt;
-        std::string result(needed, '\0');
-        if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, result.data(), &needed))
-            return std::nullopt;
-        result.resize(needed - 1); // remove null terminator
-        return result;
-    }
+// Base64 encoding/decoding using Windows CryptoAPI.
+// Free functions in anonymous namespace — no class needed, no instance state.
+namespace {
 
-    static std::optional<std::vector<BYTE>> Decode(std::string_view b64) {
-        DWORD needed = 0;
-        if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()), CRYPT_STRING_BASE64, nullptr, &needed, nullptr, nullptr))
-            return std::nullopt;
-        std::vector<BYTE> result(needed);
-        if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()), CRYPT_STRING_BASE64, result.data(), &needed, nullptr, nullptr))
-            return std::nullopt;
-        return result;
-    }
-};
+std::optional<std::string> Base64Encode(const std::vector<BYTE>& data) {
+    DWORD needed = 0;
+    if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
+                              CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &needed))
+        return std::nullopt;
+    std::string result(needed, '\0');
+    if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
+                              CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, result.data(), &needed))
+        return std::nullopt;
+    result.resize(needed - 1); // CryptBinaryToStringA includes null terminator in count
+    return result;
+}
+
+std::optional<std::vector<BYTE>> Base64Decode(std::string_view b64) {
+    DWORD needed = 0;
+    if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()),
+                              CRYPT_STRING_BASE64, nullptr, &needed, nullptr, nullptr))
+        return std::nullopt;
+    std::vector<BYTE> result(needed);
+    if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()),
+                              CRYPT_STRING_BASE64, result.data(), &needed, nullptr, nullptr))
+        return std::nullopt;
+    return result;
+}
+
+} // anonymous namespace
 
 const char* kDpapiPrefix = "dpapi:";
 const char* kPlainPrefix = "plain:";
@@ -127,7 +133,7 @@ void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted)
     // Try DPAPI first
     DataBlob blob;
     if (blob.encrypt(plain)) {
-        auto b64 = Base64::Encode({ blob.get()->pbData, blob.get()->pbData + blob.get()->cbData });
+        auto b64 = Base64Encode({ blob.get()->pbData, blob.get()->pbData + blob.get()->cbData });
         if (b64) {
             std::string result = kDpapiPrefix + *b64;
             if (result.size() < cchEncrypted) {
@@ -174,7 +180,7 @@ void DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain, UINT cchPlain)
     // DPAPI
     if (input.substr(0, strlen(kDpapiPrefix)) == kDpapiPrefix) {
         auto b64 = input.substr(strlen(kDpapiPrefix));
-        auto bin = Base64::Decode(b64);
+        auto bin = Base64Decode(b64);
         if (bin) {
             DATA_BLOB in{ static_cast<DWORD>(bin->size()), bin->data() };
             DATA_BLOB out{};

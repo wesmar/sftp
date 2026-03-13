@@ -14,12 +14,6 @@
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
 
-static constexpr size_t SFTP_MAX_READ_SIZE   = 30000;
-static constexpr size_t SFTP_MAX_WRITE_SIZE  = 30000;
-static constexpr size_t SFTP_SCP_BLOCK_SIZE  = 16384;
-static constexpr int SFTP_SCP_READ_IDLE_TIMEOUT_MS = 20000;
-static constexpr int SFTP_SCP_WRITE_IDLE_TIMEOUT_MS = 20000;
-
 // Keep command length safely below shell line limits on restricted hosts.
 // 1024 bytes -> 1368 base64 chars (+ command overhead).
 static constexpr size_t SHELL_DD_UPLOAD_CHUNK_BYTES  = 1024;
@@ -50,9 +44,8 @@ static std::string ShellB64Encode(std::span<const uint8_t> data)
 
 static size_t ShellB64Decode(std::string_view in, std::span<uint8_t> out)
 {
-    // C-style wrapper call to unified base64
-    std::string nullTerminated(in);
-    return (size_t)MimeDecode(nullTerminated.c_str(), nullTerminated.size(), out.data(), out.size());
+    // MimeDecode takes (const char*, size_t) and never calls strlen — no copy needed.
+    return static_cast<size_t>(MimeDecode(in.data(), in.size(), out.data(), out.size()));
 }
 
 static std::string ShellNormalizeScpPath(const std::string& path)
