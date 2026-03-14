@@ -8,7 +8,7 @@ param(
     [ValidateSet("txt", "md")]
     [string]$Format = "txt",
     [switch]$NoMeta = $true,
-    [string[]]$IncludeExt = @(".asm", ".c", ".cpp", ".h", ".rc", ".md", ".php", ".vcxproj", ".filters", ".ps1"),
+    [string[]]$IncludeExt = @(".asm", ".c", ".cpp", ".h", ".rc", ".lng", ".md", ".php", ".vcxproj", ".filters", ".ps1"),
     [string[]]$ExcludeDirPattern = @("\\.git\\", "\\bin\\", "\\build\\", "\\out\\", "\\x64\\", "\\x86\\", "\\obj\\")
 )
 

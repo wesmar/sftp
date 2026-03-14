@@ -31,6 +31,10 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
     struct addrinfo* res = nullptr;
     if (getaddrinfo(connecttoserver, portStr.c_str(), &hints, &res) != 0) {
         ShowErrorId(IDS_ERR_GETADDRINFO);
+        if (LogProc) {
+            const std::string msg = std::format("SFTP: DNS lookup failed for '{}' (WSA error {})", connecttoserver, WSAGetLastError());
+            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+        }
         return -20;
     }
     ConnectSettings->sock = INVALID_SOCKET;
@@ -68,6 +72,10 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
             ShowErrorId(IDS_ERR_PROXYCONNECT);
         else
             ShowErrorId(IDS_ERR_SERVERCONNECT);
+        if (LogProc) {
+            const std::string msg = std::format("SFTP: TCP connect failed to '{}:{}' (WSA error {})", connecttoserver, connecttoport, WSAGetLastError());
+            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+        }
         return -30;
     }
     return 0;
@@ -101,6 +109,10 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         ConnectSettings->session->lastError(&errmsg, &errmsg_len, false);
         ShowStatusId(IDS_ERR_INIT_SFTP, errmsg, true);
         SFTP_LOG("CONN", "SFTP init failed: %s", errmsg ? errmsg : "(null)");
+        if (LogProc) {
+            const std::string msg = std::format("SFTP: SFTP subsystem init failed: {}", errmsg ? errmsg : "(no details)");
+            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+        }
         return false;
     }
 

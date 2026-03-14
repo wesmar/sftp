@@ -308,6 +308,68 @@
 #define IDC_JUMP_CRYPTPASS              1081
 #define IDC_JUMP_EDITPASS               1082
 
+// Control IDs for formerly IDC_STATIC labels (needed for runtime translation)
+#define IDC_LABEL_CONNECTTO             1083
+#define IDC_LABEL_USERNAME              1084
+#define IDC_LABEL_CERTGROUP             1085
+#define IDC_LABEL_TRANSFER              1086
+#define IDC_LABEL_SESSION               1087
+#define IDC_LABEL_JUMPHOST_GRP          1088
+#define IDC_LABEL_PROXY_SETTINGS        1089
+#define IDC_JUMP_GROUP                  1090
+#define IDC_JUMP_LABEL_HOST             1091
+#define IDC_JUMP_LABEL_PORT             1092
+#define IDC_JUMP_LABEL_USER             1093
+#define IDC_JUMP_LABEL_PASS             1094
+#define IDC_JUMP_LABEL_PUBKEY           1095
+#define IDC_JUMP_LABEL_PRIVKEY          1096
+#define IDC_PROXY_GROUP                 1097
+#define IDC_PROXY_LABEL_HOST            1098
+#define IDC_PROXY_LABEL_USER            1099
+#define IDC_PROXY_LABEL_PASS            1100
+
+// Dialog label string IDs for runtime localization via LNG loader
+#define IDS_DLG_CAPTION                 284
+#define IDS_DLG_CONNECTTO               285
+#define IDS_DLG_USERNAME                286
+#define IDS_DLG_USEAGENT                287
+#define IDS_DLG_CHANGEPASS              288
+#define IDS_DLG_CRYPTPASS               289
+#define IDS_DLG_CERTGROUP               290
+#define IDS_DLG_PUBKEY                  291
+#define IDS_DLG_PRIVKEY                 292
+#define IDS_DLG_COMPRESS                293
+#define IDS_DLG_DETAILED_LOG            294
+#define IDS_DLG_SHELLTRANSFER           295
+#define IDS_DLG_SCP_DATA                296
+#define IDS_DLG_SCP_ALL                 297
+#define IDS_DLG_TRANSFER                298
+#define IDS_DLG_ENCODING                299
+#define IDS_DLG_PERMISSIONS_GROUP       300
+#define IDS_DLG_FILEMOD                 301
+#define IDS_DLG_DIRMOD                  302
+#define IDS_DLG_SESSION                 303
+#define IDS_DLG_JUMPHOST_GRP            304
+#define IDS_DLG_USE_JUMPHOST            305
+#define IDS_DLG_PROXY_SETTINGS          306
+#define IDS_DLG_DELETELAST              307
+#define IDS_DLG_IMPORT                  308
+#define IDS_PROXY_DLG_CAPTION           309
+#define IDS_PROXY_DLG_GROUP             310
+#define IDS_PROXY_DLG_HOST              311
+#define IDS_PROXY_DLG_USER              312
+#define IDS_PROXY_DLG_PASS              313
+#define IDS_JUMP_DLG_CAPTION            314
+#define IDS_JUMP_DLG_GROUP              315
+#define IDS_JUMP_DLG_USE                316
+#define IDS_JUMP_DLG_HOST               317
+#define IDS_JUMP_DLG_PORT               318
+#define IDS_JUMP_DLG_USER               319
+#define IDS_JUMP_DLG_PASS               320
+#define IDS_JUMP_DLG_PUBKEY             321
+#define IDS_JUMP_DLG_PRIVKEY            322
+#define IDS_JUMP_DLG_USEAGENT           323
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

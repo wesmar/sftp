@@ -3,6 +3,7 @@
 #include <array>
 #include <memory>
 #include <format>
+#include <string>
 #include "SftpClient.h"
 #include "SftpInternal.h"
 #include "SshBackendFactory.h"
@@ -82,6 +83,7 @@ int InitializeSshSession(
         auto sessionPtr = backend->createSession(session_alloc, session_free, session_realloc, ConnectSettings);
         if (!sessionPtr) {
             ShowErrorId(IDS_ERR_INIT_SSH2);
+            if (LogProc) LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, "SFTP: SSH library session init failed");
             return -60;
         }
         ConnectSettings->session = std::move(sessionPtr);
@@ -132,6 +134,10 @@ int InitializeSshSession(
         int errmsg_len;
         ConnectSettings->session->lastError(&errmsg, &errmsg_len, false);
         ShowErrorId(IDS_ERR_SSH_SESSION, errmsg);
+        if (LogProc) {
+            const std::string msg = std::format("SFTP: SSH handshake failed: {}", errmsg ? errmsg : "(no details)");
+            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+        }
         return -70;
     }
     SftpLogLastError("libssh2_session_startup: ", ConnectSettings->session->lastErrno());

@@ -81,9 +81,13 @@ static void UpdateJumpControlStates(HWND hWnd)
 
 static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
 {
+    const bool jumpChecked = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_ENABLE), sshMode ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), sshMode ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), (sshMode && jumpChecked) ? TRUE : FALSE);
 }
+
+static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
+    std::initializer_list<std::pair<int, UINT>> controls);
 
 // Jump Host settings dialog procedure.
 static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -97,6 +101,20 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         if (!ctx || !ctx->cs) { EndDialog(hWnd, IDCANCEL); return 1; }
 
         pConnectSettings cs = ctx->cs;
+
+        LocalizeDlgControls(hWnd, IDS_JUMP_DLG_CAPTION, {
+            { IDC_JUMP_GROUP,        IDS_JUMP_DLG_GROUP    },
+            { IDC_JUMP_ENABLE,       IDS_JUMP_DLG_USE      },
+            { IDC_JUMP_LABEL_HOST,   IDS_JUMP_DLG_HOST     },
+            { IDC_JUMP_LABEL_PORT,   IDS_JUMP_DLG_PORT     },
+            { IDC_JUMP_LABEL_USER,   IDS_JUMP_DLG_USER     },
+            { IDC_JUMP_LABEL_PASS,   IDS_JUMP_DLG_PASS     },
+            { IDC_JUMP_LABEL_PUBKEY, IDS_JUMP_DLG_PUBKEY   },
+            { IDC_JUMP_LABEL_PRIVKEY,IDS_JUMP_DLG_PRIVKEY  },
+            { IDC_JUMP_USEAGENT,     IDS_JUMP_DLG_USEAGENT },
+            { IDC_JUMP_CRYPTPASS,    IDS_DLG_CRYPTPASS     },
+            { IDC_JUMP_EDITPASS,     IDS_DLG_CHANGEPASS    },
+        });
 
         CheckDlgButton(hWnd, IDC_JUMP_ENABLE, cs->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
         SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
@@ -300,16 +318,6 @@ static BOOL WritePrivateProfileString(const std::string& section, const char* ke
     return ::WritePrivateProfileStringA(section.c_str(), key, value.c_str(), fileName.c_str());
 }
 
-static std::wstring LoadResStringW(UINT id)
-{
-    std::array<wchar_t, 1024> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    if (n <= 0) {
-        return {};
-    }
-    return std::wstring(buf.data(), static_cast<size_t>(n));
-}
-
 static std::string WideToUtf8(const std::wstring& w)
 {
     if (w.empty()) {
@@ -336,6 +344,89 @@ static std::wstring Utf8ToWide(const std::string& s)
     std::wstring out(static_cast<size_t>(len - 1), L'\0');
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), -1, out.data(), len);
     return out;
+}
+
+static std::wstring LoadResStringW(UINT id)
+{
+    const char* lngStr = LngGetString(id);
+    if (lngStr)
+        return Utf8ToWide(std::string(lngStr));
+    std::array<wchar_t, 1024> buf{};
+    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
+    if (n <= 0)
+        return {};
+    return std::wstring(buf.data(), static_cast<size_t>(n));
+}
+
+// Sets a dialog control's text from LNG/RC. No-op if no translation is found.
+static void LocalizeDlgControl(HWND hWnd, int ctrlId, UINT strId)
+{
+    std::wstring s = LoadResStringW(strId);
+    if (!s.empty())
+        SetDlgItemTextW(hWnd, ctrlId, s.c_str());
+}
+
+// Translates all named controls in a dialog from LNG/RC string table.
+// Call from WM_INITDIALOG after the dialog is fully initialized.
+static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
+    std::initializer_list<std::pair<int, UINT>> controls)
+{
+    std::wstring caption = LoadResStringW(captionStrId);
+    if (!caption.empty())
+        SetWindowTextW(hWnd, caption.c_str());
+    for (const auto& [ctrlId, strId] : controls)
+        LocalizeDlgControl(hWnd, ctrlId, strId);
+}
+
+// Repositions label + checkbox + button on one row based on actual text widths.
+// Prevents translated text from overlapping or leaving excessive gaps.
+static void ArrangeInlineRow(HWND hWnd, int labelId, int checkId, int btnId)
+{
+    HWND hLabel = GetDlgItem(hWnd, labelId);
+    HWND hCheck = GetDlgItem(hWnd, checkId);
+    HWND hBtn   = GetDlgItem(hWnd, btnId);
+    if (!hLabel || !hCheck || !hBtn)
+        return;
+
+    HDC hdc = GetDC(hWnd);
+    HFONT hFont    = reinterpret_cast<HFONT>(SendMessage(hWnd, WM_GETFONT, 0, 0));
+    HFONT hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
+
+    wchar_t buf[256] = {};
+    SIZE szLabel{}, szCheck{};
+    GetWindowTextW(hLabel, buf, 255);
+    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szLabel);
+    GetWindowTextW(hCheck, buf, 255);
+    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szCheck);
+
+    SelectObject(hdc, hOldFont);
+    ReleaseDC(hWnd, hdc);
+
+    RECT rLabel{}, rCheck{}, rBtn{}, rDlg{};
+    GetWindowRect(hLabel, &rLabel); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rLabel), 2);
+    GetWindowRect(hCheck, &rCheck); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rCheck), 2);
+    GetWindowRect(hBtn,   &rBtn);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rBtn),   2);
+    GetClientRect(hWnd, &rDlg);
+
+    constexpr int kGap   = 4;   // pixels between controls
+    constexpr int kBoxW  = 16;  // checkbox square
+
+    const int labelX = rLabel.left;
+    const int labelW = szLabel.cx + kGap;
+    const int checkX = labelX + labelW + kGap;
+    const int btnW   = rBtn.right  - rBtn.left;
+    const int btnH   = rBtn.bottom - rBtn.top;
+
+    // Button positioned right after checkbox text, clamped to dialog right edge.
+    const int rawBtnX   = checkX + kBoxW + static_cast<int>(szCheck.cx) + kGap * 2;
+    const int finalBtnX = (std::min)(rawBtnX, static_cast<int>(rDlg.right) - btnW - kGap);
+
+    // Checkbox: fill the space between its start and the button.
+    const int checkW = (std::max)(finalBtnX - kGap - checkX, kBoxW + 4);
+
+    SetWindowPos(hLabel, nullptr, labelX,    rLabel.top, labelW, rLabel.bottom - rLabel.top, SWP_NOZORDER);
+    SetWindowPos(hCheck, nullptr, checkX,    rCheck.top, checkW, rCheck.bottom - rCheck.top, SWP_NOZORDER);
+    SetWindowPos(hBtn,   nullptr, finalBtnX, rBtn.top,   btnW,   btnH,                       SWP_NOZORDER);
 }
 
 static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std::wstring_view> args)
@@ -1324,6 +1415,14 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             return 1;
         }
         SetWindowLongPtr(hWnd, DWLP_USER, lParam);
+        LocalizeDlgControls(hWnd, IDS_PROXY_DLG_CAPTION, {
+            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP },
+            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST  },
+            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER  },
+            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS  },
+            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS   },
+            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS  },
+        });
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
         switch (ConnectData.proxytype) {
@@ -1502,6 +1601,16 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
     return 0;
 }
 
+// Returns the real proxy number stored in CB_SETITEMDATA for the currently
+// selected combo item (0 = no proxy, >0 = proxy slot number).
+static int GetProxyNrFromCombo(HWND hWnd)
+{
+    const int idx = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
+    if (idx < 0) return 0;
+    const LRESULT data = SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, idx, 0);
+    return (data == CB_ERR || data < 0) ? 0 : static_cast<int>(data);
+}
+
 void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
 {
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_RESETCONTENT, 0, 0);
@@ -1513,17 +1622,17 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
     LoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
     LoadStringW(hinst, IDS_ADD_PROXY,  addproxy.data(),  static_cast<int>(addproxy.size()));
 
-    SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)noproxy.data());
+    // Item 0: "No proxy" — itemdata=0
+    LRESULT i0 = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)noproxy.data());
+    SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, i0, 0);
 
     tConnectSettings connectData;
     int proxynr = 1;
-    while (true) {
-        if (LoadProxySettingsFromNr(proxynr, &connectData, iniFileName)) {
+    while (LoadProxySettingsFromNr(proxynr, &connectData, iniFileName)) {
+        // Skip "notused" slots — they appear as duplicate "No proxy" and confuse users.
+        if (connectData.proxytype != sftp::Proxy::notused) {
             wcslcpy(buf.data(), std::format(L"{}: ", proxynr).c_str(), buf.size() - 1);
             switch (connectData.proxytype) {
-            case sftp::Proxy::notused:
-                wcslcat(buf.data(), noproxy.data(), buf.size()-1);
-                break;
             case sftp::Proxy::http:
                 wcslcat(buf.data(), httpproxy.data(), buf.size()-1);
                 break;
@@ -1533,20 +1642,34 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
             case sftp::Proxy::socks5:
                 wcslcat(buf.data(), L"SOCKS5: ", buf.size()-1);
                 break;
+            default:
+                break;
             }
-            if (connectData.proxytype != sftp::Proxy::notused) {
-                std::array<WCHAR, 256> proxyW{};
-                awlcopy(proxyW.data(), connectData.proxyserver.c_str(), proxyW.size() - 1);
-                wcslcat(buf.data(), proxyW.data(), buf.size()-1);
-            }
-            SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
-        } else
-            break;
+            std::array<WCHAR, 256> proxyW{};
+            awlcopy(proxyW.data(), connectData.proxyserver.c_str(), proxyW.size() - 1);
+            wcslcat(buf.data(), proxyW.data(), buf.size()-1);
+            LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
+            SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
+        }
         proxynr++;
     }
-    SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)addproxy.data());
-    if (defproxynr >= 0 && defproxynr <= proxynr)
-        SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, defproxynr, 0);
+
+    // Last item: "Add new proxy" — itemdata=-1 (sentinel, not a real proxy slot)
+    LRESULT iLast = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)addproxy.data());
+    SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iLast, -1);
+
+    // Select the item whose stored proxynr matches defproxynr (fall back to 0).
+    const int count = (int)SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
+    bool found = false;
+    for (int i = 0; i < count; ++i) {
+        if ((int)SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, i, 0) == defproxynr) {
+            SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, i, 0);
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, 0, 0);
 }
 
 bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
@@ -1597,15 +1720,20 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 
 static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
 {
-    int proxynr = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 2;
+    // Get the proxynr stored in the last real proxy item (before "Add new proxy").
+    const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
+    const int lastRealIdx = count - 2;
+    int proxynr = (lastRealIdx > 0)
+        ? (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0)
+        : 0;
     if (proxynr >= 2) {
         std::string errorstr(1024, '\0');
         LoadStringA(hinst, IDS_ERROR_INUSE, errorstr.data(), static_cast<int>(errorstr.size()));
         errorstr.resize(strlen(errorstr.data()));
         errorstr += "\n";
-        
+
         if (DeleteLastProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
-            int proxynrSel = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
+            int proxynrSel = GetProxyNrFromCombo(hWnd);
             fillProxyCombobox(hWnd, proxynrSel, dlgIniFileName);
         } else {
             std::wstring werrorstr(1024, L'\0');
@@ -1665,7 +1793,7 @@ static void OnSessionChangedCommand(HWND hWnd, ConnectDialogContext* dlgCtx, LPC
 
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
 {
-    int proxynr = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
+    int proxynr = GetProxyNrFromCombo(hWnd);
     if (proxynr > 0) {
         ProxyDialogContext proxyCtx;
         proxyCtx.proxynr = proxynr;
@@ -1756,6 +1884,36 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     LPCSTR dlgDisplayName = m_ctx->displayName;
     LPCSTR dlgIniFileName = m_ctx->iniFileName;
     int* dlgFocusset = &m_ctx->focusset;
+
+    LocalizeDlgControls(m_hWnd, IDS_DLG_CAPTION, {
+        { IDC_LABEL_CONNECTTO,    IDS_DLG_CONNECTTO         },
+        { IDC_LABEL_USERNAME,     IDS_DLG_USERNAME          },
+        { IDC_PASSLABEL,          IDS_JUMP_DLG_PASS         },
+        { IDC_USEAGENT,           IDS_DLG_USEAGENT          },
+        { IDC_EDITPASS,           IDS_DLG_CHANGEPASS        },
+        { IDC_CRYPTPASS,          IDS_DLG_CRYPTPASS         },
+        { IDC_LABEL_CERTGROUP,    IDS_DLG_CERTGROUP         },
+        { IDC_STATICPUB,          IDS_DLG_PUBKEY            },
+        { IDC_STATICPEM,          IDS_DLG_PRIVKEY           },
+        { IDC_COMPRESS,           IDS_DLG_COMPRESS          },
+        { IDC_DETAILED_LOG,       IDS_DLG_DETAILED_LOG      },
+        { IDC_SHELLTRANSFER,      IDS_DLG_SHELLTRANSFER     },
+        { IDC_SCP_DATA,           IDS_DLG_SCP_DATA          },
+        { IDC_SCP_ALL,            IDS_DLG_SCP_ALL           },
+        { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
+        { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
+        { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
+        { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
+        { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
+        { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
+        { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
+        { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
+        { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
+        { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
+        { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
+    });
+
+    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();
@@ -2130,11 +2288,7 @@ void ConnectionDialog::OnOk()
     GetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
     m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
 
-    m_settings->proxynr = (int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
-    if (m_settings->proxynr < 0) m_settings->proxynr = 0;
-    int maxProxy = (int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 1;
-    if (m_settings->proxynr >= maxProxy)
-        m_settings->proxynr = 0;
+    m_settings->proxynr = GetProxyNrFromCombo(m_hWnd);
 
     std::array<char, wdirtypemax> targetProfile{};
     std::array<char, wdirtypemax> enteredProfile{};
@@ -2343,8 +2497,10 @@ void ConnectionDialog::OnUseAgentChanged()
 
 void ConnectionDialog::OnJumpEnableChanged()
 {
+    const bool checked = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     if (m_settings)
-        m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+        m_settings->use_jump_host = checked;
+    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), checked ? TRUE : FALSE);
 }
 
 void ConnectionDialog::OnJumpButton()

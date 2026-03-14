@@ -1,11 +1,4 @@
 param(
-    [switch]$en,
-    [switch]$pl,
-    [switch]$de,
-    [switch]$fr,
-    [switch]$es,
-    [switch]$it,
-    [switch]$ru,
     [switch]$chm,
     [switch]$nochm,
     [switch]$nodeploy,
@@ -103,153 +96,10 @@ function Stop-TotalCommander {
     }
 }
 
-function Select-ResourceLanguage {
-    param(
-        [Parameter(Mandatory = $true)][string]$LanguageCode
-    )
-    
-    $resourceScriptPath = Join-Path $projectRoot "src\res\sftpplug.rc"
-    $preserveDir = Join-Path $projectRoot ".preserve"
-    $resourceScriptBackup = Join-Path $preserveDir "sftpplug.rc.original"
-    
-    if ($LanguageCode -eq "all") {
-        # "all" = every language except Russian (RU is built separately via -ru -nochm → bin_ru)
-        $rcEncoding = New-Object System.Text.UTF8Encoding($false)
-        $content = [System.IO.File]::ReadAllText($resourceScriptPath, $rcEncoding)
-        $ruPattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Russian resources.*?#endif\s*// Russian resources\r?\n?"
-        $content = [System.Text.RegularExpressions.Regex]::Replace(
-            $content,
-            $ruPattern,
-            "",
-            [System.Text.RegularExpressions.RegexOptions]::Singleline
-        )
-        New-Item -ItemType Directory -Path $preserveDir -Force | Out-Null
-        Copy-Item -Path $resourceScriptPath -Destination $resourceScriptBackup -Force
-        [System.IO.File]::WriteAllText($resourceScriptPath, $content, $rcEncoding)
-        Write-Host "  Applied resource language filter: all (excl. Russian)" -ForegroundColor Gray
-        return
-    }
-    
-    if (-not (Test-Path $resourceScriptPath)) {
-        throw "Resource script not found: $resourceScriptPath"
-    }
-    
-    # Create preserve directory
-    New-Item -ItemType Directory -Path $preserveDir -Force | Out-Null
-    
-    # Backup original RC file
-    Copy-Item -Path $resourceScriptPath -Destination $resourceScriptBackup -Force
-    
-    # UTF-8 without BOM — required for Cyrillic and other non-Latin scripts.
-    # CP1250 (old default) silently corrupted any character outside Latin/CE range.
-    $rcEncoding = New-Object System.Text.UTF8Encoding($false)
-    $content = [System.IO.File]::ReadAllText($resourceScriptPath, $rcEncoding)
-    
-    $languageSections = @{
-        en = @{
-            marker  = "// English (U.S.) resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// English \(U\.S\.\) resources.*?#endif\s*// English \(U\.S\.\) resources\r?\n?"
-        }
-        pl = @{
-            marker  = "// Polish resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Polish resources.*?#endif\s*// Polish resources\r?\n?"
-        }
-        de = @{
-            marker  = "// German resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// German resources.*?#endif\s*// German resources\r?\n?"
-        }
-        fr = @{
-            marker  = "// French resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// French resources.*?#endif\s*// French resources\r?\n?"
-        }
-        es = @{
-            marker  = "// Spanish resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Spanish resources.*?#endif\s*// Spanish resources\r?\n?"
-        }
-        it = @{
-            marker  = "// Italian resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Italian resources.*?#endif\s*// Italian resources\r?\n?"
-        }
-        ru = @{
-            marker  = "// Russian resources"
-            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Russian resources.*?#endif\s*// Russian resources\r?\n?"
-        }
-    }
-    
-    $iconsBlock = @"
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icons
-//
 
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_ICON0               ICON    DISCARDABLE     "iconconnection.ico"
-IDI_ICON1               ICON    DISCARDABLE     "icon1.ico"
-IDI_ICON2               ICON    DISCARDABLE     "icon2.ico"
-IDI_ICON1SMALL          ICON    DISCARDABLE     "icon3.ico"
-IDI_ICON2SMALL          ICON    DISCARDABLE     "icon4.ico"
-
-"@
-
-    if (-not $languageSections.ContainsKey($LanguageCode)) {
-        throw "Unsupported language code: $LanguageCode"
-    }
-    
-    $target = $languageSections[$LanguageCode]
-    if ($content -notmatch [Regex]::Escape($target.marker)) {
-        throw "Requested language section not found in RC: $($target.marker)"
-    }
-    
-    # Remove all other language sections
-    foreach ($entry in $languageSections.GetEnumerator()) {
-        if ($entry.Key -eq $LanguageCode) {
-            continue
-        }
-        $content = [System.Text.RegularExpressions.Regex]::Replace(
-            $content,
-            $entry.Value.pattern,
-            "",
-            [System.Text.RegularExpressions.RegexOptions]::Singleline
-        )
-    }
-    
-    # For non-EN builds, ensure icons are present
-    if ($LanguageCode -ne "en") {
-        if ($content -notmatch "IDI_ICON0\s+ICON") {
-            $polishMarker = [System.Text.RegularExpressions.Regex]::Match(
-                $content,
-                "/////////////////////////////////////////////////////////////////////////////\r?\n// .* resources",
-                [System.Text.RegularExpressions.RegexOptions]::Singleline
-            )
-            if ($polishMarker.Success) {
-                $content = $content.Insert($polishMarker.Index, $iconsBlock + "`r`n")
-            } else {
-                $content += "`r`n" + $iconsBlock + "`r`n"
-            }
-        }
-    }
-    
-    # Write modified RC file
-    [System.IO.File]::WriteAllText($resourceScriptPath, $content, $rcEncoding)
-    Write-Host "  Applied resource language filter: $LanguageCode" -ForegroundColor Gray
-}
-
-function Restore-ResourceLanguage {
-    $preserveDir = Join-Path $projectRoot ".preserve"
-    $resourceScriptBackup = Join-Path $preserveDir "sftpplug.rc.original"
-    
-    if (Test-Path $resourceScriptBackup) {
-        $resourceScriptPath = Join-Path $projectRoot "src\res\sftpplug.rc"
-        Copy-Item -Path $resourceScriptBackup -Destination $resourceScriptPath -Force
-        Remove-Item $resourceScriptBackup -Force -ErrorAction SilentlyContinue
-        Remove-Item $preserveDir -Force -ErrorAction SilentlyContinue
-    }
-}
 
 function Remove-PathSafe {
-    param(
-        [Parameter(Mandatory = $true)][string]$PathToRemove
+    param([Parameter(Mandatory = $true)][string]$PathToRemove
     )
     if (-not (Test-Path $PathToRemove)) {
         return $true
@@ -347,37 +197,13 @@ function Clean-BuildOutput {
 # Main Build Script
 # ============================================================================
 
-# Determine build language
-$buildLanguage = "all"
-$selectedLanguageFlags = @()
-if ($en) { $selectedLanguageFlags += "en" }
-if ($pl) { $selectedLanguageFlags += "pl" }
-if ($de) { $selectedLanguageFlags += "de" }
-if ($fr) { $selectedLanguageFlags += "fr" }
-if ($es) { $selectedLanguageFlags += "es" }
-if ($it) { $selectedLanguageFlags += "it" }
-if ($ru) { $selectedLanguageFlags += "ru" }
 
-if ($selectedLanguageFlags.Count -gt 1) {
-    Write-Error "Use only one language switch: -en, -pl, -de, -fr, -es, -it or -ru."
-    exit 1
-}
-if ($selectedLanguageFlags.Count -eq 1) {
-    $buildLanguage = $selectedLanguageFlags[0]
-}
-
-# RU + nochm → bin_ru, no deploy, no kill TC
-if ($ru -and $nochm) {
-    $binDir = Join-Path $projectRoot "bin_ru"
-    $nodeploy = $true
-}
 
 # Determine CHM build mode
 $buildCHM = (-not $nochm) -or $chm
 
 Write-Host "--- SFTP Plugin Build Script ---" -ForegroundColor Cyan
 Write-Host "Project Root: $projectRoot" -ForegroundColor Gray
-Write-Host "Resource Language: $buildLanguage" -ForegroundColor Gray
 Write-Host "Build CHM: $($(if ($buildCHM) { 'Yes' } else { 'No' }))" -ForegroundColor Gray
 Write-Host ""
 
@@ -468,15 +294,10 @@ if ($vcToolsVersion) { $msBuildBase += "/p:VCToolsVersion=$vcToolsVersion" }
 Write-Host ""
 Write-Host "--- Building Release x64 ---" -ForegroundColor Cyan
 
-Select-ResourceLanguage -LanguageCode $buildLanguage
 $msbuildExitCode = 0
-try {
-    Write-Host "  Building: $vcxprojPath (x64)" -ForegroundColor Gray
-    &$msbuild ($msBuildBase + @("/p:Platform=x64"))
-    $msbuildExitCode = $LASTEXITCODE
-} finally {
-    Restore-ResourceLanguage
-}
+Write-Host "  Building: $vcxprojPath (x64)" -ForegroundColor Gray
+&$msbuild ($msBuildBase + @("/p:Platform=x64"))
+$msbuildExitCode = $LASTEXITCODE
 if ($msbuildExitCode -ne 0) {
     Write-Host "!!! BUILD FAILED (x64) !!!" -ForegroundColor Red
     exit $msbuildExitCode
@@ -487,15 +308,10 @@ Write-Host "  x64 build completed" -ForegroundColor Green
 Write-Host ""
 Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
 
-Select-ResourceLanguage -LanguageCode $buildLanguage
 $msbuildExitCode = 0
-try {
-    Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
-    &$msbuild ($msBuildBase + @("/p:Platform=Win32"))
-    $msbuildExitCode = $LASTEXITCODE
-} finally {
-    Restore-ResourceLanguage
-}
+Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
+&$msbuild ($msBuildBase + @("/p:Platform=Win32"))
+$msbuildExitCode = $LASTEXITCODE
 if ($msbuildExitCode -ne 0) {
     Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
     exit $msbuildExitCode
@@ -561,6 +377,12 @@ version=1.0
         if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
         if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName.chm" }
 
+        # Pack all external language files
+        $lngDir = Join-Path $projectRoot "src\res\language"
+        foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
+            Add-ZipFile $lngFile.FullName "language\$($lngFile.Name)"
+        }
+
         $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
         if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
 
@@ -610,6 +432,15 @@ if (-not $nodeploy) {
             if (Test-Path $phpAgentSource) {
                 Copy-Item -Path $phpAgentSource -Destination (Join-Path $pluginDir "sftp.php") -Force
                 Write-Host "  Deployed: sftp.php" -ForegroundColor Green
+            }
+
+            # Deploy external language files
+            $lngDir = Join-Path $projectRoot "src\res\language"
+            $lngDestDir = Join-Path $pluginDir "language"
+            New-Item -ItemType Directory -Path $lngDestDir -Force | Out-Null
+            foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
+                Copy-Item -Path $lngFile.FullName -Destination (Join-Path $lngDestDir $lngFile.Name) -Force
+                Write-Host "  Deployed: language\$($lngFile.Name)" -ForegroundColor Green
             }
             
             $deploySuccess = $true
