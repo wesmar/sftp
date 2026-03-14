@@ -207,9 +207,9 @@ struct ConnectDialogContext {
     std::string defaultSystemLabel;
     std::string defaultEncodingLabel;
     std::wstring defaultPasswordLabel;
-    std::unique_ptr<smb::DiscoveryService> lanDiscovery;
-    std::unique_ptr<smb::PairServer> lanServer;
-    std::unordered_map<std::string, smb::PeerAnnouncement> lanPeers;
+    std::unique_ptr<lanpair::DiscoveryService> lanDiscovery;
+    std::unique_ptr<lanpair::PairServer> lanServer;
+    std::unordered_map<std::string, lanpair::PeerAnnouncement> lanPeers;
     std::vector<std::string> lanPeerOrder;
     std::string lanPeerId;
     std::wstring lanDisplayName;
@@ -588,7 +588,7 @@ static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, p
     }
 
     if (!dlgCtx->lanDiscovery) {
-        dlgCtx->lanDiscovery = std::make_unique<smb::DiscoveryService>();
+        dlgCtx->lanDiscovery = std::make_unique<lanpair::DiscoveryService>();
     }
     if (dlgCtx->lanPeerId.empty()) {
         dlgCtx->lanPeerId = MakeLanPeerId();
@@ -604,16 +604,16 @@ static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, p
         }
     }
 
-    smb::DiscoveryConfig cfg{};
+    lanpair::DiscoveryConfig cfg{};
     cfg.tcpPort = 45846;
-    smb::PairError err{};
+    lanpair::PairError err{};
     const bool ok = dlgCtx->lanDiscovery->start(
         cfg,
         dlgCtx->lanPeerId,
         WideToUtf8(dlgCtx->lanDisplayName),
-        smb::PairRole::Dual,
-        [hWnd](const smb::PeerAnnouncement& ann) {
-            auto* copy = new smb::PeerAnnouncement(ann);
+        lanpair::PairRole::Dual,
+        [hWnd](const lanpair::PeerAnnouncement& ann) {
+            auto* copy = new lanpair::PeerAnnouncement(ann);
             PostMessage(hWnd, WM_APP_LAN_PEER, 0, reinterpret_cast<LPARAM>(copy));
         },
         &err);
@@ -642,7 +642,7 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     auto startReceiver = [&](bool allowStopToggle) -> bool {
         if (!dlgCtx->lanServer) {
-            dlgCtx->lanServer = std::make_unique<smb::PairServer>();
+            dlgCtx->lanServer = std::make_unique<lanpair::PairServer>();
         }
         if (dlgCtx->lanServerRunning) {
             if (allowStopToggle) {
@@ -657,17 +657,17 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
             return true;
         }
 
-        smb::PairServerConfig cfg{};
+        lanpair::PairServerConfig cfg{};
         cfg.port = 45846;
         cfg.peerId = dlgCtx->lanPeerId;
         cfg.displayName = WideToUtf8(dlgCtx->lanDisplayName);
-        cfg.role = smb::PairRole::Receiver;
+        cfg.role = lanpair::PairRole::Receiver;
         cfg.password = WideToUtf8(passW.data());
-        smb::PairError err{};
+        lanpair::PairError err{};
         const std::wstring acceptedTempl = LoadResStringW(IDS_LAN_MSG_ACCEPTED);
         const bool ok = dlgCtx->lanServer->start(
             cfg,
-            [acceptedTempl](const smb::PairSessionInfo& info) {
+            [acceptedTempl](const lanpair::PairSessionInfo& info) {
                 std::wstring peerW(info.remotePeerId.begin(), info.remotePeerId.end());
                 std::wstring ipW(info.remoteIp.begin(), info.remoteIp.end());
                 const std::wstring msg = acceptedTempl.empty()
@@ -726,15 +726,15 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
         return;
     }
 
-    smb::PairClient client;
-    smb::PairClientConfig cfg{};
+    lanpair::PairClient client;
+    lanpair::PairClientConfig cfg{};
     cfg.peerId = dlgCtx->lanPeerId;
     cfg.targetIp = it->second.ip;
     cfg.targetPort = it->second.tcpPort;
     cfg.password = WideToUtf8(passW.data());
 
-    smb::PairSessionInfo info{};
-    smb::PairError err{};
+    lanpair::PairSessionInfo info{};
+    lanpair::PairError err{};
     const bool ok = client.connectAndAuthenticate(cfg, &info, &err);
     if (!ok) {
         WindowsUserFeedback tempFeedback(hWnd);
@@ -1996,7 +1996,7 @@ void ConnectionDialog::OnDestroy()
 
 INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
 {
-    auto* ann = reinterpret_cast<smb::PeerAnnouncement*>(lParam);
+    auto* ann = reinterpret_cast<lanpair::PeerAnnouncement*>(lParam);
     if (m_ctx && ann) {
         const bool peerWasNew = m_ctx->lanPeers.find(ann->peerId) == m_ctx->lanPeers.end();
         const std::string newPeerId = ann->peerId;

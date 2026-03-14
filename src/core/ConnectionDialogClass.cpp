@@ -166,7 +166,7 @@ void ConnectionDialog::OnDestroy()
 INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM wParam, LPARAM lParam)
 {
     UNREFERENCED_PARAMETER(wParam);
-    auto* ann = reinterpret_cast<smb::PeerAnnouncement*>(lParam);
+    auto* ann = reinterpret_cast<lanpair::PeerAnnouncement*>(lParam);
     if (m_ctx && ann) {
         const bool peerWasNew = m_ctx->lanPeers.find(ann->peerId) == m_ctx->lanPeers.end();
         const std::string newPeerId = ann->peerId;

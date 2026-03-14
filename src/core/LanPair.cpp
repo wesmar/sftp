@@ -31,7 +31,7 @@
 #pragma comment(lib, "Bcrypt.lib")
 #pragma comment(lib, "Crypt32.lib")
 
-namespace smb {
+namespace lanpair {
 namespace {
 
 // Pull in all shared primitives from LanPairInternal.h.
@@ -825,4 +825,4 @@ bool deleteSecret(const std::string& key,
 
 } // namespace DpapiSecretStore
 
-} // namespace smb
+} // namespace lanpair

@@ -139,6 +139,12 @@
     <ClCompile Include="..\src\core\LanPairSession.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\PluginEntryPointsFind.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\PluginEntryPointsFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <!-- Header Files -->
   <ItemGroup>
@@ -257,6 +263,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\LanPairSession.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\PluginEntryPointsInternal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

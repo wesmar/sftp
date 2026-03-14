@@ -12,13 +12,6 @@
 #include <optional>
 #include <ctime>
 
-// ============================================================================
-// Modern C++ Helper Macros
-// ============================================================================
-
-#define FIN_IF(_cond_,_code_) do { if ((_cond_)) { hr = _code_; goto fin; } } while(0)
-#define FIN(_code_)           do { hr = _code_; goto fin; } while(0)
-
 // LoadStr — type-safe replacements for the old macro.
 // Passing buf.data() to the macro caused sizeof(char*)/sizeof(char)=8 on x64,
 // silently truncating every loaded string to 6 characters.
