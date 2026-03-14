@@ -33,6 +33,7 @@ HWND hWndMain = nullptr;
 #define templatefile "sftpplug.tpl"
 char    inifilename[MAX_PATH]  = defininame;   // ANSI path (legacy / read-only)
 wchar_t inifilenameW[MAX_PATH] = defininamew;  // Unicode path (preferred for all ini calls)
+static char g_wincmdIniPath[MAX_PATH] = {};    // path to wincmd.ini, used for live language detection
 char pluginname[] = "SFTP";
 char defrootname[] = "Secure FTP";
 
@@ -550,6 +551,7 @@ HANDLE WINAPI FsFindFirstW(LPCWSTR Path, LPWIN32_FIND_DATAW FindData)
         std::array<char, wdirtypemax> pathA{};
 
         if (wcscmp(Path, L"\\") == 0) {  // in the root.
+            ApplyTcLanguageToPluginResources(g_wincmdIniPath);
             std::array<char, 256> s_helptext{};
             LoadString(hinst, IDS_HELPTEXT, s_helptext.data(), static_cast<int>(s_helptext.size()));
             LoadServersFromIniW(inifilenameW, s_quickconnect);
@@ -1507,6 +1509,7 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
         }
 
         // Align plugin resource language with Total Commander language setting.
+        strlcpy(g_wincmdIniPath, tcIniPath.data(), MAX_PATH - 1);
         ApplyTcLanguageToPluginResources(tcIniPath.data());
 
         strlcpy(inifilename, dps->DefaultIniName, MAX_PATH-1);
