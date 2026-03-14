@@ -141,8 +141,8 @@ static bool ShellExecPersistentProcessLines(
     if (!cs->scpShellChannel)
         return false;
 
-    cs->scpShellMsgBuf[0] = 0;
-    cs->scpShellErrBuf[0] = 0;
+    cs->scpShellMsgBuf.clear();
+    cs->scpShellErrBuf.clear();
 
     static unsigned shellDdSeq = 1;
     const unsigned seq = shellDdSeq++;
@@ -173,8 +173,7 @@ static bool ShellExecPersistentProcessLines(
     std::array<char, 8192> line{};
 
     while (ReadChannelLine(cs->scpShellChannel.get(), line.data(), line.size() - 1,
-                           cs->scpShellMsgBuf, sizeof(cs->scpShellMsgBuf) - 1,
-                           cs->scpShellErrBuf, sizeof(cs->scpShellErrBuf) - 1, cs->sock))
+                           cs->scpShellMsgBuf, cs->scpShellErrBuf, cs->sock))
     {
         StripEscapeSequences(line.data());
         const char* p = ShellTrimLeft(line.data());
@@ -280,11 +279,11 @@ static int64_t ShellGetRemoteFileSize(pConnectSettings cs, const std::string& re
         return -1;
     }
 
-    std::array<char, 256> msgbuf{}, errbuf{}, line{};
+    std::string msgbuf, errbuf;
+    std::array<char, 256> line{};
     int64_t size = -1;
     while (ReadChannelLine(ch.get(), line.data(), line.size() - 1,
-                           msgbuf.data(), msgbuf.size() - 1,
-                           errbuf.data(), errbuf.size() - 1, cs->sock)) {
+                           msgbuf, errbuf, cs->sock)) {
         StripEscapeSequences(line.data());
         const char* p = line.data();
         while (*p == ' ' || *p == '\t') p++;

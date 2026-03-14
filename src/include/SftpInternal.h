@@ -167,9 +167,8 @@ bool  EnsureScpShell(pConnectSettings cs);
 void  CloseScpShell(pConnectSettings cs);
 bool  ScpReadCommandOutput(pConnectSettings cs, const char* endMarker, std::vector<std::string>& outLines, DWORD timeoutMs, const char* beginMarker = nullptr);
 bool  ReadChannelLine(ISshChannel* channel,
-                      LPSTR line,   size_t linelen,
-                      LPSTR msgbuf, size_t msgbuflen,
-                      LPSTR errbuf, size_t errbuflen,
+                      char* line, size_t linelen,
+                      std::string& msgbuf, std::string& errbuf,
                       SOCKET sock = INVALID_SOCKET,
                       DWORD idleTimeoutMs  = 10000,
                       DWORD totalTimeoutMs = 45000);

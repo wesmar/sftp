@@ -654,8 +654,8 @@ int SftpCloseConnection(pConnectSettings ConnectSettings)
         // below will close remote channels anyway.
         if (ConnectSettings->scpShellChannel) {
             ConnectSettings->scpShellChannel.reset();
-            ConnectSettings->scpShellMsgBuf[0] = 0;
-            ConnectSettings->scpShellErrBuf[0] = 0;
+            ConnectSettings->scpShellMsgBuf.clear();
+            ConnectSettings->scpShellErrBuf.clear();
         }
         if (ConnectSettings->scponly) {
             // Fast close for SCP-only sessions: skip graceful shutdown loops that can block UI.

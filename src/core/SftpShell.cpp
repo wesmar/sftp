@@ -329,8 +329,8 @@ bool EnsureScpShell(pConnectSettings cs)
     Sleep(500); 
 
     cs->scpShellChannel = std::move(channel);
-    cs->scpShellMsgBuf[0] = 0;
-    cs->scpShellErrBuf[0] = 0;
+    cs->scpShellMsgBuf.clear();
+    cs->scpShellErrBuf.clear();
     return true;
 }
 
@@ -351,8 +351,8 @@ void CloseScpShell(pConnectSettings cs)
         }
     }
     cs->scpShellChannel.reset();
-    cs->scpShellMsgBuf[0] = 0;
-    cs->scpShellErrBuf[0] = 0;
+    cs->scpShellMsgBuf.clear();
+    cs->scpShellErrBuf.clear();
 }
 
 bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
@@ -373,8 +373,7 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
 
     while (ReadChannelLine(cs->scpShellChannel.get(),
                            line.data(), line.size() - 1,
-                           cs->scpShellMsgBuf, sizeof(cs->scpShellMsgBuf) - 1,
-                           cs->scpShellErrBuf, sizeof(cs->scpShellErrBuf) - 1))
+                           cs->scpShellMsgBuf, cs->scpShellErrBuf))
     {
         std::string lineStr(line.data());
         StripEscapeSequences(lineStr);
@@ -413,8 +412,7 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
 }
 
 bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
-                     char* msgbuf, size_t msgbuflen,
-                     char* errbuf, size_t errbuflen, SOCKET sock,
+                     std::string& msgbuf, std::string& errbuf, SOCKET sock,
                      DWORD idleTimeoutMs, DWORD totalTimeoutMs)
 {
     const auto start = std::chrono::steady_clock::now();
@@ -423,6 +421,10 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
     bool detectingCrLf = true;
     int consecutiveEagain = 0;
 
+    // Stack buffers for raw channel reads — sized to match the old per-call chunk.
+    char tmpbuf[4096];
+    char tmperr[2048];
+
     while (true) {
         const auto now = std::chrono::steady_clock::now();
         const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastData).count();
@@ -430,46 +432,39 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
         if (idle > static_cast<long long>(idleTimeoutMs) || total > static_cast<long long>(totalTimeoutMs))
             return false;
 
-        const size_t prevLen = strlen(msgbuf);
-        const size_t remain = msgbuflen - prevLen;
-        const size_t remainErr = errbuflen - strlen(errbuf);
-        char* p = msgbuf + prevLen;
-        char* pErr = errbuf + strlen(errbuf);
-
         if (channel->eof())
             endReceived = true;
 
-        const int rcerr = static_cast<int>(channel->readStderr(pErr, remainErr));
-        const int rc = static_cast<int>(channel->read(p, remain));
+        const int rcerr = static_cast<int>(channel->readStderr(tmperr, sizeof(tmperr) - 1));
+        const int rc    = static_cast<int>(channel->read(tmpbuf, sizeof(tmpbuf) - 1));
 
         if (rcerr > 0) {
-            pErr[rcerr] = '\0';
+            errbuf.append(tmperr, rcerr);
             lastData = now;
             consecutiveEagain = 0;
         }
         if (rc > 0) {
-            p[rc] = '\0';
+            msgbuf.append(tmpbuf, rc);
             lastData = now;
             consecutiveEagain = 0;
         }
 
-        // Check for newline in msgbuf
-        char* nl = strchr(msgbuf, '\n');
-        if (nl) {
-            *nl = '\0';
-            // Detect CRLF
-            if (nl > msgbuf && *(nl - 1) == '\r') {
+        // Extract the first complete line from the accumulation buffer.
+        const size_t pos = msgbuf.find('\n');
+        if (pos != std::string::npos) {
+            size_t lineEnd = pos;
+            if (pos > 0 && msgbuf[pos - 1] == '\r') {
                 if (detectingCrLf && global_detectcrlf == -1)
                     global_detectcrlf = 1;
-                *(nl - 1) = '\0';
+                lineEnd = pos - 1;
             } else if (detectingCrLf && global_detectcrlf == -1) {
                 global_detectcrlf = 0;
             }
-            strlcpy(line, msgbuf, lineLen);
+            const size_t copyLen = (std::min)(lineEnd, lineLen - 1);
+            msgbuf.copy(line, copyLen, 0);
+            line[copyLen] = '\0';
             StripEscapeSequences(line);
-            // Shift buffer
-            size_t remaining = strlen(nl + 1) + 1;
-            memmove(msgbuf, nl + 1, remaining);
+            msgbuf.erase(0, pos + 1);
             return true;
         }
 
@@ -482,11 +477,13 @@ bool ReadChannelLine(ISshChannel* channel, char* line, size_t lineLen,
         }
 
         if (endReceived && rc <= 0 && rc != LIBSSH2_ERROR_EAGAIN) {
-            if (msgbuf[0] && !(msgbuf[0] == '\r' || msgbuf[0] == '\n')) {
-                // Flush remaining buffer as line
-                strlcpy(line, msgbuf, lineLen);
+            if (!msgbuf.empty() && msgbuf[0] != '\r' && msgbuf[0] != '\n') {
+                // Flush the remaining partial line (no trailing newline from the server).
+                const size_t copyLen = (std::min)(msgbuf.size(), lineLen - 1);
+                msgbuf.copy(line, copyLen, 0);
+                line[copyLen] = '\0';
                 StripEscapeSequences(line);
-                msgbuf[0] = '\0';
+                msgbuf.clear();
                 return true;
             }
             return false;
@@ -548,22 +545,21 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
         return -1;
     }
 
-    std::array<char, 2048> errbuf{};
+    std::string errbuf;
     std::string msgbuf;
-    std::string line;
+    std::array<char, 4096> linebuf{};
 
-    while (ReadChannelLine(channel.get(), line.data(), line.size(),
-                           msgbuf.data(), msgbuf.size(),
-                           errbuf.data(), errbuf.size(), cs->sock,
+    while (ReadChannelLine(channel.get(), linebuf.data(), linebuf.size() - 1,
+                           msgbuf, errbuf, cs->sock,
                            idleTimeoutMs, totalTimeoutMs))
     {
-        StripEscapeSequences(line);
+        StripEscapeSequences(linebuf.data());
         if (!reply) {
-            ShowStatus(line.c_str());
+            ShowStatus(linebuf.data());
         } else {
             if (reply[0])
                 strlcat(reply, "\r\n", replylen);
-            strlcat(reply, line.c_str(), replylen);
+            strlcat(reply, linebuf.data(), replylen);
         }
     }
 
@@ -572,9 +568,9 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);
         ShowStatus(tmp);
-        if (errbuf[0]) {
-            std::string err(errbuf.data());
-            StripEscapeSequences(err);
+        if (!errbuf.empty()) {
+            std::string err = errbuf;
+            StripEscapeSequences(err.data());
             if (err.substr(0, 19) == "stdin: is not a tty")
                 err = err.substr(19);
             ShowStatus(err.c_str());
@@ -641,26 +637,25 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
         return -1;
     }
 
-    std::array<char, 2048> errbuf{};
+    std::string errbuf;
     std::string msgbuf;
-    std::string line;
+    std::array<char, 4096> linebuf{};
     const auto start = std::chrono::steady_clock::now();
     int loop = 0;
     auto lasttime = get_sys_ticks();
 
-    while (ReadChannelLine(channel.get(), line.data(), line.size() - 1,
-                           msgbuf.data(), msgbuf.size() - 1,
-                           errbuf.data(), errbuf.size() - 1, cs->sock))
+    while (ReadChannelLine(channel.get(), linebuf.data(), linebuf.size() - 1,
+                           msgbuf, errbuf, cs->sock))
     {
-        StripEscapeSequences(line);
+        StripEscapeSequences(linebuf.data());
         if (!reply) {
-            std::wstring wline;
-            CopyStringA2W(cs, line.c_str(), wline.data(), wline.size(), false);
-            ShowStatusW(wline.c_str());
+            std::array<wchar_t, 4096> wline{};
+            CopyStringA2W(cs, linebuf.data(), wline.data(), wline.size() - 1, false);
+            ShowStatusW(wline.data());
         } else {
             if (reply[0])
                 strlcat(reply, "\r\n", replylen);
-            strlcat(reply, line.c_str(), replylen);
+            strlcat(reply, linebuf.data(), replylen);
         }
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start).count();
@@ -675,9 +670,9 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);
         ShowStatus(tmp);
-        if (errbuf[0]) {
-            std::string err(errbuf.data());
-            StripEscapeSequences(err);
+        if (!errbuf.empty()) {
+            std::string err = errbuf;
+            StripEscapeSequences(err.data());
             if (err.substr(0, 19) == "stdin: is not a tty")
                 err = err.substr(19);
             ShowStatus(err.c_str());

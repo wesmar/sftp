@@ -208,8 +208,8 @@ if (cs->scponly) {
                 return SFTP_FAILED;
             }
 
-            cs->scpShellMsgBuf[0] = 0;
-            cs->scpShellErrBuf[0] = 0;
+            cs->scpShellMsgBuf.clear();
+            cs->scpShellErrBuf.clear();
 
             std::string listTarget = dirStr;
             if (!listTarget.empty() && listTarget[0] == '/')
@@ -275,11 +275,10 @@ if (cs->scponly) {
             }
 
 			if (!gotEnd && entries.empty()) {
-                if (cs->scpShellErrBuf[0]) {
-                    std::array<char, sizeof(cs->scpShellErrBuf)> err{};
-                    strlcpy(err.data(), cs->scpShellErrBuf, err.size() - 1);
+                if (!cs->scpShellErrBuf.empty()) {
+                    std::string err = cs->scpShellErrBuf;
                     StripEscapeSequences(err.data());
-                    ShowStatus(err.data());
+                    ShowStatus(err.c_str());
                 } else {
                     ShowStatus("SCP listing failed: no output or timeout.");
                 }

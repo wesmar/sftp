@@ -4,6 +4,7 @@ param(
     [switch]$de,
     [switch]$fr,
     [switch]$es,
+    [switch]$ru,
     [switch]$chm,
     [switch]$nochm,
     [switch]$nodeploy,
@@ -124,7 +125,9 @@ function Select-ResourceLanguage {
     # Backup original RC file
     Copy-Item -Path $resourceScriptPath -Destination $resourceScriptBackup -Force
     
-    $rcEncoding = [System.Text.Encoding]::GetEncoding(1250)
+    # UTF-8 without BOM — required for Cyrillic and other non-Latin scripts.
+    # CP1250 (old default) silently corrupted any character outside Latin/CE range.
+    $rcEncoding = New-Object System.Text.UTF8Encoding($false)
     $content = [System.IO.File]::ReadAllText($resourceScriptPath, $rcEncoding)
     
     $languageSections = @{
@@ -147,6 +150,10 @@ function Select-ResourceLanguage {
         es = @{
             marker  = "// Spanish resources"
             pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Spanish resources.*?#endif\s*// Spanish resources\r?\n?"
+        }
+        ru = @{
+            marker  = "// Russian resources"
+            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Russian resources.*?#endif\s*// Russian resources\r?\n?"
         }
     }
     
@@ -329,13 +336,20 @@ if ($pl) { $selectedLanguageFlags += "pl" }
 if ($de) { $selectedLanguageFlags += "de" }
 if ($fr) { $selectedLanguageFlags += "fr" }
 if ($es) { $selectedLanguageFlags += "es" }
+if ($ru) { $selectedLanguageFlags += "ru" }
 
 if ($selectedLanguageFlags.Count -gt 1) {
-    Write-Error "Use only one language switch: -en, -pl, -de, -fr or -es."
+    Write-Error "Use only one language switch: -en, -pl, -de, -fr, -es or -ru."
     exit 1
 }
 if ($selectedLanguageFlags.Count -eq 1) {
     $buildLanguage = $selectedLanguageFlags[0]
+}
+
+# RU + nochm → bin_ru, no deploy, no kill TC
+if ($ru -and $nochm) {
+    $binDir = Join-Path $projectRoot "bin_ru"
+    $nodeploy = $true
 }
 
 # Determine CHM build mode
