@@ -12,7 +12,7 @@
 
 ![SFTP Plugin](images/sftp01.jpg)
 
-**Version 1.0.0.0** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
+**Version 1.0.0.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
 
 Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core transport, authentication, and session modules were re-engineered from scratch with a compatibility-first execution model, interface-driven backend abstraction, and hardened security primitives. The plugin selects the optimal transfer path at runtime — native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair — depending on server constraints and deployment topology.
 
@@ -38,7 +38,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - [Packaging and Installation](#packaging-and-installation)
 - [PHP Agent Deployment](#php-agent-deployment)
 - [Localization](#localization)
-- [Recent Fixes (v1.0.0.0)](#recent-fixes-v1000)
+- [Recent Fixes (v1.0.0.x)](#recent-fixes-v1000)
 - [Roadmap](#roadmap)
 
 ---
@@ -950,7 +950,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 
 ---
 
-## Recent Fixes (v1.0.0.0)
+## Recent Fixes (v1.0.0.x)
 
 ### Critical Bug Fixes
 
@@ -1032,6 +1032,6 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 
 ---
 
-*Secure FTP Plugin v1.0.0.0 — Modern C++20 implementation.*
+*Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*
 [kvc.pl](https://kvc.pl) | [marek@kvc.pl](mailto:marek@kvc.pl)
