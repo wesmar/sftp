@@ -48,20 +48,20 @@ namespace {
 // Pull in all shared crypto / socket primitives.
 using namespace lanpair_internal;
 
-// ---- role helpers (local: use smb::PairRole with full qualifier) ----
+// ---- role helpers (local: use lanpair::PairRole with full qualifier) ----
 
-std::string roleToString(smb::PairRole role) {
+std::string roleToString(lanpair::PairRole role) {
     switch (role) {
-    case smb::PairRole::Donor:    return "donor";
-    case smb::PairRole::Receiver: return "receiver";
+    case lanpair::PairRole::Donor:    return "donor";
+    case lanpair::PairRole::Receiver: return "receiver";
     default:                      return "dual";
     }
 }
 
-smb::PairRole roleFromString(const std::string& s) {
-    if (s == "donor")    return smb::PairRole::Donor;
-    if (s == "receiver") return smb::PairRole::Receiver;
-    return smb::PairRole::Dual;
+lanpair::PairRole roleFromString(const std::string& s) {
+    if (s == "donor")    return lanpair::PairRole::Donor;
+    if (s == "receiver") return lanpair::PairRole::Receiver;
+    return lanpair::PairRole::Dual;
 }
 
 // ---- socket helpers only needed here ----
@@ -193,7 +193,7 @@ AuthResult pair1Connect(
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    smb::PairError*    err) noexcept
+    lanpair::PairError*    err) noexcept
 {
     AuthResult result;
 
@@ -235,7 +235,7 @@ AuthResult pair1Connect(
 
     std::ostringstream hello;
     hello << "PAIR1 HELLO " << localPeerId << " "
-          << roleToString(smb::PairRole::Donor) << " " << clientNonceHex;
+          << roleToString(lanpair::PairRole::Donor) << " " << clientNonceHex;
     if (!sendLine(s, hello.str())) {
         closesocket(s);
         if (err) { err->code = WSAGetLastError(); err->message = "Cannot send HELLO"; }
@@ -279,7 +279,7 @@ AuthResult pair1Connect(
     auto sendAuthAndGetKey = [&]() -> bool {
         std::string trustSecret;
         const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
-        if (smb::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
+        if (lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
             key.assign(trustSecret.begin(), trustSecret.end());
             auto proof = hmacSha256(key,
                 std::span<const uint8_t>(
@@ -327,7 +327,7 @@ AuthResult pair1Connect(
         key.assign(trustBytes->begin(), trustBytes->end());
         const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
         std::string raw(reinterpret_cast<const char*>(trustBytes->data()), trustBytes->size());
-        smb::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
+        lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
     }
 
     auto expectedSrvProof = hmacSha256(key,
@@ -386,8 +386,8 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
     if (!key) return false;
 
     const std::string raw(reinterpret_cast<const char*>(key->data()), key->size());
-    smb::DpapiSecretStore::saveSecret(trustKeyForClient(remotePeerId, localPeerId), raw, nullptr);
-    smb::DpapiSecretStore::saveSecret(trustKeyForServer(localPeerId, remotePeerId), raw, nullptr);
+    lanpair::DpapiSecretStore::saveSecret(trustKeyForClient(remotePeerId, localPeerId), raw, nullptr);
+    lanpair::DpapiSecretStore::saveSecret(trustKeyForServer(localPeerId, remotePeerId), raw, nullptr);
     return true;
 }
 
@@ -446,7 +446,7 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    smb::PairError* err) noexcept
+    lanpair::PairError* err) noexcept
 {
     auto impl = std::make_unique<Impl>();
     if (!impl->wsa.ok()) {
@@ -775,7 +775,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         ch << "PAIR1 CHALLENGE "
            << serverPeerId_ << " "
            << escapeToken(serverPeerId_) << " "
-           << roleToString(smb::PairRole::Receiver) << " "
+           << roleToString(lanpair::PairRole::Receiver) << " "
            << hexEncode(salt.data(), salt.size()) << " "
            << hexEncode(serverNonce.data(), serverNonce.size());
         if (!sendLine(s, ch.str())) return false;
@@ -803,7 +803,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             };
 
             std::string storedSecret;
-            if (!smb::DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr)) {
+            if (!lanpair::DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr)) {
                 sendLine(s, "PAIR1 FAIL trust-unknown");
                 return false;
             }
@@ -818,7 +818,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             key.assign(fresh.begin(), fresh.end());
             issuedTrustHex = hexEncode(fresh.data(), fresh.size());
             std::string raw(reinterpret_cast<const char*>(fresh.data()), fresh.size());
-            smb::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
+            lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
         } else {
             sendLine(s, "PAIR1 FAIL bad-auth");
             return false;
@@ -1112,7 +1112,7 @@ LanFileServer::LanFileServer()
 
 LanFileServer::~LanFileServer() { stop(); }
 
-bool LanFileServer::start(uint16_t port, smb::PairError* err) noexcept {
+bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
     stop();
 
     if (!impl_->wsa.ok()) {

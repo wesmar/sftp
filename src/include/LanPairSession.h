@@ -40,7 +40,7 @@ public:
         const std::string& localPeerId,
         const std::string& remotePeerId,
         const std::string& password,
-        smb::PairError*    err = nullptr) noexcept;
+        lanpair::PairError*    err = nullptr) noexcept;
 
     bool isConnected() const noexcept;
     void disconnect()  noexcept;
@@ -99,7 +99,7 @@ public:
     LanFileServer& operator=(const LanFileServer&) = delete;
 
     bool start(uint16_t        port = 45846,
-               smb::PairError* err  = nullptr) noexcept;
+               lanpair::PairError* err  = nullptr) noexcept;
 
     void stop()       noexcept;
     bool isRunning()  const noexcept;

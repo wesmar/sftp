@@ -55,7 +55,7 @@ static std::unique_ptr<ISshBackend> g_sshBackend;
 // Global LAN Pair file server: started at plugin init, serves all authenticated peers.
 // Also the discovery service that announces this machine's presence.
 static std::unique_ptr<LanFileServer>    g_lanFileServer;
-static std::unique_ptr<smb::DiscoveryService> g_lanDiscovery;
+static std::unique_ptr<lanpair::DiscoveryService> g_lanDiscovery;
 
 // ---------------------------------------------------------------------------
 // Connection progress step percentages
@@ -318,27 +318,27 @@ void StartGlobalLanServices()
         return;
 
     g_lanFileServer = std::make_unique<LanFileServer>();
-    smb::PairError err;
+    lanpair::PairError err;
     if (!g_lanFileServer->start(45846, &err)) {
         SFTP_LOG("LAN", "LanFileServer start failed: %s", err.message.c_str());
         g_lanFileServer.reset();
     } else {
         // Restore previously saved server password (set when any LAN Pair profile was connected).
         std::string storedPw;
-        if (smb::DpapiSecretStore::loadSecret("lanpair-server-pw", &storedPw, nullptr) &&
+        if (lanpair::DpapiSecretStore::loadSecret("lanpair-server-pw", &storedPw, nullptr) &&
             !storedPw.empty()) {
             g_lanFileServer->setPassword(storedPw);
         }
     }
 
     if (!g_lanDiscovery) {
-        g_lanDiscovery = std::make_unique<smb::DiscoveryService>();
-        smb::DiscoveryConfig cfg;
+        g_lanDiscovery = std::make_unique<lanpair::DiscoveryService>();
+        lanpair::DiscoveryConfig cfg;
         const std::string peerId = MakeLanPeerId();
         char host[256] = {};
         gethostname(host, static_cast<int>(sizeof(host) - 1));
-        smb::PairError derr;
-        if (!g_lanDiscovery->start(cfg, peerId, host, smb::PairRole::Dual,
+        lanpair::PairError derr;
+        if (!g_lanDiscovery->start(cfg, peerId, host, lanpair::PairRole::Dual,
                                    nullptr, &derr)) {
             SFTP_LOG("LAN", "LanDiscovery start failed: %s", derr.message.c_str());
             g_lanDiscovery.reset();
@@ -383,8 +383,8 @@ static int LanPairConnect(pConnectSettings cs)
     uint16_t foundPort = 45846;
 
     // Start a short-lived discovery service to look for the peer.
-    smb::DiscoveryService disco;
-    smb::DiscoveryConfig dcfg;
+    lanpair::DiscoveryService disco;
+    lanpair::DiscoveryConfig dcfg;
     const std::string localId = MakeLanPeerId();
     char host[256] = {};
     gethostname(host, static_cast<int>(sizeof(host) - 1));
@@ -393,8 +393,8 @@ static int LanPairConnect(pConnectSettings cs)
     std::condition_variable cv;
     bool found = false;
 
-    disco.start(dcfg, localId, host, smb::PairRole::Dual,
-        [&](const smb::PeerAnnouncement& ann) {
+    disco.start(dcfg, localId, host, lanpair::PairRole::Dual,
+        [&](const lanpair::PeerAnnouncement& ann) {
             if (ann.peerId != targetPeerId) return;
             std::lock_guard<std::mutex> lk(mu);
             foundIp   = ann.ip;
@@ -421,14 +421,14 @@ static int LanPairConnect(pConnectSettings cs)
     // Register password with our own server BEFORE connecting —
     // the remote peer may simultaneously try to connect to us using the same password.
     if (!cs->password.empty()) {
-        smb::DpapiSecretStore::saveSecret("lanpair-server-pw", cs->password, nullptr);
+        lanpair::DpapiSecretStore::saveSecret("lanpair-server-pw", cs->password, nullptr);
         if (g_lanFileServer)
             g_lanFileServer->setPassword(cs->password);
     }
 
     ShowStatus(("LAN Pair: connecting to " + foundIp + "...").c_str());
 
-    smb::PairError err;
+    lanpair::PairError err;
     auto session = LanPairSession::connect(
         foundIp, foundPort, localId, targetPeerId,
         cs->password,   // empty = use stored trust key

@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-namespace smb {
+namespace lanpair {
 
 struct PairError {
     int code = 0;
@@ -167,4 +167,4 @@ struct PairFrameHeader {
     uint32_t payloadSize = 0;
 };
 
-} // namespace smb
+} // namespace lanpair
