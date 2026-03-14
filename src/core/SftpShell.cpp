@@ -318,11 +318,15 @@ bool EnsureScpShell(pConnectSettings cs)
         return false;
     }
 
-    // Start shell
+	// Start shell
     int shellRc = WaitForOperation([&] { return channel->shell(); }, kScpShellOpenTimeoutMs, cs, false);
     if (shellRc < 0) {
         return false;
     }
+
+    // Servers (e.g., home.pl) lose the first login if we send it immediately.
+    // We give the shell time to load /etc/profile and the MOTD.
+    Sleep(500); 
 
     cs->scpShellChannel = std::move(channel);
     cs->scpShellMsgBuf[0] = 0;

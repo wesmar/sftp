@@ -2276,6 +2276,419 @@ END
 #endif    // Polish resources
 /////////////////////////////////////////////////////////////////////////////
 
+/////////////////////////////////////////////////////////////////////////////
+// Russian resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_RUS)
+#ifdef _WIN32
+LANGUAGE LANG_RUSSIAN, SUBLANG_DEFAULT
+#pragma code_page(65001)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_WEBDAV DIALOGEX 0, 0, 286, 320
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_NOPARENTNOTIFY
+CAPTION "Подключение к SFTP-серверу"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "&Адрес: (сервер/путь или сервер:порт/путь)", IDC_STATIC,5,5,166,8
+    CONTROL         "Auto",IDC_PROTOAUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,186,5,27,10
+    CONTROL         "IPv4",IDC_PROTOV4,"Button",BS_AUTORADIOBUTTON,218,5,31,10
+    CONTROL         "IPv6",IDC_PROTOV6,"Button",BS_AUTORADIOBUTTON,250,5,31,10
+    EDITTEXT        IDC_CONNECTTO,5,15,276,12,ES_AUTOHSCROLL
+    LTEXT           "&Пользователь:",IDC_STATIC,5,31,266,8
+    EDITTEXT        IDC_USERNAME,5,42,276,12,ES_AUTOHSCROLL
+    LTEXT           "&Пароль:",IDC_PASSLABEL,5,58,61,8
+    PUSHBUTTON      "?",IDC_PASSWORDHELP,78,57,12,10
+    CONTROL         "Агент SSH (Pageant)",IDC_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,90,58,150,8
+    PUSHBUTTON      "Сменить пароль...",IDC_EDITPASS,5,71,276,14,NOT WS_VISIBLE
+    EDITTEXT        IDC_PASSWORD,5,68,276,12,ES_PASSWORD | ES_AUTOHSCROLL
+    CONTROL         "Защитить пароль менеджером паролей (TC>=7.5)",IDC_CRYPTPASS,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,276,10
+    GROUPBOX        "Сертификат клиента для &аутентификации:",IDC_STATIC,5,92,276,60
+    LTEXT           "Открытый ключ (*.pub):",IDC_STATICPUB,10,103,240,8
+    EDITTEXT        IDC_PUBKEY,10,112,249,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_LOADPUBKEY,260,112,16,12
+    LTEXT           "Закрытый ключ (*.pem;*.ppk):",IDC_STATICPEM,10,126,253,8
+    EDITTEXT        IDC_PRIVKEY,10,136,249,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_LOADPRIVKEY,260,136,16,12
+    PUSHBUTTON      "?",IDC_CERTHELP,246,100,12,10
+    PUSHBUTTON      "?",IDC_CERTHELPPRIV,246,124,12,10
+    CONTROL         "Сжатие &ZLIB (может не работать)",IDC_COMPRESS,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,152,276,10
+    CONTROL         "Подробный лог каталогов (&debug)",IDC_DETAILED_LOG,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,162,276,10
+    CONTROL         "Передача через shell (блокировка SCP)",IDC_SHELLTRANSFER,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,172,146,10
+    CONTROL         "SCP для данных (быстрее!)",IDC_SCP_DATA,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,182,146,10
+    CONTROL         "Только SCP (без SFTP)",IDC_SCP_ALL,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,192,146,10
+    LTEXT           "Передача:",IDC_STATIC,165,175,34,8
+    COMBOBOX        IDC_TRANSFERMODE,199,173,82,46,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Система:",IDC_SYSTEMLABEL,165,187,34,8
+    COMBOBOX        IDC_SYSTEM,199,185,82,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Кодировка имён файлов:",IDC_CODEPAGELABEL,"Static",SS_SIMPLE | WS_GROUP,5,202,140,8
+    COMBOBOX        IDC_UTF8,199,199,82,127,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "?",IDC_UTF8HELP,185,200,12,10
+    GROUPBOX        " &Права новых файлов/каталогов: ",IDC_PERMISSIONS_GROUP,5,212,266,26,WS_GROUP
+    CONTROL         "Файлы (загр.):",IDC_FILEMOD_LABEL,"Static",SS_SIMPLE | WS_GROUP,13,224,70,8
+    EDITTEXT        IDC_FILEMOD,87,222,28,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Каталоги:",IDC_DIRMOD_LABEL,160,224,47,8
+    EDITTEXT        IDC_DIRMOD,210,222,28,12,ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        " LAN Pair Session: ",IDC_LANPAIR_GROUP,5,212,266,26,WS_GROUP | NOT WS_VISIBLE
+    LTEXT           "Таймаут (мин):",IDC_LAN_TIMEOUT_LABEL,13,224,80,8,NOT WS_VISIBLE
+    EDITTEXT        IDC_LAN_TIMEOUT,95,222,30,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
+    LTEXT           "(0=без лим.)",IDC_LAN_TIMEOUT_HINT,130,224,50,8,NOT WS_VISIBLE
+    LTEXT           "Сессия:",IDC_STATIC,5,241,30,8
+    COMBOBOX        IDC_SESSIONCOMBO,38,239,210,120,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Shell...",IDC_PHPSHELL,251,239,30,14
+    LTEXT           "Jump host:",IDC_STATIC,5,257,42,8
+    CONTROL         "Исп. &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,49,257,104,8
+    PUSHBUTTON      "Jump...",IDC_JUMP_BUTTON,195,255,40,14
+    LTEXT           "Настройки прокси:",IDC_STATIC,5,273,266,8
+    COMBOBOX        IDC_PROXYCOMBO,5,283,254,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      ">>",IDC_PROXYBUTTON,261,282,20,14
+    PUSHBUTTON      "Удалить прокси",IDC_DELETELAST,5,301,98,14
+    PUSHBUTTON      "Импорт...",IDC_IMPORTSESSIONS,105,301,58,14
+    PUSHBUTTON      "Помощь",IDC_PLUGINHELP,165,301,28,14
+    DEFPUSHBUTTON   "OK",IDOK,197,301,28,14
+    PUSHBUTTON      "Отмена",IDCANCEL,231,301,50,14
+END
+
+IDD_PROPERTIES DIALOGEX DISCARDABLE  0, 0, 249, 214
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Свойства"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,123,193,50,14
+    PUSHBUTTON      "Отмена",IDCANCEL,192,193,50,14
+    GROUPBOX        "Свойства файла",IDC_STATIC,7,7,235,93
+    LTEXT           "Имя:",IDC_STATIC,16,20,22,8
+    LTEXT           "Владелец:",IDC_STATIC,16,33,24,8
+    LTEXT           "Группа:",IDC_STATIC,16,46,22,8
+    LTEXT           "Права:",IDC_STATIC,16,59,40,8
+    LTEXT           "Размер:",IDC_STATIC,16,72,16,8
+    LTEXT           "Изменён:",IDC_STATIC,16,85,44,8
+    EDITTEXT        IDC_PROP_NAME,72,20,164,12,ES_AUTOHSCROLL | ES_READONLY |
+                    NOT WS_BORDER
+    EDITTEXT        IDC_PROP_OWNER,72,33,164,12,ES_AUTOHSCROLL | ES_READONLY |
+                    NOT WS_BORDER
+    EDITTEXT        IDC_PROP_GROUP,72,46,164,12,ES_AUTOHSCROLL | ES_READONLY |
+                    NOT WS_BORDER
+    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,164,12,ES_AUTOHSCROLL |
+                    ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_SIZE,72,72,164,12,ES_AUTOHSCROLL | ES_READONLY |
+                    NOT WS_BORDER
+    EDITTEXT        IDC_PROP_MODIFIED,72,85,164,12,ES_AUTOHSCROLL |
+                    ES_READONLY | NOT WS_BORDER
+    GROUPBOX        " Ответ STAT",IDC_STATIC,7,103,235,88
+    EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE |
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT
+                    WS_BORDER
+END
+
+IDD_PROXY DIALOGEX DISCARDABLE  0, 0, 280, 119
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Настройки прокси"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    CONTROL         "&Без прокси",IDC_NOPROXY,"Button",BS_AUTORADIOBUTTON,12,
+                    19,45,10
+    CONTROL         "HTTP CONNECT",IDC_OTHERPROXY,"Button",
+                    BS_AUTORADIOBUTTON,67,19,67,10
+    CONTROL         "SOCKS 4/4a",IDC_SOCKS4APROXY,"Button",
+                    BS_AUTORADIOBUTTON,144,19,53,10
+    CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,
+                    200,19,44,10
+    CONTROL         "Прокси:",IDC_STATIC,"Static",SS_SIMPLE | WS_GROUP,
+                    12,36,43,8
+    EDITTEXT        IDC_PROXYSERVER,69,34,198,12,ES_AUTOHSCROLL
+    CONTROL         "Польз. прокси:",IDC_STATIC,"Static",SS_SIMPLE |
+                    WS_GROUP,12,52,54,8
+    EDITTEXT        IDC_PROXYUSERNAME,69,50,198,12,ES_AUTOHSCROLL
+    CONTROL         "Пароль прокси:",IDC_STATIC,"Static",SS_SIMPLE |
+                    WS_GROUP,12,67,55,8
+    EDITTEXT        IDC_PROXYPASSWORD,69,66,198,12,ES_PASSWORD |
+                    ES_AUTOHSCROLL
+    PUSHBUTTON      "?",IDC_PROXYHELP,256,19,12,10
+    GROUPBOX        "Настройки прокси",IDC_STATIC,7,7,266,88
+    PUSHBUTTON      "Сменить пароль...",IDC_EDITPASS,69,66,198,14,NOT
+                    WS_VISIBLE
+    CONTROL         "Защитить пароль менеджером паролей (TC>=7.5)",
+                    IDC_CRYPTPASS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,
+                    81,258,10
+    DEFPUSHBUTTON   "OK",IDOK,167,98,50,14
+    PUSHBUTTON      "Отмена",IDCANCEL,223,98,50,14
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_STRING12001         "Нет дескрипторов"
+    IDS_STRING12002         "Таймаут"
+    IDS_STRING12003         "Расширенная ошибка"
+    IDS_STRING12004         "Внутренняя ошибка"
+    IDS_STRING12005         "Неверный URL"
+    IDS_STRING12006         "Неизвестная схема"
+    IDS_STRING12007         "Имя не разрешено"
+    IDS_STRING12008         "Протокол не найден"
+    IDS_STRING12009         "Неверная опция"
+    IDS_STRING12010         "Неверная длина опции"
+    IDS_STRING12011         "Опция недоступна"
+    IDS_STRING12012         "Завершение"
+    IDS_STRING12013         "Неверное имя польз."
+    IDS_STRING12014         "Неверный пароль"
+    IDS_STRING12015         "Ошибка входа"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_STRING12016         "Неверная операция"
+    IDS_STRING12017         "Операция отменена"
+    IDS_STRING12018         "Неверный тип дескриптора"
+    IDS_STRING12019         "Неверное состояние"
+    IDS_STRING12020         "Не запрос прокси"
+    IDS_STRING12021         "Значение реестра не найдено"
+    IDS_STRING12022         "Неверный параметр реестра"
+    IDS_STRING12023         "Нет прямого доступа"
+    IDS_STRING12024         "Нет контекста"
+    IDS_STRING12025         "Нет обратного вызова"
+    IDS_STRING12026         "Запрос ожидает"
+    IDS_STRING12027         "Неверный формат"
+    IDS_STRING12028         "Элемент не найден"
+    IDS_STRING12029         "Нет соединения"
+    IDS_STRING12030         "Соединение прервано"
+    IDS_STRING12031         "Соединение сброшено"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_STRING12032         "Повторная попытка"
+    IDS_STRING12033         "Неверный запрос прокси"
+    IDS_STRING12034         "Требуется интерфейс"
+    IDS_STRING12035         "Неизвестно"
+    IDS_STRING12036         "Дескриптор существует"
+    IDS_STRING12037         "Дата сертификата недействительна"
+    IDS_STRING12038         "CN сертификата недействителен"
+    IDS_STRING12039         "Перенаправление http→https"
+    IDS_STRING12040         "Перенаправление https→http"
+    IDS_STRING12041         "Смешанная защита"
+    IDS_STRING12042         "CHG Post незащищён"
+    IDS_STRING12043         "Post незащищён"
+    IDS_STRING12044         "Требуется сертификат клиента"
+    IDS_STRING12045         "Неверный центр сертификации"
+    IDS_STRING12046         "Аутентификация не настроена"
+    IDS_STRING12047         "Ошибка асинхронного потока"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_STRING12048         "Изменение схемы перенаправления"
+    IDS_STRING12049         "Диалог ожидает"
+    IDS_STRING12050         "Повтор диалога"
+    IDS_STRING12051         "Неизвестно"
+    IDS_STRING12052         "Перенаправление HTTPS→HTTP"
+    IDS_STRING12053         "Вставьте CD-ROM"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_F7NEW               "F7 - help.txt"
+    IDS_HELPTEXT            "Помощь плагина:\r\nF7:\tСоздать соединение (введите имя)\r\nF8/Del:\tУдалить соединение\r\nEnter:\tПодключить\r\nAlt+Enter:\tИзменить параметры\r\n\r\nРежимы передачи:\r\nSSH (SFTP/SCP):\tПо умолчанию, быстрый при SSH\r\nSCP для данных:\tКогда SFTP заблокирован\r\nТолько SCP:\tОтключить SFTP (старые хосты)\r\nПринудит. shell:\tПередача через shell (dd/base64)\r\nPHP Agent (HTTP):\tБез учётной записи SSH; sftp.php\r\nPHP Shell (HTTP):\tПсевдо-терминал HTTP через sftp.php"
+    IDS_QUICKCONNECT        "Быстрое подключение"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_HELP_CAPTION        "Помощь"
+    IDS_HELP_UTF8           "Здесь настраивается кодировка имён файлов на сервере. При выборе 'авто-определение' плагин проверит переменные среды (LANG и др.) и выполнит команду 'locale'. Если автоопределение не работает, а имена файлов отображаются некорректно — выберите 'да' вручную."
+    IDS_HELP_PROXY          "Можно подключаться напрямую или через прокси в формате прокси(:порт). Если прокси требует логин/пароль, введите их здесь. Прокси должен поддерживать команду CONNECT к порту SSH-сервера или протокол SOCKS."
+    IDS_HELP_CERT           "Здесь указывается расположение пары ключей для аутентификации по сертификату клиента.\nКлючи должны быть в формате OpenSSH/PEM.\n\nФайлы PuTTY PPK (*.ppk) конвертируются плагином напрямую.\nВнешний инструмент не требуется.\n\nПоддерживаются переменные среды, напр. %commander_path%.\n%USER% (ЗАГЛАВНЫМИ!) будет заменён текущим пользователем."
+    IDS_CONNECT_TO          "Подключение к: "
+    IDS_VIA_PROXY           "Через прокси:"
+    IDS_ERR_PROXYCONNECT    "Ошибка: не удалось подключиться к ПРОКСИ!"
+    IDS_ERR_SERVERCONNECT   "Ошибка: не удалось подключиться к серверу!"
+    IDS_VIA_PROXY_CONNECT   "Ошибка: нет соединения с сервером через прокси!"
+    IDS_ERR_INIT_SSH2       "Ошибка: не удалось инициализировать SSH2!"
+    IDS_ERR_SSH_SESSION     "Ошибка: не удалось запустить сессию SSH:\n"
+    IDS_ERR_AUTH_PUBKEY     "Ошибка: аутентификация по сертификату не удалась!\n"
+    IDS_ERR_AUTH_PASSWORD   "Ошибка: аутентификация по паролю не удалась!"
+    IDS_ERR_AUTH_KEYBDINT   "Ошибка: keyboard-interactive не удалась!"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_ERR_INIT_SFTP       "Ошибка: не удалось инициализировать SFTP!\n"
+    IDS_PROXY_PASSWORD_FOR  "Пароль прокси SFTP для "
+    IDS_PROXY_PASSWORD      "Пароль прокси:"
+    IDS_USERNAME_FOR        "Пользователь SFTP для "
+    IDS_INITSSH2            "Инициализация SSH2..."
+    IDS_SET_COMPRESSION     "Установка сжатия"
+    IDS_SESSION_STARTUP     "Запуск сессии"
+    IDS_SSH_LOGIN           "Вход через SSH2..."
+    IDS_SERVER_FINGERPRINT  "Отпечаток сервера:"
+    IDS_CONNECTION_FIRSTTIME
+                            "Вы используете это соединение впервые.\nУбедитесь, что следующий отпечаток хоста соответствует отпечатку вашего сервера:\n\n"
+    IDS_FINGERPRINT_CHANGED "ВНИМАНИЕ!\nОтпечаток хоста изменился!\nУбедитесь, что новый отпечаток соответствует вашему серверу:\n\n"
+    IDS_FINGERPRINT         "Отпечаток: "
+    IDS_CONNECTING          "Подключение..."
+    IDS_USER_AUTH_LIST      "Получение методов аутентификации..."
+    IDS_SUPPORTED_AUTH_METHODS "Поддерживаемые методы: "
+    IDS_ERR_LOAD_PUBKEY     "Не удалось открыть файл открытого ключа!\n"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_ERR_LOAD_PRIVKEY    "Не удалось открыть файл закрытого ключа!\n"
+    IDS_ERR_PUBKEY_WRONG_FORMAT
+                            "Неверный формат файла ключа, см. readme.txt!"
+    IDS_PASSPHRASE          "Парольная фраза SFTP для "
+    IDS_KEYPASSPHRASE       "Парольная фраза ключа:"
+    IDS_AUTH_PUBKEY_FOR     "Аутентификация по сертификату для: "
+    IDS_AUTH_PUBKEY         "Аутентификация по сертификату"
+    IDS_AUTH_PASSWORD_FOR   "Аутентификация по паролю для: "
+    IDS_AUTH_PASSWORD       "Аутентификация по паролю"
+    IDS_AUTH_KEYBDINT_FOR   "Keyboard-interactive для: "
+    IDS_AUTH_KEYBDINT       "Keyboard-interactive"
+    IDS_FTP_INIT            "Установка соединения SFTP..."
+    IDS_DISCONNECTING       "Отключение..."
+    IDS_GET_DIRECTORY       "Получение каталога"
+    IDS_PROXY_CONNECT       "Подключение через прокси..."
+    IDS_ERR_GETADDRINFO     "Не удалось разрешить хост!"
+    IDS_GET_DIR             "Каталог: "
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_ERR_GET_DIR         "Каталог не открыт: "
+    IDS_MK_DIR              "Создание каталога: "
+    IDS_ERR_MK_DIR          "Каталог не создан: "
+    IDS_RENFR               "Переименование из: "
+    IDS_RENTO               "Переименование в:"
+    IDS_ERR_RENAME          "Переименование НЕ УДАЛОСЬ: "
+    IDS_DOWNLOAD            "Загрузка файла: "
+    IDS_UPLOAD              "Отправка файла: "
+    IDS_DELETE              "Удаление файла: "
+    IDS_ERR_DELETE          "Удаление НЕ УДАЛОСЬ: "
+    IDS_AUTO                "Авто-определение"
+    IDS_YES                 "Да"
+    IDS_NO                  "Нет"
+    IDS_OUTOFREACH          "Цель ссылки вне базового каталога плагина:\n"
+    IDS_FOLLOWLINKROOT      "\nПри переходе по этой ссылке корень плагина изменится на / сервера!"
+    IDS_SOCKS5PROXYERR      "Ошибка логина/пароля SOCKS 5!"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_GENERALSOCKSFAILURE "Общий сбой сервера SOCKS!"
+    IDS_CONNNOTALLOWED      "Соединение запрещено правилами!"
+    IDS_NETUNREACHABLE      "Сеть недоступна!"
+    IDS_HOSTUNREACHABLE     "Хост недоступен!"
+    IDS_CONNREFUSED         "Соединение отклонено!"
+    IDS_TTLEXPIRED          "TTL пакета истёк!"
+    IDS_CMDNOTSUPPORTED     "Команда SOCKS не поддерживается!"
+    IDS_ADDRTYPENOTSUPPORTED "Тип адреса не поддерживается!"
+    IDS_UNKNOWNSOCKERR      "Неизвестная ошибка SOCKS5 %d!"
+    IDS_DUMMY               "1"
+    IDS_DUMMY2              "2"
+    IDS_DUMMY3              "3"
+    IDS_UTF8                "UTF-8"
+    IDS_ANSI                "ANSI (локальный) (0)"
+    IDS_ASCII               "ASCII/DOS (1)"
+    IDS_MACOS               "MacOS (2)"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_1250                "Восточная Европа (1250)"
+    IDS_1251                "Кириллица Windows (1251)"
+    IDS_1252                "Западный Latin1 (1252)"
+    IDS_1253                "Греческий (1253)"
+    IDS_1254                "Турецкий (1254)"
+    IDS_1255                "Иврит (1255)"
+    IDS_1256                "Арабский (1256)"
+    IDS_1257                "Балтийский (1257)"
+    IDS_1258                "Вьетнамский (1258)"
+    IDS_936                 "Китайский (материк) (936)"
+    IDS_950                 "Китайский (Тайвань) (950)"
+    IDS_932                 "Японский (932)"
+    IDS_949                 "Корейский (949)"
+    IDS_874                 "Тайский (874)"
+    IDS_437                 "DOS-USA (437)"
+    IDS_850                 "DOS-LATIN1 (850)"
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_20866               "Кириллица KOI8-R (20866)"
+    IDS_OTHER               "Другое (ввести вручную)"
+    IDS_SSH2_TOO_OLD        "Библиотека libssh2.dll слишком старая для Pageant!\nМинимальная версия: %s."
+    IDS_AGENT_CONNECTERROR  "Ошибка подключения к ssh-agent (Pageant)!\nПоместите ярлык pageant.lnk в каталог плагина,\nнапр. указывающий на\nc:\\path\\pageant.exe keyfilename"
+    IDS_AGENT_REQUESTIDENTITIES
+                            "Ошибка получения ключей от агента SSH!"
+    IDS_AGENT_AUTHFAILED    "Аутентификация агентом не удалась!"
+    IDS_AGENT_AUTHSUCCEEDED "Аутентификация агентом успешна!"
+    IDS_AGENT_NOIDENTITY    "Ошибка получения ключа от агента SSH!"
+    IDS_AGENT_TRYING1       "Попытка аутентификации пользователя """
+    IDS_AGENT_TRYING2       """ ключом """
+    IDS_AGENT_TRYING3       """ через агент..."
+    IDS_NO_PROXY            "Без прокси (прямое подключение)"
+    IDS_HTTP_PROXY          "HTTP CONNECT: "
+    IDS_ADD_PROXY           "Добавить прокси..."
+    IDS_ERROR_INUSE         "Ошибка: прокси используется соединением:"
+    IDS_PROXY_PASS_TITLE    "Пароль прокси для: "
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_PASS_TITLE          "Пароль сервера для: "
+    IDS_PASS_CHANGE_REQUEST "Сервер требует смены пароля. Новый пароль:"
+    IDS_DLL_VERSION         "libssh2 должна быть версии 1.7.0+ для файлов >2 ГБ через SCP."
+    IDS_NO_2GB_SUPPORT      "Сервер может не поддерживать файлы >2 ГБ через SCP! Всё равно попробовать?"
+    IDS_HELP_PASSWORD       "В целях безопасности сохраняйте пароли только под защитой мастер-пароля.\n\nДля двух паролей (ключ + вход) введите:\n\n""ПарольКлюча"",""ПарольВхода"""
+END
+
+STRINGTABLE DISCARDABLE
+BEGIN
+    IDS_TRANSFERMODE_LANPAIR     "LAN Pair (SMB-подобный)"
+    IDS_LAN_ROLE_LABEL           "Роль:"
+    IDS_LAN_PEER_LABEL           "Партнёр:"
+    IDS_LAN_ROLE_AUTO            "Авто"
+    IDS_LAN_ROLE_RECEIVER        "Получатель"
+    IDS_LAN_ROLE_DONOR           "Источник"
+    IDS_LAN_PEER_AUTODISC        "Авто-поиск"
+    IDS_BUTTON_PAIR              "Связать..."
+    IDS_BUTTON_SHELL             "Shell..."
+    IDS_LAN_TITLE                "LAN Pair"
+    IDS_LAN_ERR_PASSWORD         "Пароль связки (необяз. — пусто = ключ доверия)."
+    IDS_LAN_MSG_RECEIVER_STOPPED "Получатель LAN Pair остановлен."
+    IDS_LAN_ERR_RECEIVER_START   "Ошибка запуска получателя: {}"
+    IDS_LAN_MSG_RECEIVER_STARTED "Получатель LAN Pair запущен (порт 45846). Нажмите Связать... для остановки."
+    IDS_LAN_ERR_SELECT_PEER      "Сначала выберите партнёра из списка."
+    IDS_LAN_ERR_PEER_UNAVAILABLE "Выбранный партнёр недоступен."
+    IDS_LAN_ERR_PAIR_FAILED      "Связка не удалась: {}"
+    IDS_LAN_MSG_PAIR_OK          "Связка OK с {} ({})"
+    IDS_LAN_PASSWORD_LABEL       "Пароль связки:"
+    IDS_LAN_ROLE_PROMPT          "Найден партнёр LAN Pair.\nВыберите роль:\n\nДа = Источник\nНет = Получатель\nОтмена = без изменений"
+    IDS_LAN_SESSION_TIMEOUT      "Таймаут: [__] мин (0=без лимита)"
+    IDS_LAN_MSG_RECEIVER_RUNNING "Получатель LAN Pair уже запущен."
+    IDS_LAN_MSG_ACCEPTED         "LAN Pair принят: {} ({})"
+    IDS_LAN_MSG_AUTO_LISTEN      "LAN Pair: прослушивание. Диалог роли появится при обнаружении партнёра."
+
+END
+#endif    // Russian resources
+/////////////////////////////////////////////////////////////////////////////
+
 
 
 /////////////////////////////////////////////////////////////////////////////

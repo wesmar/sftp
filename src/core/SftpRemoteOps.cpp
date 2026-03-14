@@ -250,11 +250,12 @@ if (cs->scponly) {
 
             // Instead of immediately throwing an error, we force a restart on the next iteration.
             if (writeFailed) {
+                // Close the dead channel; on the next iteration EnsureScpShell will
+                // re-open it (or detect a broken socket via IsSocketError and reconnect).
+                // Do NOT touch cs->sock here — it is shared by the whole session.
                 CloseScpShell(cs);
-                if (attempt == 0) {
-                    cs->sock = INVALID_SOCKET; // Simulate socket loss
+                if (attempt == 0)
                     continue;
-                }
                 return SFTP_FAILED;
             }
 
@@ -273,7 +274,7 @@ if (cs->scponly) {
                 }
             }
 
-            if (!gotEnd && entries.empty()) {
+			if (!gotEnd && entries.empty()) {
                 if (cs->scpShellErrBuf[0]) {
                     std::array<char, sizeof(cs->scpShellErrBuf)> err{};
                     strlcpy(err.data(), cs->scpShellErrBuf, err.size() - 1);
@@ -284,9 +285,11 @@ if (cs->scponly) {
                 }
                 CloseScpShell(cs);
 
-                // Instead of immediately throwing an error, try reconnecting.
+                // Instead of immediately throwing an error, try reconnecting channel.
                 if (attempt == 0) {
-                    cs->sock = INVALID_SOCKET;
+                    // FIX CLAUDE: Nie niszczymy gniazda TCP! Wystarczy, że CloseScpShell 
+                    // zamknęło kanał. W kolejnym cyklu EnsureScpShell otworzy nowy.
+                    // cs->sock = INVALID_SOCKET; <-- USUNIĘTE
                     continue;
                 }
                 return SFTP_FAILED;
