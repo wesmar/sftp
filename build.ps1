@@ -4,6 +4,7 @@ param(
     [switch]$de,
     [switch]$fr,
     [switch]$es,
+    [switch]$it,
     [switch]$ru,
     [switch]$chm,
     [switch]$nochm,
@@ -112,6 +113,20 @@ function Select-ResourceLanguage {
     $resourceScriptBackup = Join-Path $preserveDir "sftpplug.rc.original"
     
     if ($LanguageCode -eq "all") {
+        # "all" = every language except Russian (RU is built separately via -ru -nochm → bin_ru)
+        $rcEncoding = New-Object System.Text.UTF8Encoding($false)
+        $content = [System.IO.File]::ReadAllText($resourceScriptPath, $rcEncoding)
+        $ruPattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Russian resources.*?#endif\s*// Russian resources\r?\n?"
+        $content = [System.Text.RegularExpressions.Regex]::Replace(
+            $content,
+            $ruPattern,
+            "",
+            [System.Text.RegularExpressions.RegexOptions]::Singleline
+        )
+        New-Item -ItemType Directory -Path $preserveDir -Force | Out-Null
+        Copy-Item -Path $resourceScriptPath -Destination $resourceScriptBackup -Force
+        [System.IO.File]::WriteAllText($resourceScriptPath, $content, $rcEncoding)
+        Write-Host "  Applied resource language filter: all (excl. Russian)" -ForegroundColor Gray
         return
     }
     
@@ -150,6 +165,10 @@ function Select-ResourceLanguage {
         es = @{
             marker  = "// Spanish resources"
             pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Spanish resources.*?#endif\s*// Spanish resources\r?\n?"
+        }
+        it = @{
+            marker  = "// Italian resources"
+            pattern = "(?s)\r?\n?/////////////////////////////////////////////////////////////////////////////\r?\n// Italian resources.*?#endif\s*// Italian resources\r?\n?"
         }
         ru = @{
             marker  = "// Russian resources"
@@ -336,10 +355,11 @@ if ($pl) { $selectedLanguageFlags += "pl" }
 if ($de) { $selectedLanguageFlags += "de" }
 if ($fr) { $selectedLanguageFlags += "fr" }
 if ($es) { $selectedLanguageFlags += "es" }
+if ($it) { $selectedLanguageFlags += "it" }
 if ($ru) { $selectedLanguageFlags += "ru" }
 
 if ($selectedLanguageFlags.Count -gt 1) {
-    Write-Error "Use only one language switch: -en, -pl, -de, -fr, -es or -ru."
+    Write-Error "Use only one language switch: -en, -pl, -de, -fr, -es, -it or -ru."
     exit 1
 }
 if ($selectedLanguageFlags.Count -eq 1) {

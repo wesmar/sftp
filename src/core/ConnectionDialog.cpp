@@ -492,6 +492,10 @@ static void GetPhpOptionLabels(std::string& methodLabel, std::string& chunkLabel
         methodLabel = "Metodo:";
         chunkLabel = "Fragmentos:";
         break;
+    case LANG_ITALIAN:
+        methodLabel = "Metodo:";
+        chunkLabel = "Frammenti:";
+        break;
     default:
         methodLabel = "Method:";
         chunkLabel = "Chunks:";

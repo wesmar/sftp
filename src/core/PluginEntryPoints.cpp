@@ -94,6 +94,7 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     // - WCMD_DE.LNG / WCMD_DEU.LNG
     // - WCMD_FR.LNG / WCMD_FRA.LNG
     // - WCMD_ES.LNG / WCMD_ESP.LNG
+    // - WCMD_IT.LNG / WCMD_ITA.LNG
     if (has("_PL") || has(".PL") || has("POL")) {
         return MAKELANGID(LANG_POLISH, SUBLANG_DEFAULT);
     }
@@ -105,6 +106,9 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     }
     if (has("_ES") || has(".ES") || has("ESP") || has("SPA")) {
         return MAKELANGID(LANG_SPANISH, SUBLANG_SPANISH_MODERN);
+    }
+    if (has("_IT") || has(".IT") || has("ITA")) {
+        return MAKELANGID(LANG_ITALIAN, SUBLANG_ITALIAN);
     }
     if (has("_EN") || has(".EN") || has("ENU") || has("ENG")) {
         return MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);

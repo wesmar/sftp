@@ -88,7 +88,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Automatic UTF-8 filename detection via remote `locale` command.
 - Automatic CRLF/LF conversion on text-mode transfers.
 - Symlink tracking including `~` home directory shortcut protection.
-- Multi-language UI embedded in a single binary: English, Polish, German, French, Spanish.
+- Multi-language UI embedded in a single binary: English, Polish, German, French, Spanish, Italian.
 - Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
 - Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
@@ -925,7 +925,7 @@ Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin ins
 
 ## Localization
 
-UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugin.ini`. All five language string tables are compiled into the same binary in the default build. Runtime selection is automatic based on the TC language setting.
+UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugin.ini`. All six language string tables are compiled into the same binary in the default build. Runtime selection is automatic based on the TC language setting.
 
 | Language | RC block |
 |----------|---------|
@@ -934,6 +934,9 @@ UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugi
 | German | Conditional |
 | French | Conditional |
 | Spanish | Conditional |
+| Italian | Conditional |
+
+> **Russian** is built as a separate standalone binary (`.\build.ps1 -ru -nochm` → `bin_ru\`) and is not included in the default distribution ZIP.
 
 ---
 
