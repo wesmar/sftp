@@ -111,8 +111,8 @@ struct tConnectSettings {
     int trycustomlistcommand;  // set to 2 initially, reduce to 1 or 0 if failing
     int scpserver64bit;     // 0=no, 1=yes, -1, auto-detect
     bool scpserver64bittemporary;  // true=user allowed transfers>2GB
-    char scpShellMsgBuf[4096];
-    char scpShellErrBuf[2048];
+    std::string scpShellMsgBuf;
+    std::string scpShellErrBuf;
 
     // SCP runtime profile
     bool scp_echo_only_end;

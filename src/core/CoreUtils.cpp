@@ -50,45 +50,45 @@ extern "C" {
 
 LPSTR strcatbackslash(LPSTR thedir)
 {
-    if (thedir && thedir[0]) {
-        const size_t len = strlen(thedir);
-        if (len > 0 && thedir[len - 1] != '\\') {
-            StringCbCatA(thedir, MAX_PATH, "\\");
-        }
-    }
+    if (!thedir || !thedir[0])
+        return thedir;
+    std::string s(thedir);
+    if (s.back() != '\\')
+        s += '\\';
+    strncpy_s(thedir, MAX_PATH, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPSTR strlcatforwardslash(LPSTR thedir, size_t maxlen)
 {
-    if (thedir && thedir[0]) {
-        const size_t len = strlen(thedir);
-        if (len > 0 && thedir[len - 1] != '/') {
-            strncat_s(thedir, maxlen, "/", _TRUNCATE);
-        }
-    }
+    if (!thedir || !thedir[0])
+        return thedir;
+    std::string s(thedir);
+    if (s.back() != '/')
+        s += '/';
+    strncpy_s(thedir, maxlen, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPSTR strlcatbackslash(LPSTR thedir, size_t maxlen)
 {
-    if (thedir && thedir[0]) {
-        const size_t len = strlen(thedir);
-        if (len < maxlen && thedir[len - 1] != '\\') {
-            strncat_s(thedir, maxlen, "\\", _TRUNCATE);
-        }
-    }
+    if (!thedir || !thedir[0])
+        return thedir;
+    std::string s(thedir);
+    if (s.back() != '\\')
+        s += '\\';
+    strncpy_s(thedir, maxlen, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPWSTR wcslcatbackslash(LPWSTR thedir, size_t maxlen)
 {
-    if (thedir && thedir[0]) {
-        const size_t len = wcslen(thedir);
-        if (len < maxlen && thedir[len - 1] != L'\\') {
-            wcsncat_s(thedir, maxlen, L"\\", _TRUNCATE);
-        }
-    }
+    if (!thedir || !thedir[0])
+        return thedir;
+    std::wstring s(thedir);
+    if (s.back() != L'\\')
+        s += L'\\';
+    wcsncpy_s(thedir, maxlen, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
@@ -154,33 +154,41 @@ LPSTR strlcat(LPSTR p, LPCSTR p2, size_t maxlen)
 
 LPSTR ReplaceBackslashBySlash(LPSTR thedir)
 {
-    if (thedir) {
-        std::replace(thedir, thedir + strlen(thedir), '\\', '/');
-    }
+    if (!thedir)
+        return thedir;
+    std::string s(thedir);
+    std::replace(s.begin(), s.end(), '\\', '/');
+    strncpy_s(thedir, s.size() + 1, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPWSTR ReplaceBackslashBySlashW(LPWSTR thedir)
 {
-    if (thedir) {
-        std::replace(thedir, thedir + wcslen(thedir), L'\\', L'/');
-    }
+    if (!thedir)
+        return thedir;
+    std::wstring s(thedir);
+    std::replace(s.begin(), s.end(), L'\\', L'/');
+    wcsncpy_s(thedir, s.size() + 1, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPSTR ReplaceSlashByBackslash(LPSTR thedir)
 {
-    if (thedir) {
-        std::replace(thedir, thedir + strlen(thedir), '/', '\\');
-    }
+    if (!thedir)
+        return thedir;
+    std::string s(thedir);
+    std::replace(s.begin(), s.end(), '/', '\\');
+    strncpy_s(thedir, s.size() + 1, s.c_str(), _TRUNCATE);
     return thedir;
 }
 
 LPWSTR ReplaceSlashByBackslashW(LPWSTR thedir)
 {
-    if (thedir) {
-        std::replace(thedir, thedir + wcslen(thedir), L'/', L'\\');
-    }
+    if (!thedir)
+        return thedir;
+    std::wstring s(thedir);
+    std::replace(s.begin(), s.end(), L'/', L'\\');
+    wcsncpy_s(thedir, s.size() + 1, s.c_str(), _TRUNCATE);
     return thedir;
 }
 

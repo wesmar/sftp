@@ -218,11 +218,57 @@ struct ConnectDialogContext {
     bool lanRolePromptShown = false;
 };
 
+// Forward declaration so GetConnectDialogContext can return context via the class.
+class ConnectionDialog;
+
 namespace {
 constexpr int TC_DIALOG_STATIC_ID = -1;
 }
 
 static ConnectDialogContext* GetConnectDialogContext(HWND hWnd);
+
+// ============================================================================
+// ConnectionDialog class definition
+// ============================================================================
+
+class ConnectionDialog {
+public:
+    ConnectionDialog(HWND hWnd, ConnectDialogContext* ctx);
+    ~ConnectionDialog() = default;
+    INT_PTR HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
+    ConnectDialogContext* GetContext() const noexcept { return m_ctx; }
+private:
+    INT_PTR OnInitDialog(LPARAM lParam);
+    INT_PTR OnShowWindow(BOOL fShow);
+    INT_PTR OnCommand(WPARAM wParam, LPARAM lParam);
+    void    OnDestroy();
+    INT_PTR OnLanPeerMessage(WPARAM wParam, LPARAM lParam);
+    void    OnOk();
+    void    OnCancel();
+    void    OnSessionChanged();
+    void    OnTransferModeChanged();
+    void    OnPhpShellBtn();
+    void    OnBrowseKeyFile(bool isPublicKey);
+    void    OnPrivateKeyChanged();
+    void    OnUseAgentChanged();
+    void    OnJumpEnableChanged();
+    void    OnJumpButton();
+    void    OnProxyButton();
+    void    OnProxyComboChanged();
+    void    OnDeleteLastProxy();
+    void    OnImportSessions();
+    void    OnPluginHelp();
+    void    OnCertHelp();
+    void    OnPasswordHelp();
+    void    OnUtf8Help();
+    void    OnEditPass();
+    void    OnConnectToChanged();
+
+    HWND                  m_hWnd;
+    ConnectDialogContext*  m_ctx;
+    pConnectSettings       m_settings;
+    bool                   m_initialized;
+};
 
 static BOOL SetDlgItemText(HWND hWnd, int nIDDlgItem, const std::string& text)
 {
@@ -976,7 +1022,8 @@ static ProxyDialogContext* GetProxyDialogContext(HWND hWnd)
 
 static ConnectDialogContext* GetConnectDialogContext(HWND hWnd)
 {
-    return reinterpret_cast<ConnectDialogContext*>(GetWindowLongPtr(hWnd, DWLP_USER));
+    const auto* dlg = reinterpret_cast<const ConnectionDialog*>(GetWindowLongPtr(hWnd, DWLP_USER));
+    return dlg ? dlg->GetContext() : nullptr;
 }
 
 static tConnectSettings g_proxyDialogDummyData{};
@@ -1644,277 +1691,453 @@ static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, L
         dlgConnectResults->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
 }
 
-static INT_PTR OnConnectDlgInit(HWND hWnd, LPARAM lParam)
+// ============================================================================
+// SR: 09.07.2005 — ConnectDlgProc now delegates to ConnectionDialog class
+// ============================================================================
+
+INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
-    ConnectDialogContext* dlgCtx = reinterpret_cast<ConnectDialogContext*>(lParam);
-    if (!dlgCtx || !dlgCtx->connectResults || !dlgCtx->displayName || !dlgCtx->iniFileName) {
-        EndDialog(hWnd, IDCANCEL);
-        return 1;
+    auto* dlg = reinterpret_cast<ConnectionDialog*>(GetWindowLongPtr(hWnd, DWLP_USER));
+
+    switch (Message) {
+    case WM_INITDIALOG: {
+        auto* dlgCtx = reinterpret_cast<ConnectDialogContext*>(lParam);
+        if (!dlgCtx || !dlgCtx->connectResults || !dlgCtx->displayName || !dlgCtx->iniFileName) {
+            EndDialog(hWnd, IDCANCEL);
+            return 1;
+        }
+        dlg = new ConnectionDialog(hWnd, dlgCtx);
+        SetWindowLongPtr(hWnd, DWLP_USER, reinterpret_cast<LONG_PTR>(dlg));
+        return dlg->HandleMessage(Message, wParam, lParam);
     }
-    SetWindowLongPtr(hWnd, DWLP_USER, lParam);
-    pConnectSettings dlgConnectResults = dlgCtx->connectResults;
-    LPCSTR dlgDisplayName = dlgCtx->displayName;
-    LPCSTR dlgIniFileName = dlgCtx->iniFileName;
-    int* dlgFocusset = &dlgCtx->focusset;
-    if (dlgCtx->lanPeerId.empty())
-        dlgCtx->lanPeerId = MakeLanPeerId();
-    if (dlgCtx->lanDisplayName.empty()) {
-        // Keep LAN peer display name in native wide form to avoid ANSI codepage corruption.
+    case WM_DESTROY: {
+        const INT_PTR result = dlg ? dlg->HandleMessage(Message, wParam, lParam) : 0;
+        delete dlg;
+        SetWindowLongPtr(hWnd, DWLP_USER, 0);
+        return result;
+    }
+    default:
+        return dlg ? dlg->HandleMessage(Message, wParam, lParam) : 0;
+    }
+}
+
+// ============================================================================
+// ConnectionDialog method implementations
+// ============================================================================
+
+ConnectionDialog::ConnectionDialog(HWND hWnd, ConnectDialogContext* ctx)
+    : m_hWnd(hWnd)
+    , m_ctx(ctx)
+    , m_settings(ctx ? ctx->connectResults : nullptr)
+    , m_initialized(false)
+{
+}
+
+INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg) {
+    case WM_INITDIALOG:   return OnInitDialog(lParam);
+    case WM_SHOWWINDOW:   return OnShowWindow(LOWORD(wParam));
+    case WM_COMMAND:      return OnCommand(wParam, lParam);
+    case WM_APP_LAN_PEER: return OnLanPeerMessage(wParam, lParam);
+    case WM_DESTROY:      OnDestroy(); return 0;
+    }
+    return 0;
+}
+
+INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
+{
+    // ConnectDlgProc already validated dlgCtx and stored the ConnectionDialog*
+    // in DWLP_USER before routing here, so no null-check or SetWindowLongPtr needed.
+    LPCSTR dlgDisplayName = m_ctx->displayName;
+    LPCSTR dlgIniFileName = m_ctx->iniFileName;
+    int* dlgFocusset = &m_ctx->focusset;
+
+    if (m_ctx->lanPeerId.empty())
+        m_ctx->lanPeerId = MakeLanPeerId();
+    if (m_ctx->lanDisplayName.empty()) {
         std::array<wchar_t, MAX_COMPUTERNAME_LENGTH + 1> host{};
         DWORD hostLen = static_cast<DWORD>(host.size() - 1);
-        if (GetComputerNameW(host.data(), &hostLen) && host[0]) {
-            dlgCtx->lanDisplayName = host.data();
-        } else {
-            dlgCtx->lanDisplayName = L"SFTPplug";
-        }
+        if (GetComputerNameW(host.data(), &hostLen) && host[0])
+            m_ctx->lanDisplayName = host.data();
+        else
+            m_ctx->lanDisplayName = L"SFTPplug";
     }
 
     std::array<char, 32> modbuf{};
     RECT rt1, rt2;
     int w, h, DlgWidth, DlgHeight, NewPosX, NewPosY;
 
-    SendDlgItemMessage(hWnd, IDC_DEFAULTCOMBO, CB_SETCURSEL, 0, 0);
+    SendDlgItemMessage(m_hWnd, IDC_DEFAULTCOMBO, CB_SETCURSEL, 0, 0);
     LoadServersFromIni(dlgIniFileName, s_quickconnect);
-    FillSessionCombo(hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
+    FillSessionCombo(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
     serverfieldchangedbyuser = false;
 
-    SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"SSH (SFTP/SCP)");
-    SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Agent (HTTP)");
-    SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Shell (HTTP)");
+    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"SSH (SFTP/SCP)");
+    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Agent (HTTP)");
+    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Shell (HTTP)");
     {
         const std::wstring lanMode = LoadResStringW(IDS_TRANSFERMODE_LANPAIR);
-        SendDlgItemMessageW(hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)(lanMode.empty() ? L"LAN Pair (SMB-like)" : lanMode.c_str()));
+        SendDlgItemMessageW(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0,
+            (LPARAM)(lanMode.empty() ? L"LAN Pair (SMB-like)" : lanMode.c_str()));
     }
 
     {
         std::array<char, 128> labelBuf{};
-        GetDlgItemText(hWnd, IDC_SYSTEMLABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
-        dlgCtx->defaultSystemLabel = labelBuf.data();
+        GetDlgItemText(m_hWnd, IDC_SYSTEMLABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
+        m_ctx->defaultSystemLabel = labelBuf.data();
         labelBuf.fill('\0');
-        GetDlgItemText(hWnd, IDC_CODEPAGELABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
-        dlgCtx->defaultEncodingLabel = labelBuf.data();
+        GetDlgItemText(m_hWnd, IDC_CODEPAGELABEL, labelBuf.data(), static_cast<int>(labelBuf.size() - 1));
+        m_ctx->defaultEncodingLabel = labelBuf.data();
     }
     {
         std::array<WCHAR, 128> wlabelBuf{};
-        GetDlgItemTextW(hWnd, IDC_PASSLABEL, wlabelBuf.data(), static_cast<int>(wlabelBuf.size() - 1));
-        dlgCtx->defaultPasswordLabel = wlabelBuf.data();
+        GetDlgItemTextW(m_hWnd, IDC_PASSLABEL, wlabelBuf.data(), static_cast<int>(wlabelBuf.size() - 1));
+        m_ctx->defaultPasswordLabel = wlabelBuf.data();
     }
 
     if (strcmp(dlgDisplayName, s_quickconnect) != 0) {
-        SetDlgItemText(hWnd, IDC_CONNECTTO, dlgConnectResults->server);
-        if (!dlgConnectResults->server.empty())
+        SetDlgItemText(m_hWnd, IDC_CONNECTTO, m_settings->server);
+        if (!m_settings->server.empty())
             serverfieldchangedbyuser = true;
 
-        switch (dlgConnectResults->protocoltype) {
-        case 1:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV4); break;
-        case 2:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV6); break;
-        default: CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO); break;
+        switch (m_settings->protocoltype) {
+        case 1:  CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV4); break;
+        case 2:  CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV6); break;
+        default: CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO); break;
         }
 
-        SetDlgItemText(hWnd, IDC_USERNAME, dlgConnectResults->user);
+        SetDlgItemText(m_hWnd, IDC_USERNAME, m_settings->user);
 
-        if (dlgConnectResults->useagent)
-            CheckDlgButton(hWnd, IDC_USEAGENT, BST_CHECKED);
-        if (dlgConnectResults->detailedlog)
-            CheckDlgButton(hWnd, IDC_DETAILED_LOG, BST_CHECKED);
-        if (dlgConnectResults->compressed)
-            CheckDlgButton(hWnd, IDC_COMPRESS, BST_CHECKED);
-        if (dlgConnectResults->scpfordata)
-            CheckDlgButton(hWnd, IDC_SCP_DATA, BST_CHECKED);
-        if (dlgConnectResults->scponly)
-            CheckDlgButton(hWnd, IDC_SCP_ALL,BST_CHECKED);
-        if (dlgConnectResults->shell_transfer_dd && dlgConnectResults->shell_transfer_force)
-            CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_CHECKED);
-        if (dlgConnectResults->use_jump_host)
-            CheckDlgButton(hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
+        if (m_settings->useagent)
+            CheckDlgButton(m_hWnd, IDC_USEAGENT, BST_CHECKED);
+        if (m_settings->detailedlog)
+            CheckDlgButton(m_hWnd, IDC_DETAILED_LOG, BST_CHECKED);
+        if (m_settings->compressed)
+            CheckDlgButton(m_hWnd, IDC_COMPRESS, BST_CHECKED);
+        if (m_settings->scpfordata)
+            CheckDlgButton(m_hWnd, IDC_SCP_DATA, BST_CHECKED);
+        if (m_settings->scponly)
+            CheckDlgButton(m_hWnd, IDC_SCP_ALL, BST_CHECKED);
+        if (m_settings->shell_transfer_dd && m_settings->shell_transfer_force)
+            CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_CHECKED);
+        if (m_settings->use_jump_host)
+            CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
 
-        SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, dlgConnectResults->transfermode)), 0);
+        SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, m_settings->transfermode)), 0);
 
-        if (dlgConnectResults->password == "\001" && CryptProc) {
+        if (m_settings->password == "\001" && CryptProc) {
             std::array<char, MAX_PATH> sessionPassword{};
-            if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, dlgDisplayName, sessionPassword.data(), static_cast<int>(sessionPassword.size() - 1)) == FS_FILE_OK) {
-                dlgConnectResults->password = sessionPassword.data();
-                SetDlgItemText(hWnd, IDC_PASSWORD, dlgConnectResults->password);
-                CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
+            if (CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD_NO_UI, dlgDisplayName,
+                          sessionPassword.data(), static_cast<int>(sessionPassword.size() - 1)) == FS_FILE_OK) {
+                m_settings->password = sessionPassword.data();
+                SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
+                CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
             } else {
-                ShowWindow(GetDlgItem(hWnd, IDC_PASSWORD), SW_HIDE);
-                ShowWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), SW_HIDE);
-                ShowWindow(GetDlgItem(hWnd, IDC_EDITPASS), SW_SHOW);
+                ShowWindow(GetDlgItem(m_hWnd, IDC_PASSWORD), SW_HIDE);
+                ShowWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), SW_HIDE);
+                ShowWindow(GetDlgItem(m_hWnd, IDC_EDITPASS), SW_SHOW);
             }
         } else {
-            SetDlgItemText(hWnd, IDC_PASSWORD, dlgConnectResults->password);
+            SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
             if (!CryptProc)
-                EnableWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), false);
+                EnableWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), false);
             else {
-                // Reflect the per-session storage mode from INI ("!" means TC password manager).
                 std::array<char, MAX_PATH> storedPasswordRaw{};
                 GetPrivateProfileString(dlgDisplayName, "password", "",
                                         storedPasswordRaw.data(),
                                         storedPasswordRaw.size() - 1,
                                         dlgIniFileName);
-                CheckDlgButton(hWnd, IDC_CRYPTPASS,
+                CheckDlgButton(m_hWnd, IDC_CRYPTPASS,
                                strcmp(storedPasswordRaw.data(), "!") == 0 ? BST_CHECKED : BST_UNCHECKED);
             }
         }
 
-        SetDlgItemText(hWnd, IDC_PUBKEY, dlgConnectResults->pubkeyfile);
-        SetDlgItemText(hWnd, IDC_PRIVKEY, dlgConnectResults->privkeyfile);
+        SetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
+        SetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
 
-        _itoa_s(dlgConnectResults->filemod, modbuf.data(), modbuf.size(), 8);
-        SetDlgItemText(hWnd, IDC_FILEMOD, modbuf.data());
-        _itoa_s(dlgConnectResults->dirmod, modbuf.data(), modbuf.size(), 8);
-        SetDlgItemText(hWnd, IDC_DIRMOD, modbuf.data());
+        _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
+        SetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data());
+        _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);
+        SetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data());
 
-        fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgIniFileName);
+        fillProxyCombobox(m_hWnd, m_settings->proxynr, dlgIniFileName);
     } else {
-        CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO);
-        SetDlgItemText(hWnd, IDC_FILEMOD, "644");
-        SetDlgItemText(hWnd, IDC_DIRMOD, "755");
-        CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
-        SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, 0, 0);
-        fillProxyCombobox(hWnd, 0, dlgIniFileName);
+        CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO);
+        SetDlgItemText(m_hWnd, IDC_FILEMOD, "644");
+        SetDlgItemText(m_hWnd, IDC_DIRMOD, "755");
+        CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
+        SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, 0, 0);
+        fillProxyCombobox(m_hWnd, 0, dlgIniFileName);
     }
-    RebuildSystemAndEncodingCombos(hWnd, dlgCtx, dlgConnectResults);
-    SetLanTimeoutMinutes(hWnd, dlgConnectResults->lan_pair_timeout_min);
-    dlgCtx->lastTransferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
-    UpdateScpOnlyDependentControls(hWnd);
+    RebuildSystemAndEncodingCombos(m_hWnd, m_ctx, m_settings);
+    SetLanTimeoutMinutes(m_hWnd, m_settings->lan_pair_timeout_min);
+    m_ctx->lastTransferMode = (int)SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+    UpdateScpOnlyDependentControls(m_hWnd);
 
     if (strcmp(dlgDisplayName, s_quickconnect) != 0) {
-        if (dlgConnectResults->server.empty())
-            *dlgFocusset=IDC_CONNECTTO;
-        else if (dlgConnectResults->user.empty())
-            *dlgFocusset=IDC_USERNAME;
+        if (m_settings->server.empty())
+            *dlgFocusset = IDC_CONNECTTO;
+        else if (m_settings->user.empty())
+            *dlgFocusset = IDC_USERNAME;
         else
-            *dlgFocusset=IDC_PASSWORD;
-    } else
-        *dlgFocusset=IDC_CONNECTTO;
+            *dlgFocusset = IDC_PASSWORD;
+    } else {
+        *dlgFocusset = IDC_CONNECTTO;
+    }
 
-    // Center the dialog relative to its parent window.
-    if (GetWindowRect(hWnd, &rt1) && GetWindowRect(GetParent(hWnd), &rt2)) {
+    if (GetWindowRect(m_hWnd, &rt1) && GetWindowRect(GetParent(m_hWnd), &rt2)) {
         w = rt2.right  - rt2.left;
         h = rt2.bottom - rt2.top;
         DlgWidth   = rt1.right - rt1.left;
         DlgHeight  = rt1.bottom - rt1.top;
-        NewPosX    = rt2.left + (w - DlgWidth)/2;
-        NewPosY    = rt2.top + (h - DlgHeight)/2;
-        SetWindowPos(hWnd, 0, NewPosX, NewPosY, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+        NewPosX    = rt2.left + (w - DlgWidth) / 2;
+        NewPosY    = rt2.top  + (h - DlgHeight) / 2;
+        SetWindowPos(m_hWnd, 0, NewPosX, NewPosY, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
     }
 
     // SR: 11.07.2005
     serverfieldchangedbyuser = false;
-
     return 1;
 }
 
-static INT_PTR OnConnectDlgOk(HWND hWnd, ConnectDialogContext* dlgCtx)
+INT_PTR ConnectionDialog::OnShowWindow(BOOL /*fShow*/)
 {
-    pConnectSettings dlgConnectResults = dlgCtx->connectResults;
-    LPCSTR dlgDisplayName = dlgCtx->displayName;
-    LPCSTR dlgIniFileName = dlgCtx->iniFileName;
+    if (m_ctx && m_ctx->focusset)
+        SetFocus(GetDlgItem(m_hWnd, m_ctx->focusset));
+    return 0;
+}
+
+INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
+{
+    switch (LOWORD(wParam)) {
+    case IDOK:
+        OnOk();
+        return 1;
+    case IDCANCEL:
+        OnCancel();
+        return 1;
+    case IDC_SESSIONCOMBO:
+        if (HIWORD(wParam) == CBN_SELCHANGE)
+            OnSessionChanged();
+        break;
+    case IDC_TRANSFERMODE:
+        if (HIWORD(wParam) == CBN_SELCHANGE)
+            OnTransferModeChanged();
+        break;
+    case IDC_PHPSHELL:
+        OnPhpShellBtn();
+        break;
+    case IDC_LOADPUBKEY:
+    case IDC_LOADPRIVKEY:
+        OnBrowseKeyFile(LOWORD(wParam) == IDC_LOADPUBKEY);
+        break;
+    case IDC_PRIVKEY:
+        if (HIWORD(wParam) == EN_CHANGE)
+            OnPrivateKeyChanged();
+        break;
+    case IDC_USEAGENT:
+        OnUseAgentChanged();
+        break;
+    case IDC_JUMP_ENABLE:
+        OnJumpEnableChanged();
+        break;
+    case IDC_JUMP_BUTTON:
+        OnJumpButton();
+        break;
+    case IDC_PROXYBUTTON:
+        OnProxyButton();
+        break;
+    case IDC_PROXYCOMBO:
+        if (HIWORD(wParam) == CBN_SELCHANGE)
+            OnProxyComboChanged();
+        break;
+    case IDC_DELETELAST:
+        OnDeleteLastProxy();
+        break;
+    case IDC_IMPORTSESSIONS:
+        OnImportSessions();
+        break;
+    case IDC_PLUGINHELP:
+        OnPluginHelp();
+        break;
+    case IDC_CERTHELP:
+    case IDC_CERTHELPPRIV:
+        OnCertHelp();
+        break;
+    case IDC_PASSWORDHELP:
+        OnPasswordHelp();
+        break;
+    case IDC_UTF8HELP:
+        OnUtf8Help();
+        break;
+    case IDC_EDITPASS:
+        OnEditPass();
+        break;
+    case IDC_CONNECTTO:
+        if (HIWORD(wParam) == EN_CHANGE)
+            OnConnectToChanged();
+        break;
+    case IDC_SCP_ALL:
+        UpdateScpOnlyDependentControls(m_hWnd);
+        break;
+    }
+    return 0;
+}
+
+void ConnectionDialog::OnDestroy()
+{
+    StopLanPairing(m_ctx);
+}
+
+INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
+{
+    auto* ann = reinterpret_cast<smb::PeerAnnouncement*>(lParam);
+    if (m_ctx && ann) {
+        const bool peerWasNew = m_ctx->lanPeers.find(ann->peerId) == m_ctx->lanPeers.end();
+        const std::string newPeerId = ann->peerId;
+        m_ctx->lanPeers[ann->peerId] = *ann;
+        delete ann;
+
+        const int transferMode = (int)SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+        if (transferMode == static_cast<int>(sftp::TransferMode::smb_lan)) {
+            const BOOL dropped = (BOOL)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETDROPPEDSTATE, 0, 0);
+            if (!dropped)
+                RefreshLanPeerCombo(m_hWnd, m_ctx, m_settings ? m_settings->lan_pair_peer : std::string{});
+
+            const int roleSel = (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
+            if (peerWasNew && roleSel == 0 && !m_ctx->lanRolePromptShown) {
+                m_ctx->lanRolePromptShown = true;
+                const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+                const std::wstring msgW   = LoadResStringW(IDS_LAN_ROLE_PROMPT);
+                const int choice = MessageBoxW(
+                    m_hWnd,
+                    msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
+                    titleW.empty() ? L"LAN Pair" : titleW.c_str(),
+                    MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
+                if (choice == IDYES || choice == IDNO) {
+                    const int newRole = (choice == IDYES) ? 2 : 1;
+                    SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_SETCURSEL, newRole, 0);
+                    if (choice == IDYES) {
+                        for (size_t i = 0; i < m_ctx->lanPeerOrder.size(); ++i) {
+                            if (m_ctx->lanPeerOrder[i] == newPeerId) {
+                                SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_SETCURSEL, static_cast<WPARAM>(i + 1), 0);
+                                break;
+                            }
+                        }
+                    }
+                    HandleLanPairAction(m_hWnd, m_ctx, m_settings);
+                }
+                m_ctx->lanRolePromptShown = false;
+            }
+        }
+        return 1;
+    }
+    delete ann;
+    return 1;
+}
+
+void ConnectionDialog::OnOk()
+{
+    StopLanPairing(m_ctx);
+
+    LPCSTR dlgDisplayName = m_ctx->displayName;
+    LPCSTR dlgIniFileName = m_ctx->iniFileName;
     std::array<char, 32> modbuf{};
     std::array<char, MAX_PATH> strbuf{};
     int cp = 0, cbline = 0;
 
-    GetDlgItemText(hWnd, IDC_CONNECTTO, dlgConnectResults->server);
-    GetDlgItemText(hWnd, IDC_USERNAME, dlgConnectResults->user);
-    GetDlgItemText(hWnd, IDC_PASSWORD, dlgConnectResults->password);
-    if (IsDlgButtonChecked(hWnd, IDC_PROTOV4))
-        dlgConnectResults->protocoltype = 1;
-    else if (IsDlgButtonChecked(hWnd, IDC_PROTOV6))
-        dlgConnectResults->protocoltype = 2;
+    GetDlgItemText(m_hWnd, IDC_CONNECTTO, m_settings->server);
+    GetDlgItemText(m_hWnd, IDC_USERNAME,  m_settings->user);
+    GetDlgItemText(m_hWnd, IDC_PASSWORD,  m_settings->password);
+    if (IsDlgButtonChecked(m_hWnd, IDC_PROTOV4))
+        m_settings->protocoltype = 1;
+    else if (IsDlgButtonChecked(m_hWnd, IDC_PROTOV6))
+        m_settings->protocoltype = 2;
     else
-        dlgConnectResults->protocoltype = 0;
-    dlgConnectResults->transfermode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
-    if (dlgConnectResults->transfermode < 0 || dlgConnectResults->transfermode > 3)
-        dlgConnectResults->transfermode = 0;
-    const bool smbMode = dlgConnectResults->transfermode == static_cast<int>(sftp::TransferMode::smb_lan);
-    const bool phpMode = dlgConnectResults->transfermode != static_cast<int>(sftp::TransferMode::ssh_auto);
+        m_settings->protocoltype = 0;
+    m_settings->transfermode = (int)SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+    if (m_settings->transfermode < 0 || m_settings->transfermode > 3)
+        m_settings->transfermode = 0;
+    const bool smbMode = m_settings->transfermode == static_cast<int>(sftp::TransferMode::smb_lan);
+    const bool phpMode = m_settings->transfermode != static_cast<int>(sftp::TransferMode::ssh_auto);
     if (phpMode && !smbMode) {
-        dlgConnectResults->php_http_mode = (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
-        if (dlgConnectResults->php_http_mode < 0 || dlgConnectResults->php_http_mode > 2)
-            dlgConnectResults->php_http_mode = 0;
-        dlgConnectResults->php_chunk_mib = PhpChunkComboIndexToValue(
-            (int)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0));
+        m_settings->php_http_mode = (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
+        if (m_settings->php_http_mode < 0 || m_settings->php_http_mode > 2)
+            m_settings->php_http_mode = 0;
+        m_settings->php_chunk_mib = PhpChunkComboIndexToValue(
+            (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0));
     } else if (smbMode) {
-        dlgConnectResults->lan_pair_role = LanRoleComboToValue((int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0));
-        const int peerIdx = (int)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
-        if (peerIdx > 0 && dlgCtx && peerIdx <= (int)dlgCtx->lanPeerOrder.size()) {
-            dlgConnectResults->lan_pair_peer = dlgCtx->lanPeerOrder[peerIdx - 1];
-        } else {
-            dlgConnectResults->lan_pair_peer.clear();
-        }
-        dlgConnectResults->lan_pair_timeout_min = ReadLanTimeoutMinutes(hWnd);
+        m_settings->lan_pair_role = LanRoleComboToValue(
+            (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0));
+        const int peerIdx = (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
+        if (peerIdx > 0 && peerIdx <= (int)m_ctx->lanPeerOrder.size())
+            m_settings->lan_pair_peer = m_ctx->lanPeerOrder[peerIdx - 1];
+        else
+            m_settings->lan_pair_peer.clear();
+        m_settings->lan_pair_timeout_min = ReadLanTimeoutMinutes(m_hWnd);
     }
 
-    GetDlgItemText(hWnd, IDC_PUBKEY, dlgConnectResults->pubkeyfile);
-    GetDlgItemText(hWnd, IDC_PRIVKEY, dlgConnectResults->privkeyfile);
-    dlgConnectResults->useagent = IsDlgButtonChecked(hWnd, IDC_USEAGENT) == BST_CHECKED;
-    dlgConnectResults->use_jump_host = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
-    dlgConnectResults->detailedlog = IsDlgButtonChecked(hWnd, IDC_DETAILED_LOG) == BST_CHECKED;
-    dlgConnectResults->compressed = IsDlgButtonChecked(hWnd, IDC_COMPRESS) == BST_CHECKED;
-    dlgConnectResults->scpfordata = IsDlgButtonChecked(hWnd, IDC_SCP_DATA) == BST_CHECKED;
-    dlgConnectResults->scponly = IsDlgButtonChecked(hWnd, IDC_SCP_ALL) == BST_CHECKED;
-    if (dlgConnectResults->scponly)
-        dlgConnectResults->scpfordata = true;
-    const bool shellTransferChecked = IsDlgButtonChecked(hWnd, IDC_SHELLTRANSFER) == BST_CHECKED;
-    dlgConnectResults->shell_transfer_dd = shellTransferChecked;
-    dlgConnectResults->shell_transfer_force = shellTransferChecked;
+    GetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
+    GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
+    m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
+    m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
+    m_settings->detailedlog   = IsDlgButtonChecked(m_hWnd, IDC_DETAILED_LOG) == BST_CHECKED;
+    m_settings->compressed    = IsDlgButtonChecked(m_hWnd, IDC_COMPRESS)     == BST_CHECKED;
+    m_settings->scpfordata    = IsDlgButtonChecked(m_hWnd, IDC_SCP_DATA)     == BST_CHECKED;
+    m_settings->scponly       = IsDlgButtonChecked(m_hWnd, IDC_SCP_ALL)      == BST_CHECKED;
+    if (m_settings->scponly)
+        m_settings->scpfordata = true;
+    const bool shellTransferChecked = IsDlgButtonChecked(m_hWnd, IDC_SHELLTRANSFER) == BST_CHECKED;
+    m_settings->shell_transfer_dd    = shellTransferChecked;
+    m_settings->shell_transfer_force = shellTransferChecked;
 
     if (!phpMode || smbMode) {
         if (smbMode) {
-            dlgConnectResults->utf8names = -1;
-            dlgConnectResults->unixlinebreaks = -1;
-            dlgConnectResults->codepage = 0;
+            m_settings->utf8names      = -1;
+            m_settings->unixlinebreaks = -1;
+            m_settings->codepage       = 0;
         } else {
-        cp = 0;
-        cbline = (char)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
-        switch (cbline) {
-        case 0: dlgConnectResults->utf8names = -1; break;  // auto-detect
-        case 1: dlgConnectResults->utf8names = 1; break;
-        default:
-            dlgConnectResults->utf8names = 0;
-            if (cbline >= 0 && cbline < kCodepageListCount) {
-                cp = codepagelist[cbline];
-                if (cp == -3) {
-                    if (RequestProc(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):", strbuf.data(), strbuf.size()-1)) {
-                        cp = atoi(strbuf.data());
+            cp = 0;
+            cbline = (char)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
+            switch (cbline) {
+            case 0: m_settings->utf8names = -1; break;
+            case 1: m_settings->utf8names =  1; break;
+            default:
+                m_settings->utf8names = 0;
+                if (cbline >= 0 && cbline < kCodepageListCount) {
+                    cp = codepagelist[cbline];
+                    if (cp == -3) {
+                        if (RequestProc(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
+                                        strbuf.data(), strbuf.size() - 1))
+                            cp = atoi(strbuf.data());
+                    } else if (cp == -4) {
+                        cp = m_settings->codepage;
                     }
-                } else if (cp == -4) {
-                    cp = dlgConnectResults->codepage;  // unchanged.
                 }
             }
-        }
-        dlgConnectResults->codepage = cp;
-        dlgConnectResults->unixlinebreaks = (char)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0) - 1;
+            m_settings->codepage       = cp;
+            m_settings->unixlinebreaks = (char)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0) - 1;
         }
     }
 
-    GetDlgItemText(hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size()-1);
-    if (modbuf[0] == 0)
-        dlgConnectResults->filemod = 0644;
-    else
-        dlgConnectResults->filemod = strtol(modbuf.data(), nullptr, 8);
-    GetDlgItemText(hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size()-1);
-    if (modbuf[0] == 0)
-        dlgConnectResults->dirmod = 0755;
-    else
-        dlgConnectResults->dirmod = strtol(modbuf.data(), nullptr, 8);
+    GetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size() - 1);
+    m_settings->filemod = modbuf[0] == 0 ? 0644 : strtol(modbuf.data(), nullptr, 8);
+    GetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
+    m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
 
-    dlgConnectResults->proxynr = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
-    if (dlgConnectResults->proxynr < 0)
-        dlgConnectResults->proxynr = 0;
-    int max = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 1;
-    if (dlgConnectResults->proxynr >= max)  // "add" item.
-        dlgConnectResults->proxynr = 0;
+    m_settings->proxynr = (int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
+    if (m_settings->proxynr < 0) m_settings->proxynr = 0;
+    int maxProxy = (int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 1;
+    if (m_settings->proxynr >= maxProxy)
+        m_settings->proxynr = 0;
 
     std::array<char, wdirtypemax> targetProfile{};
     std::array<char, wdirtypemax> enteredProfile{};
     targetProfile[0] = 0;
     enteredProfile[0] = 0;
 
-    // Always honor the text currently present in the Session combo.
-    // If user edited an existing session name, treat it as a rename target.
-    GetDlgItemText(hWnd, IDC_SESSIONCOMBO, enteredProfile.data(), enteredProfile.size() - 1);
+    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, enteredProfile.data(), enteredProfile.size() - 1);
     TrimSessionName(enteredProfile.data());
     if (enteredProfile[0] && _stricmp(enteredProfile.data(), s_quickconnect) != 0) {
         strlcpy(targetProfile.data(), enteredProfile.data(), targetProfile.size() - 1);
@@ -1923,334 +2146,279 @@ static INT_PTR OnConnectDlgOk(HWND hWnd, ConnectDialogContext* dlgCtx)
     }
 
     if (targetProfile[0]) {
-        if (smbMode && dlgConnectResults->server.empty()) {
-            // Keep SMB/LAN profiles visible and readable in server list.
-            // Prefer selected/discovered peer id when available.
-            if (!dlgConnectResults->lan_pair_peer.empty()) {
-                dlgConnectResults->server = std::format("lanpair://peer/{}", dlgConnectResults->lan_pair_peer);
-            } else {
-                dlgConnectResults->server = "lanpair://local";
-            }
+        if (smbMode && m_settings->server.empty()) {
+            if (!m_settings->lan_pair_peer.empty())
+                m_settings->server = std::format("lanpair://peer/{}", m_settings->lan_pair_peer);
+            else
+                m_settings->server = "lanpair://local";
         }
 
         if (strcmp(dlgDisplayName, s_quickconnect) != 0 &&
             _stricmp(targetProfile.data(), dlgDisplayName) != 0) {
             int moveRc = CopyMoveServerInIni(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
             if (moveRc == FS_FILE_EXISTS) {
-                MessageBoxA(hWnd,
+                MessageBoxA(m_hWnd,
                             "Session with this name already exists.\nChoose a different session name.",
-                            "SFTP",
-                            MB_OK | MB_ICONWARNING);
-                return 1;
+                            "SFTP", MB_OK | MB_ICONWARNING);
+                return;
             }
         }
 
-        dlgConnectResults->DisplayName = targetProfile.data();
-        if (dlgConnectResults->dialogforconnection && strcmp(dlgDisplayName, s_quickconnect) == 0)
-            dlgConnectResults->saveonlyprofile = true;
+        m_settings->DisplayName = targetProfile.data();
+        if (m_settings->dialogforconnection && strcmp(dlgDisplayName, s_quickconnect) == 0)
+            m_settings->saveonlyprofile = true;
         std::array<char, 16> buf{};
-        WritePrivateProfileString(targetProfile.data(), "server", dlgConnectResults->server.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "user", dlgConnectResults->user.c_str(), dlgIniFileName);
-        _itoa_s(dlgConnectResults->protocoltype, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "protocol", dlgConnectResults->protocoltype == 0 ? nullptr : buf.data(), dlgIniFileName);
-        _itoa_s(max(0, min(3, dlgConnectResults->transfermode)), buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "server",   m_settings->server.c_str(),  dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "user",     m_settings->user.c_str(),    dlgIniFileName);
+        _itoa_s(m_settings->protocoltype, buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "protocol", m_settings->protocoltype == 0 ? nullptr : buf.data(), dlgIniFileName);
+        _itoa_s(max(0, min(3, m_settings->transfermode)), buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), "transfermode", buf.data(), dlgIniFileName);
-        _itoa_s(max(0, min(2, dlgConnectResults->php_http_mode)), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "phphttpmode", dlgConnectResults->php_http_mode == 0 ? nullptr : buf.data(), dlgIniFileName);
-        _itoa_s(dlgConnectResults->php_chunk_mib, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "phpchunkmb", dlgConnectResults->php_chunk_mib == 0 ? nullptr : buf.data(), dlgIniFileName);
-        _itoa_s(max(0, min(2, dlgConnectResults->lan_pair_role)), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "lanpairrole", dlgConnectResults->lan_pair_role == 0 ? nullptr : buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "lanpairpeer", dlgConnectResults->lan_pair_peer.empty() ? nullptr : dlgConnectResults->lan_pair_peer.c_str(), dlgIniFileName);
-        _itoa_s(max(0, dlgConnectResults->lan_pair_timeout_min), buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "lanpairtimeout", dlgConnectResults->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
-        // Pre-derive DPAPI trust keys from the shared password so both
-        // directions work without any password exchange at connect time.
-        if (dlgConnectResults->transfermode == static_cast<int>(sftp::TransferMode::smb_lan) &&
-            !dlgConnectResults->password.empty() &&
-            !dlgConnectResults->lan_pair_peer.empty()) {
+        _itoa_s(max(0, min(2, m_settings->php_http_mode)), buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "phphttpmode", m_settings->php_http_mode == 0 ? nullptr : buf.data(), dlgIniFileName);
+        _itoa_s(m_settings->php_chunk_mib, buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "phpchunkmb", m_settings->php_chunk_mib == 0 ? nullptr : buf.data(), dlgIniFileName);
+        _itoa_s(max(0, min(2, m_settings->lan_pair_role)), buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "lanpairrole", m_settings->lan_pair_role == 0 ? nullptr : buf.data(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "lanpairpeer", m_settings->lan_pair_peer.empty() ? nullptr : m_settings->lan_pair_peer.c_str(), dlgIniFileName);
+        _itoa_s(max(0, m_settings->lan_pair_timeout_min), buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "lanpairtimeout", m_settings->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
+        if (m_settings->transfermode == static_cast<int>(sftp::TransferMode::smb_lan) &&
+            !m_settings->password.empty() && !m_settings->lan_pair_peer.empty()) {
             const std::string localId = MakeLanPeerId();
-            PrepareLanPairTrustKeys(localId,
-                                    dlgConnectResults->lan_pair_peer,
-                                    dlgConnectResults->password);
+            PrepareLanPairTrustKeys(localId, m_settings->lan_pair_peer, m_settings->password);
         }
-        WritePrivateProfileString(targetProfile.data(), "detailedlog", dlgConnectResults->detailedlog ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "utf8", dlgConnectResults->utf8names == -1 ? nullptr : dlgConnectResults->utf8names == 1 ? "1" : "0", dlgIniFileName);
-        _itoa_s(dlgConnectResults->codepage, buf.data(), buf.size(), 10);
-        WritePrivateProfileString(targetProfile.data(), "codepage", buf.data(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "unixlinebreaks", dlgConnectResults->unixlinebreaks == -1 ? nullptr : dlgConnectResults->unixlinebreaks == 1 ? "1" : "0", dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "largefilesupport", dlgConnectResults->scpserver64bit == -1 ? nullptr : dlgConnectResults->scpserver64bit == 1 ? "1" : "0", dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "compression", dlgConnectResults->compressed ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "scpfordata", dlgConnectResults->scpfordata ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "scponly", dlgConnectResults->scponly ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "shelltransfer", dlgConnectResults->shell_transfer_dd ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "shelltransferforce", dlgConnectResults->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "pubkeyfile", dlgConnectResults->pubkeyfile.empty() ? nullptr : dlgConnectResults->pubkeyfile.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "privkeyfile", dlgConnectResults->privkeyfile.empty() ? nullptr : dlgConnectResults->privkeyfile.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "useagent", dlgConnectResults->useagent ? "1" : nullptr, dlgIniFileName);
-
-        // Persist jump host settings.
-        WritePrivateProfileString(targetProfile.data(), "usejumphost",
-            dlgConnectResults->use_jump_host ? "1" : nullptr, dlgIniFileName);
-        if (!dlgConnectResults->jump_host.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumphost", dlgConnectResults->jump_host.c_str(), dlgIniFileName);
-        if (dlgConnectResults->jump_port && dlgConnectResults->jump_port != 22) {
+        WritePrivateProfileString(targetProfile.data(), "detailedlog", m_settings->detailedlog ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "utf8",        m_settings->utf8names == -1 ? nullptr : m_settings->utf8names == 1 ? "1" : "0", dlgIniFileName);
+        _itoa_s(m_settings->codepage, buf.data(), buf.size(), 10);
+        WritePrivateProfileString(targetProfile.data(), "codepage",    buf.data(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "unixlinebreaks", m_settings->unixlinebreaks == -1 ? nullptr : m_settings->unixlinebreaks == 1 ? "1" : "0", dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "largefilesupport", m_settings->scpserver64bit == -1 ? nullptr : m_settings->scpserver64bit == 1 ? "1" : "0", dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "compression",     m_settings->compressed          ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "scpfordata",      m_settings->scpfordata           ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "usejumphost",  m_settings->use_jump_host        ? "1" : nullptr, dlgIniFileName);
+        if (!m_settings->jump_host.empty())
+            WritePrivateProfileString(targetProfile.data(), "jumphost", m_settings->jump_host.c_str(), dlgIniFileName);
+        if (m_settings->jump_port && m_settings->jump_port != 22) {
             std::array<char, 16> portBuf{};
-            _itoa_s(dlgConnectResults->jump_port, portBuf.data(), portBuf.size(), 10);
+            _itoa_s(m_settings->jump_port, portBuf.data(), portBuf.size(), 10);
             WritePrivateProfileString(targetProfile.data(), "jumpport", portBuf.data(), dlgIniFileName);
         }
-        if (!dlgConnectResults->jump_user.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpuser", dlgConnectResults->jump_user.c_str(), dlgIniFileName);
-        if (!dlgConnectResults->jump_pubkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile", dlgConnectResults->jump_pubkeyfile.c_str(), dlgIniFileName);
-        if (!dlgConnectResults->jump_privkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile", dlgConnectResults->jump_privkeyfile.c_str(), dlgIniFileName);
-        WritePrivateProfileString(targetProfile.data(), "jumpuseagent",
-            dlgConnectResults->jump_useagent ? "1" : nullptr, dlgIniFileName);
-        if (!dlgConnectResults->jump_password.empty()) {
+        if (!m_settings->jump_user.empty())
+            WritePrivateProfileString(targetProfile.data(), "jumpuser", m_settings->jump_user.c_str(), dlgIniFileName);
+        if (!m_settings->jump_pubkeyfile.empty())
+            WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile", m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
+        if (!m_settings->jump_privkeyfile.empty())
+            WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile", m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
+        if (!m_settings->jump_password.empty()) {
             std::array<char, MAX_PATH> jumpEnc{};
-            EncryptString(dlgConnectResults->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
+            EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
             WritePrivateProfileString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
         }
-
-        _itoa_s(dlgConnectResults->filemod, modbuf.data(), modbuf.size(), 8);
-        WritePrivateProfileString(targetProfile.data(), "filemod", dlgConnectResults->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
-        _itoa_s(dlgConnectResults->dirmod, modbuf.data(), modbuf.size(), 8);
-        WritePrivateProfileString(targetProfile.data(), "dirmod", dlgConnectResults->dirmod == 0755 ? nullptr : modbuf.data(), dlgIniFileName);
-
-        _itoa_s(dlgConnectResults->proxynr, buf.data(), buf.size(), 10);
+        _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
+        WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
+        _itoa_s(m_settings->dirmod, modbuf.data(), modbuf.size(), 8);
+        WritePrivateProfileString(targetProfile.data(), "dirmod", m_settings->dirmod == 0755 ? nullptr : modbuf.data(), dlgIniFileName);
+        _itoa_s(m_settings->proxynr, buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
 
-        // Persist password for named sessions (including quick dialog with selected session name).
         std::array<char, MAX_PATH> szEncryptedPassword{};
-        if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {
-            if (dlgConnectResults->password.empty()) {
+        if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
+            if (m_settings->password.empty()) {
                 WritePrivateProfileString(targetProfile.data(), "password", nullptr, dlgIniFileName);
-            } else if (CryptProc && IsDlgButtonChecked(hWnd, IDC_CRYPTPASS)) {
-                bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD, targetProfile.data(), const_cast<char*>(dlgConnectResults->password.c_str()), 0) == FS_FILE_OK;
-                WritePrivateProfileString(targetProfile.data(), "password", ok? "!" : nullptr, dlgIniFileName);
-                CryptCheckPass=true;
+            } else if (CryptProc && IsDlgButtonChecked(m_hWnd, IDC_CRYPTPASS)) {
+                bool ok = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_SAVE_PASSWORD,
+                                    targetProfile.data(),
+                                    const_cast<char*>(m_settings->password.c_str()), 0) == FS_FILE_OK;
+                WritePrivateProfileString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
+                CryptCheckPass = true;
             } else {
-                EncryptString(dlgConnectResults->password.c_str(), szEncryptedPassword.data(), static_cast<UINT>(szEncryptedPassword.size()));
+                EncryptString(m_settings->password.c_str(), szEncryptedPassword.data(),
+                              static_cast<UINT>(szEncryptedPassword.size()));
                 WritePrivateProfileString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
             }
         }
-
     }
-    const int transferMode = max(0, min(3, dlgConnectResults->transfermode));
+
+    const int transferMode = max(0, min(3, m_settings->transfermode));
     if (transferMode == static_cast<int>(sftp::TransferMode::php_agent) ||
         transferMode == static_cast<int>(sftp::TransferMode::php_shell)) {
-        if (!UpdateLocalPhpAgentScriptWithPassword(dlgConnectResults->password.c_str())) {
+        if (!UpdateLocalPhpAgentScriptWithPassword(m_settings->password.c_str())) {
             SFTP_LOG("PHP", "Local sftp.php update skipped: file missing or not writable in plugin directory.");
             ShowStatus("PHP Agent: local sftp.php update skipped (missing or read-only file).");
         }
     }
-    dlgConnectResults->customport = 0;  // will be set later
-    EndDialog(hWnd, IDOK);
-    return 1;
+    m_settings->customport = 0;  // will be set later by the connection logic
+    EndDialog(m_hWnd, IDOK);
 }
 
-// SR: 09.07.2005
-INT_PTR WINAPI ConnectDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
+void ConnectionDialog::OnCancel()
 {
-    ConnectDialogContext* dlgCtx = GetConnectDialogContext(hWnd);
-    pConnectSettings dlgConnectResults = dlgCtx ? dlgCtx->connectResults : nullptr;
-    LPCSTR dlgDisplayName = dlgCtx ? dlgCtx->displayName : nullptr;
-    LPCSTR dlgIniFileName = dlgCtx ? dlgCtx->iniFileName : nullptr;
-    if (Message != WM_INITDIALOG && (!dlgConnectResults || !dlgDisplayName || !dlgIniFileName))
-        return 0;
+    StopLanPairing(m_ctx);
+    EndDialog(m_hWnd, IDCANCEL);
+}
 
-    switch (Message) {
-    case WM_INITDIALOG:
-        return OnConnectDlgInit(hWnd, lParam);
-    case WM_APP_LAN_PEER: {
-        auto* ann = reinterpret_cast<smb::PeerAnnouncement*>(lParam);
-        if (dlgCtx && ann) {
-            const bool peerWasNew = dlgCtx->lanPeers.find(ann->peerId) == dlgCtx->lanPeers.end();
-            const std::string newPeerId = ann->peerId;
-            dlgCtx->lanPeers[ann->peerId] = *ann;
-            delete ann;
-            const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
-            if (transferMode == static_cast<int>(sftp::TransferMode::smb_lan)) {
-                const BOOL dropped = (BOOL)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETDROPPEDSTATE, 0, 0);
-                if (!dropped) {
-                    RefreshLanPeerCombo(hWnd, dlgCtx, dlgConnectResults ? dlgConnectResults->lan_pair_peer : std::string{});
-                }
-                const int roleSel = (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
-                if (peerWasNew && roleSel == 0 && !dlgCtx->lanRolePromptShown) {
-                    dlgCtx->lanRolePromptShown = true;
-                    const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
-                    const std::wstring msgW = LoadResStringW(IDS_LAN_ROLE_PROMPT);
-                    const int choice = MessageBoxW(
-                        hWnd,
-                        msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
-                        titleW.empty() ? L"LAN Pair" : titleW.c_str(),
-                        MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
-                    if (choice == IDYES || choice == IDNO) {
-                        const int newRole = (choice == IDYES) ? 2 : 1;
-                        SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, newRole, 0);
-                        if (choice == IDYES) {
-                            for (size_t i = 0; i < dlgCtx->lanPeerOrder.size(); ++i) {
-                                if (dlgCtx->lanPeerOrder[i] == newPeerId) {
-                                    SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL, static_cast<WPARAM>(i + 1), 0);
-                                    break;
-                                }
-                            }
-                        }
-                        HandleLanPairAction(hWnd, dlgCtx, dlgConnectResults);
-                    }
-                    dlgCtx->lanRolePromptShown = false;
-                }
-            }
-            return 1;
-        }
-        delete ann;
-        return 1;
+void ConnectionDialog::OnSessionChanged()
+{
+    std::array<char, wdirtypemax> sessionName{};
+    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, sessionName.data(), sessionName.size() - 1);
+    TrimSessionName(sessionName.data());
+    if (sessionName[0] && _stricmp(sessionName.data(), s_quickconnect) != 0) {
+        tConnectSettings loaded{};
+        if (LoadServerSettings(sessionName.data(), &loaded, m_ctx->iniFileName))
+            ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
     }
-    case WM_SHOWWINDOW:
-        if (dlgCtx && dlgCtx->focusset)
-            SetFocus(GetDlgItem(hWnd, dlgCtx->focusset));
-        break;
-    case WM_DESTROY:
-        StopLanPairing(dlgCtx);
-        return 0;
-    case WM_COMMAND:
-        switch (LOWORD(wParam)) {
-        case IDOK:
-            StopLanPairing(dlgCtx);
-            return OnConnectDlgOk(hWnd, dlgCtx);
-        case IDCANCEL:
-            StopLanPairing(dlgCtx);
-            EndDialog(hWnd, IDCANCEL);
-            return 1;
-        case IDC_EDITPASS: {
-            bool doshow = true;
-            std::array<char, MAX_PATH> sessionPassword{};
-            int err = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, dlgDisplayName, sessionPassword.data(), static_cast<int>(sessionPassword.size() - 1));
-            if (err == FS_FILE_OK) {
-                dlgConnectResults->password = sessionPassword.data();
-                SetDlgItemText(hWnd, IDC_PASSWORD, dlgConnectResults->password);
-            } else if (err == FS_FILE_READERROR) {
-                SetDlgItemText(hWnd, IDC_PASSWORD, "");
-            } else {
-                doshow = false;
+}
+
+void ConnectionDialog::OnTransferModeChanged()
+{
+    if (m_ctx) {
+        if (m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::ssh_auto)) {
+            m_settings->unixlinebreaks = (char)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0) - 1;
+            const int encSel = (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
+            if (encSel == 0)
+                m_settings->utf8names = -1;
+            else if (encSel == 1)
+                m_settings->utf8names = 1;
+            else if (encSel >= 0 && encSel < kCodepageListCount) {
+                m_settings->utf8names = 0;
+                const int cp = codepagelist[encSel];
+                if (cp > 0)
+                    m_settings->codepage = cp;
             }
-            if (doshow) {
-                ShowWindow(GetDlgItem(hWnd, IDC_PASSWORD), SW_SHOW);
-                ShowWindow(GetDlgItem(hWnd, IDC_CRYPTPASS), SW_SHOW);
-                ShowWindow(GetDlgItem(hWnd, IDC_EDITPASS), SW_HIDE);
-                if (!dlgConnectResults->password.empty())
-                    CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
-            }
-            break;
+        } else if (m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_agent) ||
+                   m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_shell)) {
+            m_settings->php_http_mode = (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
+            if (m_settings->php_http_mode < 0 || m_settings->php_http_mode > 2)
+                m_settings->php_http_mode = 0;
+            m_settings->php_chunk_mib = PhpChunkComboIndexToValue(
+                (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0));
+        } else if (m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::smb_lan)) {
+            m_settings->lan_pair_role = LanRoleComboToValue(
+                (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0));
+            const int peerIdx = (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
+            if (peerIdx > 0 && peerIdx <= (int)m_ctx->lanPeerOrder.size())
+                m_settings->lan_pair_peer = m_ctx->lanPeerOrder[peerIdx - 1];
+            else
+                m_settings->lan_pair_peer.clear();
+            m_settings->lan_pair_timeout_min = ReadLanTimeoutMinutes(m_hWnd);
         }
-        case IDC_CONNECTTO:
-            if (HIWORD(wParam) == EN_CHANGE)
-                serverfieldchangedbyuser = true;
-            break;
-        case IDC_SESSIONCOMBO:
-            if (HIWORD(wParam) == CBN_SELCHANGE)
-                OnSessionChangedCommand(hWnd, dlgCtx, dlgIniFileName);
-            break;
-        case IDC_CERTHELP:
-        case IDC_CERTHELPPRIV:
-            ShowHelpDialog(hWnd, IDS_HELP_CERT);
-            break;
-        case IDC_PASSWORDHELP:
-            ShowHelpDialog(hWnd, IDS_HELP_PASSWORD);
-            break;
-        case IDC_UTF8HELP:
-            ShowHelpDialog(hWnd, IDS_HELP_UTF8);
-            break;
-        case IDC_IMPORTSESSIONS:
-            OnImportSessionsCommand(hWnd, dlgConnectResults, dlgCtx);
-            break;
-        case IDC_LOADPUBKEY:
-        case IDC_LOADPRIVKEY:
-            OnBrowseKeyFileCommand(hWnd, LOWORD(wParam) == IDC_LOADPUBKEY);
-            break;
-        case IDC_PRIVKEY:
-            if (HIWORD(wParam) == EN_CHANGE)
-                UpdateCertSectionState(hWnd);
-            break;
-        case IDC_USEAGENT:
-            UpdateCertSectionState(hWnd);
-            break;
-        case IDC_PROXYCOMBO:
-            if (HIWORD(wParam) == CBN_SELCHANGE)
-                if ((int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0) ==
-                    (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 1)
-                    PostMessage(hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
-            break;
-        case IDC_JUMP_ENABLE:
-            // Reflect the checkbox state immediately into dlgConnectResults so it
-            // survives a session load that calls ApplyLoadedSessionToDialog.
-            if (dlgConnectResults)
-                dlgConnectResults->use_jump_host = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
-            break;
-        case IDC_JUMP_BUTTON:
-            OnJumpButtonCommand(hWnd, dlgConnectResults, dlgDisplayName, dlgIniFileName);
-            break;
-        case IDC_PROXYBUTTON:
-            OnProxyButtonCommand(hWnd, dlgConnectResults, dlgCtx);
-            break;
-        case IDC_PLUGINHELP:
-            OpenPluginHelp(hWnd);
-            break;
-        case IDC_SCP_ALL:
-            UpdateScpOnlyDependentControls(hWnd);
-            break;
-        case IDC_TRANSFERMODE:
-            if (HIWORD(wParam) == CBN_SELCHANGE) {
-                if (dlgCtx) {
-                    if (dlgCtx->lastTransferMode == static_cast<int>(sftp::TransferMode::ssh_auto)) {
-                        dlgConnectResults->unixlinebreaks = (char)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0) - 1;
-                        const int encSel = (int)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
-                        if (encSel == 0)
-                            dlgConnectResults->utf8names = -1;
-                        else if (encSel == 1)
-                            dlgConnectResults->utf8names = 1;
-                        else if (encSel >= 0 && encSel < kCodepageListCount) {
-                            dlgConnectResults->utf8names = 0;
-                            const int cp = codepagelist[encSel];
-                            if (cp > 0)
-                                dlgConnectResults->codepage = cp;
-                        }
-                    } else if (dlgCtx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_agent) ||
-                               dlgCtx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_shell)) {
-                        dlgConnectResults->php_http_mode = (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
-                        if (dlgConnectResults->php_http_mode < 0 || dlgConnectResults->php_http_mode > 2)
-                            dlgConnectResults->php_http_mode = 0;
-                        dlgConnectResults->php_chunk_mib = PhpChunkComboIndexToValue(
-                            (int)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0));
-                    } else if (dlgCtx->lastTransferMode == static_cast<int>(sftp::TransferMode::smb_lan)) {
-                        dlgConnectResults->lan_pair_role = LanRoleComboToValue(
-                            (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0));
-                        const int peerIdx = (int)SendDlgItemMessage(hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0);
-                        if (peerIdx > 0 && peerIdx <= (int)dlgCtx->lanPeerOrder.size()) {
-                            dlgConnectResults->lan_pair_peer = dlgCtx->lanPeerOrder[peerIdx - 1];
-                        } else {
-                            dlgConnectResults->lan_pair_peer.clear();
-                        }
-                        dlgConnectResults->lan_pair_timeout_min = ReadLanTimeoutMinutes(hWnd);
-                    }
-                }
-                RebuildSystemAndEncodingCombos(hWnd, dlgCtx, dlgConnectResults);
-                if (dlgCtx)
-                    dlgCtx->lastTransferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
-                UpdateScpOnlyDependentControls(hWnd);
-            }
-            break;
-        case IDC_PHPSHELL:
-            OnPhpShellCommand(hWnd, dlgCtx, dlgConnectResults);
-            break;
-        case IDC_DELETELAST:
-            OnDeleteLastProxyCommand(hWnd, dlgConnectResults, dlgIniFileName);
-            break;
-        }
-        break;
     }
-    return 0;
+    RebuildSystemAndEncodingCombos(m_hWnd, m_ctx, m_settings);
+    if (m_ctx)
+        m_ctx->lastTransferMode = (int)SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
+    UpdateScpOnlyDependentControls(m_hWnd);
+}
+
+void ConnectionDialog::OnPhpShellBtn()
+{
+    OnPhpShellCommand(m_hWnd, m_ctx, m_settings);
+}
+
+void ConnectionDialog::OnBrowseKeyFile(bool isPublicKey)
+{
+    OnBrowseKeyFileCommand(m_hWnd, isPublicKey);
+}
+
+void ConnectionDialog::OnPrivateKeyChanged()
+{
+    UpdateCertSectionState(m_hWnd);
+}
+
+void ConnectionDialog::OnUseAgentChanged()
+{
+    UpdateCertSectionState(m_hWnd);
+}
+
+void ConnectionDialog::OnJumpEnableChanged()
+{
+    if (m_settings)
+        m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+}
+
+void ConnectionDialog::OnJumpButton()
+{
+    OnJumpButtonCommand(m_hWnd, m_settings, m_ctx->displayName, m_ctx->iniFileName);
+    CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
+        m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
+}
+
+void ConnectionDialog::OnProxyButton()
+{
+    OnProxyButtonCommand(m_hWnd, m_settings, m_ctx);
+}
+
+void ConnectionDialog::OnProxyComboChanged()
+{
+    if ((int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0) ==
+        (int)SendDlgItemMessage(m_hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0) - 1)
+        PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
+}
+
+void ConnectionDialog::OnDeleteLastProxy()
+{
+    OnDeleteLastProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
+}
+
+void ConnectionDialog::OnImportSessions()
+{
+    OnImportSessionsCommand(m_hWnd, m_settings, m_ctx);
+}
+
+void ConnectionDialog::OnPluginHelp()
+{
+    OpenPluginHelp(m_hWnd);
+}
+
+void ConnectionDialog::OnCertHelp()
+{
+    ShowHelpDialog(m_hWnd, IDS_HELP_CERT);
+}
+
+void ConnectionDialog::OnPasswordHelp()
+{
+    ShowHelpDialog(m_hWnd, IDS_HELP_PASSWORD);
+}
+
+void ConnectionDialog::OnUtf8Help()
+{
+    ShowHelpDialog(m_hWnd, IDS_HELP_UTF8);
+}
+
+void ConnectionDialog::OnEditPass()
+{
+    bool doshow = true;
+    std::array<char, MAX_PATH> sessionPassword{};
+    int err = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD,
+                        m_ctx->displayName, sessionPassword.data(),
+                        static_cast<int>(sessionPassword.size() - 1));
+    if (err == FS_FILE_OK) {
+        m_settings->password = sessionPassword.data();
+        SetDlgItemText(m_hWnd, IDC_PASSWORD, m_settings->password);
+    } else if (err == FS_FILE_READERROR) {
+        SetDlgItemText(m_hWnd, IDC_PASSWORD, std::string{});
+    } else {
+        doshow = false;
+    }
+    if (doshow) {
+        ShowWindow(GetDlgItem(m_hWnd, IDC_PASSWORD),  SW_SHOW);
+        ShowWindow(GetDlgItem(m_hWnd, IDC_CRYPTPASS), SW_SHOW);
+        ShowWindow(GetDlgItem(m_hWnd, IDC_EDITPASS),  SW_HIDE);
+        if (!m_settings->password.empty())
+            CheckDlgButton(m_hWnd, IDC_CRYPTPASS, BST_CHECKED);
+    }
+}
+
+void ConnectionDialog::OnConnectToChanged()
+{
+    serverfieldchangedbyuser = true;
 }
 
 bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPCSTR inifilename)
