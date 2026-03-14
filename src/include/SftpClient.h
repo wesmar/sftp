@@ -28,7 +28,7 @@ enum SftpResult : int
 };
 
 extern int PluginNumber;
-extern char s_quickconnect[32];
+extern char s_quickconnect[64];
 
 namespace sftp {
 

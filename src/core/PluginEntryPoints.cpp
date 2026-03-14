@@ -37,7 +37,7 @@ char pluginname[] = "SFTP";
 char defrootname[] = "Secure FTP";
 
 char s_f7newconnection[32];
-char s_quickconnect[32];
+char s_quickconnect[64];
 std::array<WCHAR, 32> s_f7newconnectionW{};
 std::array<WCHAR, 32> s_quickconnectW{};
 
