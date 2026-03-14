@@ -81,6 +81,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 ### Additional Capabilities
 
 - Session import from PuTTY and WinSCP Windows Registry.
+- Session import from PuTTY Portable: select the PuTTY Portable folder — the plugin finds `putty.reg` automatically (recursive search up to 4 levels deep).
 - Proxy support: HTTP CONNECT, SOCKS4, SOCKS4a, SOCKS5 (with or without credentials).
 - Dual-stack IPv4/IPv6 (`getaddrinfo`, `AF_INET6`).
 - Host key fingerprint verification with first-connection warning and change alert.
@@ -88,7 +89,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Automatic UTF-8 filename detection via remote `locale` command.
 - Automatic CRLF/LF conversion on text-mode transfers.
 - Symlink tracking including `~` home directory shortcut protection.
-- Multi-language UI embedded in a single binary: English, Polish, German, French, Spanish, Italian.
+- Multi-language UI via external `.lng` files: English (built-in), Polish, German, French, Spanish, Italian, Russian. Language detected automatically from TC's `wincmd.ini`.
 - Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
 - Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
@@ -916,6 +917,12 @@ Distribution archive: `SFTPplug.zip`
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `SFTPplug.chm` | Full offline documentation |
 | `readme.txt` | Package notes |
+| `language\pol.lng` | Polish translations |
+| `language\deu.lng` | German translations |
+| `language\fra.lng` | French translations |
+| `language\esp.lng` | Spanish translations |
+| `language\ita.lng` | Italian translations |
+| `language\rus.lng` | Russian translations |
 
 No external DLLs required. libssh2 and Argon2 are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
 
@@ -925,18 +932,21 @@ Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin ins
 
 ## Localization
 
-UI language is resolved from `wincmd.ini` (key `LanguageIni`), not from `fsplugin.ini`. All six language string tables are compiled into the same binary in the default build. Runtime selection is automatic based on the TC language setting.
+UI language is resolved at startup from `wincmd.ini` (key `[Configuration] → LanguageIni`). The plugin reads the registry key `HKCU\Software\Ghisler\Total Commander\IniFileName` to locate `wincmd.ini` directly, with a fallback derived from `FsSetDefaultParams`. Language loading is triggered from both `FsSetDefaultParams` and `FsInit` to cover all TC load orders.
 
-| Language | RC block |
-|----------|---------|
-| English (US) | Default |
-| Polish | Conditional |
-| German | Conditional |
-| French | Conditional |
-| Spanish | Conditional |
-| Italian | Conditional |
+The binary ships with an English-only compiled resource (`sftpplug.rc`). All non-English translations are provided as external UTF-8 files in the `language\` subdirectory and loaded at runtime via `LngLoader`. Dialog labels, checkboxes, buttons and window captions are all translated dynamically in `WM_INITDIALOG` using `SetDlgItemTextW`. Layout of variable-length rows (e.g. the Jump host line) is adjusted dynamically based on measured text width so all languages fit without overlap or excessive gaps.
 
-> **Russian** is built as a separate standalone binary (`.\build.ps1 -ru -nochm` → `bin_ru\`) and is not included in the default distribution ZIP.
+| Language | File | Notes |
+|----------|------|-------|
+| English (US) | built-in RC | Default fallback when no `.lng` entry exists |
+| Polish | `language\pol.lng` | |
+| German | `language\deu.lng` | |
+| French | `language\fra.lng` | |
+| Spanish | `language\esp.lng` | |
+| Italian | `language\ita.lng` | |
+| Russian | `language\rus.lng` | Treated identically to other languages |
+
+To add a new language: create `language\XYZ.lng` (UTF-8) following the existing format (`ID=text`, `#` comments, RC-style `\n \t \\` escapes), deploy it alongside the plugin, and add the language code mapping to `LangIdToTcCode` in `LngLoader.cpp`.
 
 ---
 

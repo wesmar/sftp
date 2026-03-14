@@ -3,6 +3,7 @@
 #include <wincrypt.h>
 #include <vector>
 #include <string>
+#include <format>
 #include <optional>
 #include <memory>
 #include "SftpInternal.h"
@@ -93,6 +94,20 @@ const char* kPlainPrefix = "plain:";
 // DO NOT use this for any new encryption - always use DPAPI via DataBlob class.
 LPCSTR g_pszKey = "unpzScGeCInX7XcRM2z+svTK+gegRLhz9KXVbYKJl5boSvVCcfym";
 
+static std::string LegacyEncryptXor(const std::string& plain)
+{
+    const size_t keyLen = strlen(g_pszKey);
+    const size_t plainLen = plain.size();
+    const int iPos = static_cast<int>(plainLen % keyLen);
+    std::string result;
+    result.reserve(plainLen * 3);
+    for (size_t j = 0; j < plainLen; ++j) {
+        const int num = static_cast<unsigned char>(plain[j]) ^ static_cast<unsigned char>(g_pszKey[(j + iPos) % keyLen]);
+        result += std::format("{:03d}", num);
+    }
+    return result;
+}
+
 std::optional<std::string> LegacyDecryptXor(std::string_view encrypted)
 {
     if (encrypted.size() % 3 != 0)
@@ -143,11 +158,10 @@ void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted)
         }
     }
 
-    // Fallback to plain
-    std::string result = kPlainPrefix + plain;
-    if (result.size() < cchEncrypted) {
+    // Fallback: XOR obfuscation (same format as legacy passwords — numeric triplets)
+    const std::string result = LegacyEncryptXor(plain);
+    if (result.size() < cchEncrypted)
         strcpy(pszEncrypted, result.c_str());
-    }
 }
 
 void DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain, UINT cchPlain)

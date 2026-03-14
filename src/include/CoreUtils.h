@@ -12,22 +12,38 @@
 #include <optional>
 #include <ctime>
 
-// LoadStr — type-safe replacements for the old macro.
-// Passing buf.data() to the macro caused sizeof(char*)/sizeof(char)=8 on x64,
-// silently truncating every loaded string to 6 characters.
+// LoadStr — type-safe wrappers that first check the external .lng map loaded at
+// runtime (LngLoadForLanguage) and fall back to the built-in RC string table.
+// This avoids the old macro pitfall where sizeof(char*)/sizeof(char) == 8 on
+// x64 silently truncated every string to 6 characters.
 extern HINSTANCE hinst; // defined in PluginEntryPoints.cpp
+
+#include "LngLoader.h"
+
+namespace detail {
+inline int LoadStrInto(char* dest, int maxChars, UINT id)
+{
+    if (maxChars <= 0) return 0;
+    const char* lngStr = LngGetString(id);
+    if (lngStr) {
+        strncpy_s(dest, static_cast<size_t>(maxChars) + 1, lngStr, _TRUNCATE);
+        return static_cast<int>(strnlen(dest, static_cast<size_t>(maxChars)));
+    }
+    return LoadStringA(hinst, id, dest, maxChars);
+}
+} // namespace detail
 
 template<size_t N>
 inline int LoadStr(std::array<char, N>& arr, UINT id) {
-    return LoadStringA(hinst, id, arr.data(), static_cast<int>(N) - 1);
+    return detail::LoadStrInto(arr.data(), static_cast<int>(N) - 1, id);
 }
 template<size_t N>
 inline int LoadStr(char (&arr)[N], UINT id) {
-    return LoadStringA(hinst, id, arr, static_cast<int>(N) - 1);
+    return detail::LoadStrInto(arr, static_cast<int>(N) - 1, id);
 }
 // For raw char* cases where only a runtime size is available
 inline int LoadStr(char* p, size_t n, UINT id) {
-    return LoadStringA(hinst, id, p, static_cast<int>(n) - 1);
+    return detail::LoadStrInto(p, static_cast<int>(n) - 1, id);
 }
 
 // ============================================================================

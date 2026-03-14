@@ -485,7 +485,7 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
     sftp::DllExceptionBarrier _barrier;
     return sftp::dll_invoke(_barrier, FALSE, [&]() -> BOOL {
         const std::wstring_view remoteView = RemoteName ? std::wstring_view(RemoteName) : std::wstring_view{};
-        if (remoteView.size() < 3)
+        if (remoteView.size() < 2)
             return false;
 
         const bool hasRemoteSubPath = remoteView.find(L'\\', 1) != std::wstring_view::npos;

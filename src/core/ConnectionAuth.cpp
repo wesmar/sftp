@@ -272,6 +272,11 @@ int PerformAuthentication(
     SFTP_LOG("CONN", "%s", authLog.c_str());
 
     if (auth) {
+        if (LogProc) {
+            const std::string msg = std::format("SFTP: Authentication failed for '{}@{}'",
+                ConnectSettings->user, ConnectSettings->server);
+            LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
+        }
         SFTP_LOG("CONN", "Auth failed, returning SFTP_FAILED");
         return SFTP_FAILED;
     }

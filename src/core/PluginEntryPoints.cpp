@@ -20,6 +20,7 @@
 #include "PluginEntryPoints.h"
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
+#include "LngLoader.h"
 
 // Declared in SftpConnection.cpp
 void StartGlobalLanServices();
@@ -94,6 +95,7 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     // - WCMD_FR.LNG / WCMD_FRA.LNG
     // - WCMD_ES.LNG / WCMD_ESP.LNG
     // - WCMD_IT.LNG / WCMD_ITA.LNG
+    // - WCMD_RU.LNG  / WCMD_RUS.LNG
     if (has("_PL") || has(".PL") || has("POL")) {
         return MAKELANGID(LANG_POLISH, SUBLANG_DEFAULT);
     }
@@ -108,6 +110,9 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     }
     if (has("_IT") || has(".IT") || has("ITA")) {
         return MAKELANGID(LANG_ITALIAN, SUBLANG_ITALIAN);
+    }
+    if (has("_RU") || has(".RU") || has("RUS")) {
+        return MAKELANGID(LANG_RUSSIAN, SUBLANG_DEFAULT);
     }
     if (has("_EN") || has(".EN") || has("ENU") || has("ENG")) {
         return MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
@@ -125,14 +130,30 @@ void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
 
     g_configuredUiLangId = langId;
 
+    // Load external .lng file for non-English languages; clears any previous load.
+    LngLoadForLanguage(langId, hinst);
+
     // Make Win32 resource lookup prefer the language configured in Total Commander.
     SetThreadUILanguage(langId);
     SetThreadLocale(MAKELCID(langId, SORT_DEFAULT));
 
-    // Refresh cached strings that were initially loaded in DllMain.
-    LoadStringW(hinst, IDS_F7NEW, s_f7newconnectionW.data(), static_cast<int>(s_f7newconnectionW.size()) - 1);
+    // Refresh cached strings: prefer .lng translation, fall back to compiled RC resource.
+    const char* f7Str = LngGetString(IDS_F7NEW);
+    if (f7Str) {
+        std::wstring wF7 = unicode_util::utf8_to_wstring(f7Str);
+        wcsncpy_s(s_f7newconnectionW.data(), s_f7newconnectionW.size(), wF7.c_str(), _TRUNCATE);
+    } else {
+        LoadStringW(hinst, IDS_F7NEW, s_f7newconnectionW.data(), static_cast<int>(s_f7newconnectionW.size()) - 1);
+    }
     walcopy(s_f7newconnection, s_f7newconnectionW.data(), countof(s_f7newconnection) - 1);
-    LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
+
+    const char* qcStr = LngGetString(IDS_QUICKCONNECT);
+    if (qcStr) {
+        std::wstring wQc = unicode_util::utf8_to_wstring(qcStr);
+        wcsncpy_s(s_quickconnectW.data(), s_quickconnectW.size(), wQc.c_str(), _TRUNCATE);
+    } else {
+        LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
+    }
     walcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
 }
 
@@ -350,6 +371,45 @@ LPWSTR cut_srv_name(LPWSTR path)
 }
 
 
+// Detects and applies TC language if not already loaded.
+// Called from both FsSetDefaultParams and _FsInit to cover all load orders.
+static void DetectAndApplyLanguage(const char* fallbackIniPath) noexcept
+{
+    if (g_wincmdIniPath[0])
+        return;  // Already loaded by a prior call.
+
+    std::array<char, MAX_PATH> tcIniPath{};
+
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Ghisler\\Total Commander",
+                      0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD type = 0;
+        DWORD bytes = static_cast<DWORD>(tcIniPath.size()) - 1;
+        if (RegQueryValueExA(hKey, "IniFileName", nullptr, &type,
+                             reinterpret_cast<LPBYTE>(tcIniPath.data()), &bytes) == ERROR_SUCCESS
+            && (type == REG_SZ || type == REG_EXPAND_SZ)) {
+            // Path retrieved from registry (may contain %APPDATA% etc.)
+        } else {
+            tcIniPath[0] = '\0';
+        }
+        RegCloseKey(hKey);
+    }
+
+    if (!tcIniPath[0] && fallbackIniPath && fallbackIniPath[0]) {
+        strlcpy(tcIniPath.data(), fallbackIniPath, tcIniPath.size() - 1);
+        char* slash = strrchr(tcIniPath.data(), '\\');
+        if (slash) {
+            slash[1] = '\0';
+            strlcat(tcIniPath.data(), "wincmd.ini", tcIniPath.size() - 1);
+        }
+    }
+
+    if (tcIniPath[0]) {
+        strlcpy(g_wincmdIniPath, tcIniPath.data(), MAX_PATH - 1);
+        ApplyTcLanguageToPluginResources(g_wincmdIniPath);
+    }
+}
+
 static int _FsInit(int PluginNr)
 {
     if (!g_winsockInitialized) {
@@ -361,6 +421,10 @@ static int _FsInit(int PluginNr)
     }
     PluginNumber = PluginNr;
     mainthreadid = GetCurrentThreadId();
+
+    // Load language now in case FsSetDefaultParams was not called yet or registry lookup failed.
+    DetectAndApplyLanguage(nullptr);
+
     InitMultiServer();
     StartGlobalLanServices();  // Start LAN Pair file server + discovery in background
     return 0;
@@ -466,17 +530,10 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
 {
     sftp::DllExceptionBarrier _barrier;
     sftp::dll_invoke_void(_barrier, [&] {
-        std::array<char, MAX_PATH> tcIniPath{};
-        strlcpy(tcIniPath.data(), dps->DefaultIniName, tcIniPath.size() - 1);
-        char* slash = strrchr(tcIniPath.data(), '\\');
-        if (slash) {
-            slash[1] = '\0';
-            strlcat(tcIniPath.data(), "wincmd.ini", tcIniPath.size() - 1);
+        if (dps) {
+            // Detect wincmd.ini from registry, falling back to the path derived from dps->DefaultIniName.
+            DetectAndApplyLanguage(dps->DefaultIniName);
         }
-
-        // Align plugin resource language with Total Commander language setting.
-        strlcpy(g_wincmdIniPath, tcIniPath.data(), MAX_PATH - 1);
-        ApplyTcLanguageToPluginResources(tcIniPath.data());
 
         strlcpy(inifilename, dps->DefaultIniName, MAX_PATH-1);
         LPSTR p = strrchr(inifilename, '\\');
