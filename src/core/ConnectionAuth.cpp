@@ -43,7 +43,7 @@ void newpassfunc(LIBSSH2_SESSION* /*session*/, LPSTR* newpw, int* newpw_len, LPV
                 if (newpass[0] == 0) {
                     WritePrivateProfileString(PassConnectSettings->DisplayName.c_str(), "password", nullptr, PassConnectSettings->IniFileName.c_str());
                 } else {
-                    std::array<char, 256> szEncryptedPassword{};
+                    std::array<char, 1024> szEncryptedPassword{};
                     EncryptString(newpass.data(), szEncryptedPassword.data(), szEncryptedPassword.size());
                     WritePrivateProfileString(PassConnectSettings->DisplayName.c_str(), "password", szEncryptedPassword.data(), PassConnectSettings->IniFileName.c_str());
                 }

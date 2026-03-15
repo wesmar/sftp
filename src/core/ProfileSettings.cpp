@@ -21,7 +21,7 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
         GetPrivateProfileString(proxyentry.data(), "proxyuser", "", proxyUser.data(), proxyUser.size() - 1, iniFileName);
         ConnectResults->proxyserver = proxyServer.data();
         ConnectResults->proxyuser = proxyUser.data();
-        std::array<char, MAX_PATH> szPassword{};
+        std::array<char, 1024> szPassword{};
         if (GetPrivateProfileString(proxyentry.data(), "proxypassword", "", szPassword.data(), szPassword.size(), iniFileName)) {
             std::array<char, MAX_PATH> decPassword{};
             DecryptString(szPassword.data(), decPassword.data(), static_cast<UINT>(decPassword.size()));
@@ -40,7 +40,7 @@ bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCST
 
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName)
 {
-    std::array<char, MAX_PATH> szPassword{};
+    std::array<char, 1024> szPassword{};
     std::array<char, 6> modbuf{};
     ConnectResults->DisplayName = DisplayName ? DisplayName : "";
     ConnectResults->IniFileName = iniFileName ? iniFileName : "";
@@ -145,7 +145,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
             GetPrivateProfileInt(DisplayName, "jumpport", 22, iniFileName));
         ConnectResults->jump_useagent    = GetPrivateProfileInt(DisplayName, "jumpuseagent", 0, iniFileName) != 0;
 
-        std::array<char, MAX_PATH> jumpPass{};
+        std::array<char, 1024> jumpPass{};
         if (GetPrivateProfileString(DisplayName, "jumppassword", "", jumpPass.data(), jumpPass.size(), iniFileName)) {
             std::array<char, MAX_PATH> decJumpPass{};
             DecryptString(jumpPass.data(), decJumpPass.data(), static_cast<UINT>(decJumpPass.size()));

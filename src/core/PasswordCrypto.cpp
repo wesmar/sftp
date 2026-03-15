@@ -63,7 +63,7 @@ std::optional<std::string> Base64Encode(const std::vector<BYTE>& data) {
     if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
                               CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, result.data(), &needed))
         return std::nullopt;
-    result.resize(needed - 1); // CryptBinaryToStringA includes null terminator in count
+    result.resize(needed); // needed on output = chars written, NOT including null terminator
     return result;
 }
 

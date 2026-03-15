@@ -187,7 +187,7 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
                 WritePrivateProfileString(sec, "jumpuseagent", cs->jump_useagent ? "1" : "0", ini);
                 // Password: encrypt like main password.
                 if (!cs->jump_password.empty()) {
-                    std::array<char, MAX_PATH> enc{};
+                    std::array<char, 1024> enc{};
                     EncryptString(cs->jump_password.c_str(), enc.data(), static_cast<UINT>(enc.size()));
                     WritePrivateProfileString(sec, "jumppassword", enc.data(), ini);
                 } else {
@@ -1515,7 +1515,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             LPSTR proxy_str = (ConnectData.proxytype == sftp::Proxy::notused) ? nullptr : buf.data();
             WritePrivateProfileString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
 
-            std::array<char, 256> szEncryptedPassword{};
+            std::array<char, 1024> szEncryptedPassword{};
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
                 if (ConnectData.proxypassword.empty()) {
                     WritePrivateProfileString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
@@ -2376,7 +2376,7 @@ void ConnectionDialog::OnOk()
             WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile", m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
         if (!m_settings->jump_password.empty()) {
-            std::array<char, MAX_PATH> jumpEnc{};
+            std::array<char, 1024> jumpEnc{};
             EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
             WritePrivateProfileString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
         }
@@ -2387,7 +2387,7 @@ void ConnectionDialog::OnOk()
         _itoa_s(m_settings->proxynr, buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
 
-        std::array<char, MAX_PATH> szEncryptedPassword{};
+        std::array<char, 1024> szEncryptedPassword{};
         if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
             if (m_settings->password.empty()) {
                 WritePrivateProfileString(targetProfile.data(), "password", nullptr, dlgIniFileName);
