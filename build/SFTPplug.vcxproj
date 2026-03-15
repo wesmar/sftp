@@ -151,6 +151,7 @@
     <ClCompile Include="..\src\core\SftpConnection.cpp" />
     <ClCompile Include="..\src\core\ProxyNegotiator.cpp" />
     <ClCompile Include="..\src\core\ConnectionDialog.cpp" />
+    <ClCompile Include="..\src\core\DialogLayout.cpp" />
     <ClCompile Include="..\src\core\SftpAuth.cpp" />
     <ClCompile Include="..\src\core\ScpTransfer.cpp" />
     <ClCompile Include="..\src\core\ShellFallbackTransfer.cpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h" />
     <ClInclude Include="..\src\include\LngLoader.h" />
+    <ClInclude Include="..\src\include\DialogLayout.h" />
     <ClInclude Include="..\src\include\DllExceptionBarrier.h" />
     <ClInclude Include="..\src\include\SshDynFunctions.h" />
     <ClInclude Include="..\src\include\CoreUtils.h" />
