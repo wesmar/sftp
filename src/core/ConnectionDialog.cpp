@@ -34,6 +34,7 @@
 #include "JumpHostConnection.h"
 #include "ProfileSettings.h"
 #include "LngLoader.h"
+#include "DialogLayout.h"
 
 extern bool serverfieldchangedbyuser;
 
@@ -380,95 +381,6 @@ static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
 }
 
 // Repositions label + checkbox + button on one row based on actual text widths.
-// Prevents translated text from overlapping or leaving excessive gaps.
-static void ArrangeInlineRow(HWND hWnd, int labelId, int checkId, int btnId)
-{
-    HWND hLabel = GetDlgItem(hWnd, labelId);
-    HWND hCheck = GetDlgItem(hWnd, checkId);
-    HWND hBtn   = GetDlgItem(hWnd, btnId);
-    if (!hLabel || !hCheck || !hBtn)
-        return;
-
-    HDC hdc = GetDC(hWnd);
-    HFONT hFont    = reinterpret_cast<HFONT>(SendMessage(hWnd, WM_GETFONT, 0, 0));
-    HFONT hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
-
-    wchar_t buf[256] = {};
-    SIZE szLabel{}, szCheck{};
-    GetWindowTextW(hLabel, buf, 255);
-    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szLabel);
-    GetWindowTextW(hCheck, buf, 255);
-    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szCheck);
-
-    SelectObject(hdc, hOldFont);
-    ReleaseDC(hWnd, hdc);
-
-    RECT rLabel{}, rCheck{}, rBtn{}, rDlg{};
-    GetWindowRect(hLabel, &rLabel); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rLabel), 2);
-    GetWindowRect(hCheck, &rCheck); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rCheck), 2);
-    GetWindowRect(hBtn,   &rBtn);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rBtn),   2);
-    GetClientRect(hWnd, &rDlg);
-
-    constexpr int kGap   = 4;   // pixels between controls
-    constexpr int kBoxW  = 16;  // checkbox square
-
-    const int labelX = rLabel.left;
-    const int labelW = szLabel.cx + kGap;
-    const int checkX = labelX + labelW + kGap;
-    const int btnW   = rBtn.right  - rBtn.left;
-    const int btnH   = rBtn.bottom - rBtn.top;
-
-    // Button positioned right after checkbox text, clamped to dialog right edge.
-    const int rawBtnX   = checkX + kBoxW + static_cast<int>(szCheck.cx) + kGap * 2;
-    const int finalBtnX = (std::min)(rawBtnX, static_cast<int>(rDlg.right) - btnW - kGap);
-
-    // Checkbox: fill the space between its start and the button.
-    const int checkW = (std::max)(finalBtnX - kGap - checkX, kBoxW + 4);
-
-    SetWindowPos(hLabel, nullptr, labelX,    rLabel.top, labelW, rLabel.bottom - rLabel.top, SWP_NOZORDER);
-    SetWindowPos(hCheck, nullptr, checkX,    rCheck.top, checkW, rCheck.bottom - rCheck.top, SWP_NOZORDER);
-    SetWindowPos(hBtn,   nullptr, finalBtnX, rBtn.top,   btnW,   btnH,                       SWP_NOZORDER);
-}
-
-// Arrange: label → small help button → checkbox stretching to right edge.
-static void ArrangePasswordRow(HWND hWnd, int labelId, int helpBtnId, int checkId)
-{
-    HWND hLabel   = GetDlgItem(hWnd, labelId);
-    HWND hHelpBtn = GetDlgItem(hWnd, helpBtnId);
-    HWND hCheck   = GetDlgItem(hWnd, checkId);
-    if (!hLabel || !hHelpBtn || !hCheck)
-        return;
-
-    HDC hdc = GetDC(hWnd);
-    HFONT hFont    = reinterpret_cast<HFONT>(SendMessage(hWnd, WM_GETFONT, 0, 0));
-    HFONT hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
-    wchar_t buf[256] = {};
-    SIZE szLabel{};
-    GetWindowTextW(hLabel, buf, 255);
-    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szLabel);
-    SelectObject(hdc, hOldFont);
-    ReleaseDC(hWnd, hdc);
-
-    RECT rLabel{}, rHelpBtn{}, rCheck{}, rDlg{};
-    GetWindowRect(hLabel,   &rLabel);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rLabel),   2);
-    GetWindowRect(hHelpBtn, &rHelpBtn); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rHelpBtn), 2);
-    GetWindowRect(hCheck,   &rCheck);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rCheck),   2);
-    GetClientRect(hWnd, &rDlg);
-
-    constexpr int kGap = 4;
-    const int labelX = rLabel.left;
-    const int labelW = szLabel.cx + kGap;
-    const int helpX  = labelX + labelW + kGap;
-    const int helpW  = rHelpBtn.right - rHelpBtn.left;
-    const int helpH  = rHelpBtn.bottom - rHelpBtn.top;
-    const int checkX = helpX + helpW + kGap;
-    const int checkW = rDlg.right - checkX - kGap;
-
-    SetWindowPos(hLabel,   nullptr, labelX, rLabel.top,   labelW, rLabel.bottom - rLabel.top, SWP_NOZORDER);
-    SetWindowPos(hHelpBtn, nullptr, helpX,  rHelpBtn.top, helpW,  helpH,                      SWP_NOZORDER);
-    SetWindowPos(hCheck,   nullptr, checkX, rCheck.top,   checkW, rCheck.bottom - rCheck.top, SWP_NOZORDER);
-}
-
 static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std::wstring_view> args)
 {
     size_t pos = 0;
@@ -1969,6 +1881,12 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
     ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
+    ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
+    ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
+    ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
+    ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
+    ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
+    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONCOMBO, IDC_PHPSHELL);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();

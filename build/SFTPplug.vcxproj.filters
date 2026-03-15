@@ -40,6 +40,9 @@
     <ClCompile Include="..\src\core\ConnectionDialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\DialogLayout.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\ScpTransfer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -152,6 +155,9 @@
   <!-- Header Files -->
   <ItemGroup>
     <ClInclude Include="..\src\include\PluginEntryPoints.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\DialogLayout.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\DllExceptionBarrier.h">
