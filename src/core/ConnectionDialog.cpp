@@ -33,6 +33,7 @@
 #include "LanPair.h"
 #include "JumpHostConnection.h"
 #include "ProfileSettings.h"
+#include "LngLoader.h"
 
 extern bool serverfieldchangedbyuser;
 
@@ -1556,9 +1557,9 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         case IDC_PROXYHELP:
         {
             std::array<WCHAR, 100> szCaption{};
-            LoadStringW(hinst, IDS_HELP_CAPTION, szCaption.data(), static_cast<int>(szCaption.size()));
+            LngLoadStringW(hinst, IDS_HELP_CAPTION, szCaption.data(), static_cast<int>(szCaption.size()));
             std::array<WCHAR, 1024> szBuffer{};
-            LoadStringW(hinst, IDS_HELP_PROXY, szBuffer.data(), static_cast<int>(szBuffer.size()));
+            LngLoadStringW(hinst, IDS_HELP_PROXY, szBuffer.data(), static_cast<int>(szBuffer.size()));
             if (RequestProcW)
                 RequestProcW(PluginNumber, RT_MsgOK, szCaption.data(), szBuffer.data(), nullptr, 0);
             else
@@ -1618,9 +1619,9 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
     std::array<WCHAR, 100> addproxy{};
     std::array<WCHAR, 100> httpproxy{};
     std::array<WCHAR, 256> buf{};
-    LoadStringW(hinst, IDS_NO_PROXY,   noproxy.data(),   static_cast<int>(noproxy.size()));
-    LoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
-    LoadStringW(hinst, IDS_ADD_PROXY,  addproxy.data(),  static_cast<int>(addproxy.size()));
+    LngLoadStringW(hinst, IDS_NO_PROXY,   noproxy.data(),   static_cast<int>(noproxy.size()));
+    LngLoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
+    LngLoadStringW(hinst, IDS_ADD_PROXY,  addproxy.data(),  static_cast<int>(addproxy.size()));
 
     // Item 0: "No proxy" — itemdata=0
     LRESULT i0 = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)noproxy.data());
@@ -1705,9 +1706,9 @@ bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileNam
 static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 {
     std::array<WCHAR, 100> szCaption{};
-    LoadStringW(hinst, IDS_HELP_CAPTION, szCaption.data(), static_cast<int>(szCaption.size()));
+    LngLoadStringW(hinst, IDS_HELP_CAPTION, szCaption.data(), static_cast<int>(szCaption.size()));
     std::array<WCHAR, 1024> szBuffer{};
-    LoadStringW(hinst, bodyStringId, szBuffer.data(), static_cast<int>(szBuffer.size()));
+    LngLoadStringW(hinst, bodyStringId, szBuffer.data(), static_cast<int>(szBuffer.size()));
     if (RequestProcW)
         RequestProcW(PluginNumber, RT_MsgOK, szCaption.data(), szBuffer.data(), nullptr, 0);
     else
@@ -1793,13 +1794,27 @@ static void OnSessionChangedCommand(HWND hWnd, ConnectDialogContext* dlgCtx, LPC
 
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
 {
-    int proxynr = GetProxyNrFromCombo(hWnd);
+    const int idx = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCURSEL, 0, 0);
+    const LRESULT selData = (idx >= 0) ? SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, idx, 0) : CB_ERR;
+
+    int proxynr;
+    if (selData == (LRESULT)-1) {
+        // "Add new proxy" selected — determine next available slot
+        const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
+        const int lastRealIdx = count - 2;  // last item before "Add new proxy"
+        const LRESULT lastData = (lastRealIdx >= 1)
+            ? SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0) : 0;
+        proxynr = (lastData > 0) ? (int)lastData + 1 : 2;
+    } else {
+        proxynr = GetProxyNrFromCombo(hWnd);
+    }
+
     if (proxynr > 0) {
         ProxyDialogContext proxyCtx;
         proxyCtx.proxynr = proxynr;
         proxyCtx.ownerConnectResults = dlgConnectResults;
         proxyCtx.iniFileName = dlgCtx->iniFileName;
-        
+
         if (IDOK == ShowLocalizedDialogBoxParam(IDD_PROXY, GetActiveWindow(), ProxyDlgProc, (LPARAM)&proxyCtx))
             fillProxyCombobox(hWnd, proxynr, dlgCtx->iniFileName);
     }

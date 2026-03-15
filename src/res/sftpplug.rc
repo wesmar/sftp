@@ -143,18 +143,18 @@ BEGIN
     CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,
                     200,19,44,10
     CONTROL         "Proxy host:",IDC_PROXY_LABEL_HOST,"Static",SS_SIMPLE | WS_GROUP,
-                    12,36,43,8
-    EDITTEXT        IDC_PROXYSERVER,69,34,198,12,ES_AUTOHSCROLL
+                    12,36,90,8
+    EDITTEXT        IDC_PROXYSERVER,104,34,163,12,ES_AUTOHSCROLL
     CONTROL         "Proxy user name:",IDC_PROXY_LABEL_USER,"Static",SS_SIMPLE |
-                    WS_GROUP,12,52,54,8
-    EDITTEXT        IDC_PROXYUSERNAME,69,50,198,12,ES_AUTOHSCROLL
+                    WS_GROUP,12,52,90,8
+    EDITTEXT        IDC_PROXYUSERNAME,104,50,163,12,ES_AUTOHSCROLL
     CONTROL         "Proxy password:",IDC_PROXY_LABEL_PASS,"Static",SS_SIMPLE |
-                    WS_GROUP,12,67,55,8
-    EDITTEXT        IDC_PROXYPASSWORD,69,66,198,12,ES_PASSWORD | 
+                    WS_GROUP,12,67,90,8
+    EDITTEXT        IDC_PROXYPASSWORD,104,66,163,12,ES_PASSWORD |
                     ES_AUTOHSCROLL
     PUSHBUTTON      "?",IDC_PROXYHELP,256,19,12,10
     GROUPBOX        "Proxy settings",IDC_PROXY_GROUP,7,7,266,88
-    PUSHBUTTON      "Change password...",IDC_EDITPASS,69,66,198,14,NOT 
+    PUSHBUTTON      "Change password...",IDC_EDITPASS,104,66,163,14,NOT
                     WS_VISIBLE
     CONTROL         "Protect password with password manager (TC>=7.5)",
                     IDC_CRYPTPASS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,
