@@ -430,6 +430,45 @@ static void ArrangeInlineRow(HWND hWnd, int labelId, int checkId, int btnId)
     SetWindowPos(hBtn,   nullptr, finalBtnX, rBtn.top,   btnW,   btnH,                       SWP_NOZORDER);
 }
 
+// Arrange: label → small help button → checkbox stretching to right edge.
+static void ArrangePasswordRow(HWND hWnd, int labelId, int helpBtnId, int checkId)
+{
+    HWND hLabel   = GetDlgItem(hWnd, labelId);
+    HWND hHelpBtn = GetDlgItem(hWnd, helpBtnId);
+    HWND hCheck   = GetDlgItem(hWnd, checkId);
+    if (!hLabel || !hHelpBtn || !hCheck)
+        return;
+
+    HDC hdc = GetDC(hWnd);
+    HFONT hFont    = reinterpret_cast<HFONT>(SendMessage(hWnd, WM_GETFONT, 0, 0));
+    HFONT hOldFont = reinterpret_cast<HFONT>(SelectObject(hdc, hFont));
+    wchar_t buf[256] = {};
+    SIZE szLabel{};
+    GetWindowTextW(hLabel, buf, 255);
+    GetTextExtentPoint32W(hdc, buf, static_cast<int>(wcslen(buf)), &szLabel);
+    SelectObject(hdc, hOldFont);
+    ReleaseDC(hWnd, hdc);
+
+    RECT rLabel{}, rHelpBtn{}, rCheck{}, rDlg{};
+    GetWindowRect(hLabel,   &rLabel);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rLabel),   2);
+    GetWindowRect(hHelpBtn, &rHelpBtn); MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rHelpBtn), 2);
+    GetWindowRect(hCheck,   &rCheck);   MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rCheck),   2);
+    GetClientRect(hWnd, &rDlg);
+
+    constexpr int kGap = 4;
+    const int labelX = rLabel.left;
+    const int labelW = szLabel.cx + kGap;
+    const int helpX  = labelX + labelW + kGap;
+    const int helpW  = rHelpBtn.right - rHelpBtn.left;
+    const int helpH  = rHelpBtn.bottom - rHelpBtn.top;
+    const int checkX = helpX + helpW + kGap;
+    const int checkW = rDlg.right - checkX - kGap;
+
+    SetWindowPos(hLabel,   nullptr, labelX, rLabel.top,   labelW, rLabel.bottom - rLabel.top, SWP_NOZORDER);
+    SetWindowPos(hHelpBtn, nullptr, helpX,  rHelpBtn.top, helpW,  helpH,                      SWP_NOZORDER);
+    SetWindowPos(hCheck,   nullptr, checkX, rCheck.top,   checkW, rCheck.bottom - rCheck.top, SWP_NOZORDER);
+}
+
 static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std::wstring_view> args)
 {
     size_t pos = 0;
@@ -1929,6 +1968,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     });
 
     ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
+    ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();

@@ -1,26 +1,16 @@
-//Microsoft Developer Studio generated resource script.
+// Microsoft Visual C++ generated resource script.
 //
-
 #include "resource.h"
-
-#define APSTUDIO_READONLY_SYMBOLS
+#include <winresrc.h>
+#ifndef IDC_STATIC
+#define IDC_STATIC -1
+#endif
 /////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 2 resource.
-//
-#include "afxres.h"
-
-/////////////////////////////////////////////////////////////////////////////
-#undef APSTUDIO_READONLY_SYMBOLS
-
-/////////////////////////////////////////////////////////////////////////////
-// English (U.S.) resources
+// English (United States) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-#ifdef _WIN32
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(65001)
-#endif //_WIN32
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -33,7 +23,7 @@ EXSTYLE WS_EX_NOPARENTNOTIFY
 CAPTION "Connect to SFTP Server"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    LTEXT           "&Connect to: (server/path or server:port/path)", IDC_LABEL_CONNECTTO,5,5,178,8
+    LTEXT           "&Connect to: (server/path or server:port/path)",IDC_LABEL_CONNECTTO,5,5,178,8
     CONTROL         "Auto",IDC_PROTOAUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,186,5,27,10
     CONTROL         "IPv4",IDC_PROTOV4,"Button",BS_AUTORADIOBUTTON,218,5,31,10
     CONTROL         "IPv6",IDC_PROTOV6,"Button",BS_AUTORADIOBUTTON,250,5,31,10
@@ -41,21 +31,21 @@ BEGIN
     LTEXT           "&User name:",IDC_LABEL_USERNAME,5,31,266,8
     EDITTEXT        IDC_USERNAME,5,42,276,12,ES_AUTOHSCROLL
     LTEXT           "&Password:",IDC_PASSLABEL,5,58,61,8
-    PUSHBUTTON      "?",IDC_PASSWORDHELP,78,57,12,10
-    CONTROL         "Use SSH agent (Pageant)",IDC_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,90,58,150,8
+    PUSHBUTTON      "?",IDC_PASSWORDHELP,47,57,12,10
+    CONTROL         "Use SSH agent (Pageant)",IDC_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,66,58,150,8
     PUSHBUTTON      "Change password...",IDC_EDITPASS,5,71,276,14,NOT WS_VISIBLE
     EDITTEXT        IDC_PASSWORD,5,68,276,12,ES_PASSWORD | ES_AUTOHSCROLL
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82, 276,10
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,276,10
     GROUPBOX        "Client certificate for &authentication:",IDC_LABEL_CERTGROUP,5,92,276,60
     LTEXT           "Public key file (*.pub):",IDC_STATICPUB,10,103,240,8
-    EDITTEXT        IDC_PUBKEY,10,112,249,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_PUBKEY,10,112,232,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "?",IDC_CERTHELP,246,112,12,12
     PUSHBUTTON      ">>",IDC_LOADPUBKEY,260,112,16,12
     LTEXT           "Private key file (*.pem;*.ppk):",IDC_STATICPEM,10,126,253,8
-    EDITTEXT        IDC_PRIVKEY,10,136,249,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_PRIVKEY,10,136,232,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "?",IDC_CERTHELPPRIV,246,136,12,12
     PUSHBUTTON      ">>",IDC_LOADPRIVKEY,260,136,16,12
-    PUSHBUTTON      "?",IDC_CERTHELP,246,100,12,10
-    PUSHBUTTON      "?",IDC_CERTHELPPRIV,246,124,12,10
     CONTROL         "Compress with &ZLIB (may fail on some servers)",IDC_COMPRESS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,152,276,10
     CONTROL         "Log full directory listings (&debug)",IDC_DETAILED_LOG,
@@ -69,7 +59,8 @@ BEGIN
     COMBOBOX        IDC_TRANSFERMODE,199,173,82,46,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "System:",IDC_SYSTEMLABEL,165,187,34,8
     COMBOBOX        IDC_SYSTEM,199,185,82,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "Encoding (codepage) of file names:",IDC_CODEPAGELABEL,"Static",SS_SIMPLE | WS_GROUP,5,202,140,8
+    CONTROL         "Encoding (codepage) of file names:",IDC_CODEPAGELABEL,
+                    "Static",SS_SIMPLE | WS_GROUP,5,202,140,8
     COMBOBOX        IDC_UTF8,199,199,82,127,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "?",IDC_UTF8HELP,185,200,12,10
     GROUPBOX        " User &rights of newly created files/directories: ",IDC_PERMISSIONS_GROUP,5,212,266,26,WS_GROUP
@@ -77,7 +68,7 @@ BEGIN
     EDITTEXT        IDC_FILEMOD,87,222,28,12,ES_AUTOHSCROLL | ES_NUMBER
     LTEXT           "New folders:",IDC_DIRMOD_LABEL,160,224,47,8
     EDITTEXT        IDC_DIRMOD,210,222,28,12,ES_AUTOHSCROLL | ES_NUMBER
-    GROUPBOX        " LAN Pair Session: ",IDC_LANPAIR_GROUP,5,212,266,26,WS_GROUP | NOT WS_VISIBLE
+    GROUPBOX        " LAN Pair Session: ",IDC_LANPAIR_GROUP,5,212,266,26,NOT WS_VISIBLE | WS_GROUP
     LTEXT           "Session timeout (min):",IDC_LAN_TIMEOUT_LABEL,13,224,80,8,NOT WS_VISIBLE
     EDITTEXT        IDC_LAN_TIMEOUT,95,222,30,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
     LTEXT           "(0=no limit)",IDC_LAN_TIMEOUT_HINT,130,224,50,8,NOT WS_VISIBLE
@@ -88,7 +79,7 @@ BEGIN
     CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,49,257,104,8
     PUSHBUTTON      "Jump...",IDC_JUMP_BUTTON,195,255,40,14
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,266,8
-    COMBOBOX        IDC_PROXYCOMBO,5,283,254,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_PROXYCOMBO,5,283,253,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      ">>",IDC_PROXYBUTTON,261,282,20,14
     PUSHBUTTON      "Delete last proxy",IDC_DELETELAST,5,301,98,14
     PUSHBUTTON      "Import...",IDC_IMPORTSESSIONS,105,301,58,14
@@ -97,7 +88,7 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,231,301,50,14
 END
 
-IDD_PROPERTIES DIALOGEX DISCARDABLE  0, 0, 249, 214
+IDD_PROPERTIES DIALOGEX 0, 0, 249, 214
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Properties"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
@@ -111,56 +102,68 @@ BEGIN
     LTEXT           "Permissions:",IDC_STATIC,16,59,40,8
     LTEXT           "Size:",IDC_STATIC,16,72,16,8
     LTEXT           "Last modified:",IDC_STATIC,16,85,44,8
-    EDITTEXT        IDC_PROP_NAME,72,20,164,12,ES_AUTOHSCROLL | ES_READONLY | 
-                    NOT WS_BORDER
-    EDITTEXT        IDC_PROP_OWNER,72,33,164,12,ES_AUTOHSCROLL | ES_READONLY | 
-                    NOT WS_BORDER
-    EDITTEXT        IDC_PROP_GROUP,72,46,164,12,ES_AUTOHSCROLL | ES_READONLY | 
-                    NOT WS_BORDER
-    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,164,12,ES_AUTOHSCROLL | 
-                    ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_SIZE,72,72,164,12,ES_AUTOHSCROLL | ES_READONLY | 
-                    NOT WS_BORDER
-    EDITTEXT        IDC_PROP_MODIFIED,72,85,164,12,ES_AUTOHSCROLL | 
-                    ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_NAME,72,20,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_OWNER,72,33,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_GROUP,72,46,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_SIZE,72,72,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_MODIFIED,72,85,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
     GROUPBOX        " Raw STAT reply",IDC_STATIC,7,103,235,88
-    EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE | 
-                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT 
-                    WS_BORDER
+    EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
 END
 
-IDD_PROXY DIALOGEX DISCARDABLE  0, 0, 280, 119
+IDD_PROXY DIALOGEX 0, 0, 280, 119
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Proxy Settings"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    CONTROL         "&No proxy",IDC_NOPROXY,"Button",BS_AUTORADIOBUTTON,12,
-                    19,45,10
-    CONTROL         "HTTP CONNECT",IDC_OTHERPROXY,"Button",
-                    BS_AUTORADIOBUTTON,67,19,67,10
-    CONTROL         "SOCKS 4/4a",IDC_SOCKS4APROXY,"Button",
-                    BS_AUTORADIOBUTTON,144,19,53,10
-    CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,
-                    200,19,44,10
-    CONTROL         "Proxy host:",IDC_PROXY_LABEL_HOST,"Static",SS_SIMPLE | WS_GROUP,
-                    12,36,90,8
+    CONTROL         "&No proxy",IDC_NOPROXY,"Button",BS_AUTORADIOBUTTON,12,19,45,10
+    CONTROL         "HTTP CONNECT",IDC_OTHERPROXY,"Button",BS_AUTORADIOBUTTON,67,19,67,10
+    CONTROL         "SOCKS 4/4a",IDC_SOCKS4APROXY,"Button",BS_AUTORADIOBUTTON,144,19,53,10
+    CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,200,19,44,10
+    CONTROL         "Proxy host:",IDC_PROXY_LABEL_HOST,"Static",SS_SIMPLE | WS_GROUP,12,36,90,8
     EDITTEXT        IDC_PROXYSERVER,104,34,163,12,ES_AUTOHSCROLL
-    CONTROL         "Proxy user name:",IDC_PROXY_LABEL_USER,"Static",SS_SIMPLE |
-                    WS_GROUP,12,52,90,8
+    CONTROL         "Proxy user name:",IDC_PROXY_LABEL_USER,"Static",SS_SIMPLE | WS_GROUP,12,52,90,8
     EDITTEXT        IDC_PROXYUSERNAME,104,50,163,12,ES_AUTOHSCROLL
-    CONTROL         "Proxy password:",IDC_PROXY_LABEL_PASS,"Static",SS_SIMPLE |
-                    WS_GROUP,12,67,90,8
-    EDITTEXT        IDC_PROXYPASSWORD,104,66,163,12,ES_PASSWORD |
-                    ES_AUTOHSCROLL
+    CONTROL         "Proxy password:",IDC_PROXY_LABEL_PASS,"Static",SS_SIMPLE | WS_GROUP,12,67,90,8
+    EDITTEXT        IDC_PROXYPASSWORD,104,66,163,12,ES_PASSWORD | ES_AUTOHSCROLL
     PUSHBUTTON      "?",IDC_PROXYHELP,256,19,12,10
     GROUPBOX        "Proxy settings",IDC_PROXY_GROUP,7,7,266,88
-    PUSHBUTTON      "Change password...",IDC_EDITPASS,104,66,163,14,NOT
-                    WS_VISIBLE
-    CONTROL         "Protect password with password manager (TC>=7.5)",
-                    IDC_CRYPTPASS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,
-                    81,258,10
+    PUSHBUTTON      "Change password...",IDC_EDITPASS,104,66,163,14,NOT WS_VISIBLE
+    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,81,258,10
     DEFPUSHBUTTON   "OK",IDOK,167,98,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,223,98,50,14
+END
+
+IDD_JUMPHOST DIALOGEX 0, 0, 300, 185
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SSH Jump Host (ProxyJump) Settings"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    GROUPBOX        "Jump host connection",IDC_JUMP_GROUP,5,5,290,170
+    CONTROL         "&Use jump host (ProxyJump)",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,17,180,10
+    LTEXT           "Jump host:",IDC_JUMP_LABEL_HOST,12,33,50,8
+    EDITTEXT        IDC_JUMP_HOST,65,31,155,12,ES_AUTOHSCROLL
+    LTEXT           "Port:",IDC_JUMP_LABEL_PORT,225,33,18,8
+    EDITTEXT        IDC_JUMP_PORT,245,31,43,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "User name:",IDC_JUMP_LABEL_USER,12,50,50,8
+    EDITTEXT        IDC_JUMP_USER,65,48,223,12,ES_AUTOHSCROLL
+    LTEXT           "&Password:",IDC_JUMP_LABEL_PASS,12,67,50,8
+    EDITTEXT        IDC_JUMP_PASSWORD,65,65,223,12,ES_PASSWORD | ES_AUTOHSCROLL
+    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_JUMP_CRYPTPASS,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,80,276,10
+    PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,65,223,14,NOT WS_VISIBLE
+    LTEXT           "Public key file (*.pub):",IDC_JUMP_LABEL_PUBKEY,12,95,120,8
+    EDITTEXT        IDC_JUMP_PUBKEY,12,105,260,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_JUMP_LOADPUBKEY,274,105,16,12
+    LTEXT           "Private key file (*.pem;*.ppk):",IDC_JUMP_LABEL_PRIVKEY,12,121,180,8
+    EDITTEXT        IDC_JUMP_PRIVKEY,12,131,260,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_JUMP_LOADPRIVKEY,274,131,16,12
+    CONTROL         "Use SSH &agent (Pageant) for jump host auth",IDC_JUMP_USEAGENT,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,149,276,10
+    DEFPUSHBUTTON   "OK",IDOK,186,163,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,242,163,50,14
 END
 
 
@@ -170,7 +173,7 @@ END
 //
 
 #ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO DISCARDABLE 
+GUIDELINES DESIGNINFO
 BEGIN
     IDD_WEBDAV, DIALOG
     BEGIN
@@ -201,14 +204,67 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON0               ICON                    "iconconnection.ico"
+
+IDI_ICON1               ICON                    "icon1.ico"
+
+IDI_ICON2               ICON                    "icon2.ico"
+
+IDI_ICON1SMALL          ICON                    "icon3.ico"
+
+IDI_ICON2SMALL          ICON                    "icon4.ico"
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_WEBDAV AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // String Table
 //
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_STRING12001         "Out of handles"
     IDS_STRING12002         "Timeout"
-
     IDS_STRING12003         "Extended error"
     IDS_STRING12004         "Internal Error"
     IDS_STRING12005         "Invalid URL"
@@ -224,7 +280,7 @@ BEGIN
     IDS_STRING12015         "Login failure"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_STRING12016         "Invalid operation"
     IDS_STRING12017         "Operation cancelled"
@@ -244,7 +300,7 @@ BEGIN
     IDS_STRING12031         "Connection reset"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_STRING12032         "Force retry"
     IDS_STRING12033         "Invalid proxy request"
@@ -264,7 +320,7 @@ BEGIN
     IDS_STRING12047         "Async thread failed"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_STRING12048         "Redirect scheme change"
     IDS_STRING12049         "Dialog pending"
@@ -272,16 +328,18 @@ BEGIN
     IDS_STRING12051         "Unknown"
     IDS_STRING12052         "HTTPS to HTTP submit redirection"
     IDS_STRING12053         "Insert CD-ROM"
+    IDS_LAN_ROLE_PROMPT     "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
+    IDS_LAN_SESSION_TIMEOUT "Session timeout: [__] min (0=no limit)"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_F7NEW               "F7 - help.txt"
     IDS_HELPTEXT            "Plugin help:\r\nF7:\tCreate new connection (TC shows New Folder - enter connection name)\r\nF8/Del:\tDelete connection\r\nEnter:\tConnect\r\nAlt+Enter:\tChange options\r\n\r\nTransfer modes:\r\nSSH (SFTP/SCP):\tDefault, fastest when SSH access is available\r\nUse SCP for data:\tUse when SFTP is blocked/unstable\r\nUse SCP only:\tDisable SFTP completely (legacy hosts)\r\nShell transfer force:\tForce shell-based transfer (dd/base64)\r\nPHP Agent (HTTP):\tNo SSH account needed; use uploaded sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal over HTTP via sftp.php"
     IDS_QUICKCONNECT        "Quick Connection"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_HELP_CAPTION        "Help"
     IDS_HELP_UTF8           "Here you can configure how the server sends file names with accents. When you choose 'auto-detect', the plugin will get some environment variables (like LANG) and send the command 'locale' to determine the character encoding used by the server. This may not work with all servers, so if you know that your server uses UTF-8, or file names in file lists appear with strange looking characters instead of accents, then please choose 'yes' manually."
@@ -299,7 +357,7 @@ BEGIN
     IDS_ERR_AUTH_KEYBDINT   "Error: Authentication by keyboard-interactive failed!"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_ERR_INIT_SFTP       "Error: Could not initialize SFTP session!\n"
     IDS_PROXY_PASSWORD_FOR  "SFTP proxy password for "
@@ -320,7 +378,7 @@ BEGIN
     IDS_ERR_LOAD_PUBKEY     "Cannot open public key file!\n"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_ERR_LOAD_PRIVKEY    "Cannot open private key file!\n"
     IDS_ERR_PUBKEY_WRONG_FORMAT 
@@ -341,7 +399,7 @@ BEGIN
     IDS_GET_DIR             "Get directory: "
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_ERR_GET_DIR         "Directory not opened: "
     IDS_MK_DIR              "Create directory: "
@@ -361,7 +419,7 @@ BEGIN
     IDS_SOCKS5PROXYERR      "SOCKS 5 Proxy user/password error!"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_GENERALSOCKSFAILURE "General SOCKS server failure!"
     IDS_CONNNOTALLOWED      "Connection not allowed by ruleset!"
@@ -381,7 +439,7 @@ BEGIN
     IDS_MACOS               "MacOS (2)"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_1250                "Eastern Europe (1250)"
     IDS_1251                "Cyrillic Windows (1251)"
@@ -401,7 +459,7 @@ BEGIN
     IDS_850                 "DOS-LATIN1 (850)"
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_20866               "Cyrillic KOI8-R (20866)"
     IDS_OTHER               "Other (enter manually)"
@@ -422,123 +480,98 @@ BEGIN
     IDS_PROXY_PASS_TITLE    "Proxy password for user: "
 END
 
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
     IDS_PASS_TITLE          "Server password for user: "
     IDS_PASS_CHANGE_REQUEST "The server requests that you change your password. New password:"
     IDS_DLL_VERSION         "libssh2 has to be version 1.7.0 or higher to support filesize > 2 GB over SCP."
     IDS_NO_2GB_SUPPORT      "The server may not support the transfer of files >2GB via SCP! Try anyway?"
     IDS_HELP_PASSWORD       "For security reasons, you should only save passwords protected by a master password.\n\nIf you need 2 passwords (for private key and login), enter them as follows:\n\n""KeyPassword"",""LoginPasswort"""
+    IDS_TRANSFERMODE_LANPAIR "LAN Pair (SMB-like)"
+    IDS_LAN_ROLE_LABEL      "Pair role:"
+    IDS_LAN_PEER_LABEL      "Peer:"
+    IDS_LAN_ROLE_AUTO       "Auto"
+    IDS_LAN_ROLE_RECEIVER   "Receiver"
+    IDS_LAN_ROLE_DONOR      "Donor"
+    IDS_LAN_PEER_AUTODISC   "Auto-discovery"
+    IDS_BUTTON_PAIR         "Pair..."
+    IDS_BUTTON_SHELL        "Shell..."
+    IDS_LAN_TITLE           "LAN Pair"
+    IDS_LAN_ERR_PASSWORD    "Pairing password (optional � leave empty to use stored trust key)."
 END
 
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icons
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_ICON0               ICON    DISCARDABLE     "iconconnection.ico"
-IDI_ICON1               ICON    DISCARDABLE     "icon1.ico"
-IDI_ICON2               ICON    DISCARDABLE     "icon2.ico"
-IDI_ICON1SMALL          ICON    DISCARDABLE     "icon3.ico"
-IDI_ICON2SMALL          ICON    DISCARDABLE     "icon4.ico"
-
-STRINGTABLE DISCARDABLE 
+STRINGTABLE
 BEGIN
-    IDS_TRANSFERMODE_LANPAIR     "LAN Pair (SMB-like)"
-    IDS_LAN_ROLE_LABEL           "Pair role:"
-    IDS_LAN_PEER_LABEL           "Peer:"
-    IDS_LAN_ROLE_AUTO            "Auto"
-    IDS_LAN_ROLE_RECEIVER        "Receiver"
-    IDS_LAN_ROLE_DONOR           "Donor"
-    IDS_LAN_PEER_AUTODISC        "Auto-discovery"
-    IDS_BUTTON_PAIR              "Pair..."
-    IDS_BUTTON_SHELL             "Shell..."
-    IDS_LAN_TITLE                "LAN Pair"
-    IDS_LAN_ERR_PASSWORD         "Pairing password (optional — leave empty to use stored trust key)."
     IDS_LAN_MSG_RECEIVER_STOPPED "LAN Pair receiver stopped."
-    IDS_LAN_ERR_RECEIVER_START   "Receiver start failed: {}"
-    IDS_LAN_MSG_RECEIVER_STARTED "LAN Pair receiver started (port 45846). Click Pair... again to stop."
-    IDS_LAN_ERR_SELECT_PEER      "Select discovered peer first in Peer list."
+    IDS_LAN_ERR_RECEIVER_START "Receiver start failed: {}"
+    IDS_LAN_MSG_RECEIVER_STARTED 
+                            "LAN Pair receiver started (port 45846). Click Pair... again to stop."
+    IDS_LAN_ERR_SELECT_PEER "Select discovered peer first in Peer list."
     IDS_LAN_ERR_PEER_UNAVAILABLE "Selected peer is no longer available."
-    IDS_LAN_ERR_PAIR_FAILED      "Pairing failed: {}"
-    IDS_LAN_MSG_PAIR_OK          "Pairing OK with {} ({})"
-    IDS_LAN_PASSWORD_LABEL       "Pairing password:"
-    IDS_LAN_ROLE_PROMPT          "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
-    IDS_LAN_SESSION_TIMEOUT      "Session timeout: [__] min (0=no limit)"
+    IDS_LAN_ERR_PAIR_FAILED "Pairing failed: {}"
+    IDS_LAN_MSG_PAIR_OK     "Pairing OK with {} ({})"
+    IDS_LAN_PASSWORD_LABEL  "Pairing password:"
     IDS_LAN_MSG_RECEIVER_RUNNING "LAN Pair receiver already running."
-    IDS_LAN_MSG_ACCEPTED         "LAN Pair accepted: {} ({})"
-    IDS_LAN_MSG_AUTO_LISTEN      "LAN Pair: listening. Role dialog will appear when peer is detected."
-
+    IDS_LAN_MSG_ACCEPTED    "LAN Pair accepted: {} ({})"
+    IDS_LAN_MSG_AUTO_LISTEN "LAN Pair: listening. Role dialog will appear when peer is detected."
+    IDS_DLG_CAPTION         "Connect to SFTP Server"
+    IDS_DLG_CONNECTTO       "&Connect to: (server/path or server:port/path)"
+    IDS_DLG_USERNAME        "&User name:"
+    IDS_DLG_USEAGENT        "Use SSH agent (Pageant)"
 END
 
-STRINGTABLE DISCARDABLE
+STRINGTABLE
 BEGIN
-    IDS_DLG_CAPTION              "Connect to SFTP Server"
-    IDS_DLG_CONNECTTO            "&Connect to: (server/path or server:port/path)"
-    IDS_DLG_USERNAME             "&User name:"
-    IDS_DLG_USEAGENT             "Use SSH agent (Pageant)"
-    IDS_DLG_CHANGEPASS           "Change password..."
-    IDS_DLG_CRYPTPASS            "Protect password with password manager (TC>=7.5)"
-    IDS_DLG_CERTGROUP            "Client certificate for &authentication:"
-    IDS_DLG_PUBKEY               "Public key file (*.pub):"
-    IDS_DLG_PRIVKEY              "Private key file (*.pem;*.ppk):"
-    IDS_DLG_COMPRESS             "Compress with &ZLIB (may fail on some servers)"
-    IDS_DLG_DETAILED_LOG         "Log full directory listings (&debug)"
-    IDS_DLG_SHELLTRANSFER        "Use shell transfer (blocked hosts)"
-    IDS_DLG_SCP_DATA             "Use SCP for data transfers (faster!)"
-    IDS_DLG_SCP_ALL              "Use SCP for everything (no SFTP)"
-    IDS_DLG_TRANSFER             "Transfer:"
-    IDS_DLG_ENCODING             "Encoding (codepage) of file names:"
-    IDS_DLG_PERMISSIONS_GROUP    " User &rights of newly created files/directories: "
-    IDS_DLG_FILEMOD              "New files (Upload):"
-    IDS_DLG_DIRMOD               "New folders:"
-    IDS_DLG_SESSION              "Session:"
-    IDS_DLG_JUMPHOST_GRP         "Jump host:"
-    IDS_DLG_USE_JUMPHOST         "Use &jump host"
-    IDS_DLG_PROXY_SETTINGS       "Proxy settings:"
-    IDS_DLG_DELETELAST           "Delete last proxy"
-    IDS_DLG_IMPORT               "Import..."
-    IDS_PROXY_DLG_CAPTION        "Proxy Settings"
-    IDS_PROXY_DLG_GROUP          "Proxy settings"
-    IDS_PROXY_DLG_HOST           "Proxy host:"
-    IDS_PROXY_DLG_USER           "Proxy user name:"
-    IDS_PROXY_DLG_PASS           "Proxy password:"
-    IDS_JUMP_DLG_CAPTION         "SSH Jump Host (ProxyJump) Settings"
-    IDS_JUMP_DLG_GROUP           "Jump host connection"
-    IDS_JUMP_DLG_USE             "&Use jump host (ProxyJump)"
-    IDS_JUMP_DLG_HOST            "Jump host:"
-    IDS_JUMP_DLG_PORT            "Port:"
-    IDS_JUMP_DLG_USER            "User name:"
-    IDS_JUMP_DLG_PASS            "&Password:"
-    IDS_JUMP_DLG_PUBKEY          "Public key file (*.pub):"
-    IDS_JUMP_DLG_PRIVKEY         "Private key file (*.pem;*.ppk):"
-    IDS_JUMP_DLG_USEAGENT        "Use SSH &agent (Pageant) for jump host auth"
+    IDS_DLG_CHANGEPASS      "Change password..."
+    IDS_DLG_CRYPTPASS       "Protect password with password manager (TC>=7.5)"
+    IDS_DLG_CERTGROUP       "Client certificate for &authentication:"
+    IDS_DLG_PUBKEY          "Public key file (*.pub):"
+    IDS_DLG_PRIVKEY         "Private key file (*.pem;*.ppk):"
+    IDS_DLG_COMPRESS        "Compress with &ZLIB (may fail on some servers)"
+    IDS_DLG_DETAILED_LOG    "Log full directory listings (&debug)"
+    IDS_DLG_SHELLTRANSFER   "Use shell transfer (blocked hosts)"
+    IDS_DLG_SCP_DATA        "Use SCP for data transfers (faster!)"
+    IDS_DLG_SCP_ALL         "Use SCP for everything (no SFTP)"
+    IDS_DLG_TRANSFER        "Transfer:"
+    IDS_DLG_ENCODING        "Encoding (codepage) of file names:"
+    IDS_DLG_PERMISSIONS_GROUP 
+                            " User &rights of newly created files/directories: "
+    IDS_DLG_FILEMOD         "New files (Upload):"
+    IDS_DLG_DIRMOD          "New folders:"
+    IDS_DLG_SESSION         "Session:"
 END
 
-#endif    // English (U.S.) resources
+STRINGTABLE
+BEGIN
+    IDS_DLG_JUMPHOST_GRP    "Jump host:"
+    IDS_DLG_USE_JUMPHOST    "Use &jump host"
+    IDS_DLG_PROXY_SETTINGS  "Proxy settings:"
+    IDS_DLG_DELETELAST      "Delete last proxy"
+    IDS_DLG_IMPORT          "Import..."
+    IDS_PROXY_DLG_CAPTION   "Proxy Settings"
+    IDS_PROXY_DLG_GROUP     "Proxy settings"
+    IDS_PROXY_DLG_HOST      "Proxy host:"
+    IDS_PROXY_DLG_USER      "Proxy user name:"
+    IDS_PROXY_DLG_PASS      "Proxy password:"
+    IDS_JUMP_DLG_CAPTION    "SSH Jump Host (ProxyJump) Settings"
+    IDS_JUMP_DLG_GROUP      "Jump host connection"
+    IDS_JUMP_DLG_USE        "&Use jump host (ProxyJump)"
+    IDS_JUMP_DLG_HOST       "Jump host:"
+    IDS_JUMP_DLG_PORT       "Port:"
+    IDS_JUMP_DLG_USER       "User name:"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_JUMP_DLG_PASS       "&Password:"
+    IDS_JUMP_DLG_PUBKEY     "Public key file (*.pub):"
+    IDS_JUMP_DLG_PRIVKEY    "Private key file (*.pem;*.ppk):"
+    IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
+END
+
+#endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 
-/////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////
-
-
-/////////////////////////////////////////////////////////////////////////////
-
-
-/////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////
-
-
-
-/////////////////////////////////////////////////////////////////////////////
-// Dialog for LAN Pair timeout selection
-/////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef APSTUDIO_INVOKED
@@ -550,52 +583,4 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
-
-
-/////////////////////////////////////////////////////////////////////////////
-// Jump Host (ProxyJump) settings dialog — language neutral
-/////////////////////////////////////////////////////////////////////////////
-
-IDD_JUMPHOST DIALOGEX DISCARDABLE 0, 0, 300, 185
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "SSH Jump Host (ProxyJump) Settings"
-FONT 8, "MS Shell Dlg", 0, 0, 0x1
-BEGIN
-    GROUPBOX        "Jump host connection",IDC_JUMP_GROUP,5,5,290,170
-    CONTROL         "&Use jump host (ProxyJump)",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,17,180,10
-
-    LTEXT           "Jump host:",IDC_JUMP_LABEL_HOST,12,33,50,8
-    EDITTEXT        IDC_JUMP_HOST,65,31,155,12,ES_AUTOHSCROLL
-    LTEXT           "Port:",IDC_JUMP_LABEL_PORT,225,33,18,8
-    EDITTEXT        IDC_JUMP_PORT,245,31,43,12,ES_AUTOHSCROLL | ES_NUMBER
-
-    LTEXT           "User name:",IDC_JUMP_LABEL_USER,12,50,50,8
-    EDITTEXT        IDC_JUMP_USER,65,48,223,12,ES_AUTOHSCROLL
-
-    LTEXT           "&Password:",IDC_JUMP_LABEL_PASS,12,67,50,8
-    EDITTEXT        IDC_JUMP_PASSWORD,65,65,223,12,ES_PASSWORD | ES_AUTOHSCROLL
-    CONTROL         "Protect password with password manager (TC>=7.5)",IDC_JUMP_CRYPTPASS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,80,276,10
-    PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,65,223,14,NOT WS_VISIBLE
-
-    LTEXT           "Public key file (*.pub):",IDC_JUMP_LABEL_PUBKEY,12,95,120,8
-    EDITTEXT        IDC_JUMP_PUBKEY,12,105,260,12,ES_AUTOHSCROLL
-    PUSHBUTTON      ">>",IDC_JUMP_LOADPUBKEY,274,105,16,12
-
-    LTEXT           "Private key file (*.pem;*.ppk):",IDC_JUMP_LABEL_PRIVKEY,12,121,180,8
-    EDITTEXT        IDC_JUMP_PRIVKEY,12,131,260,12,ES_AUTOHSCROLL
-    PUSHBUTTON      ">>",IDC_JUMP_LOADPRIVKEY,274,131,16,12
-
-    CONTROL         "Use SSH &agent (Pageant) for jump host auth",IDC_JUMP_USEAGENT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,149,276,10
-
-    DEFPUSHBUTTON   "OK",IDOK,186,163,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,242,163,50,14
-END
-
-
-
-
-
-
-
-
 
