@@ -11,3 +11,6 @@ void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept;
 // Return the translated string for id, or nullptr if no .lng override exists.
 // The returned pointer is valid for the lifetime of the process.
 const char* LngGetString(UINT id) noexcept;
+
+// Load a wide string: tries .lng (UTF-8) first, falls back to LoadStringW.
+bool LngLoadStringW(HINSTANCE hInst, UINT id, WCHAR* buf, int bufLen) noexcept;

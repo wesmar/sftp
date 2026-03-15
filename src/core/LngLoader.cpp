@@ -165,3 +165,15 @@ const char* LngGetString(UINT id) noexcept
         return nullptr;
     return it->second.c_str();
 }
+
+bool LngLoadStringW(HINSTANCE hInst, UINT id, WCHAR* buf, int bufLen) noexcept
+{
+    if (!buf || bufLen <= 0)
+        return false;
+    const char* utf8 = LngGetString(id);
+    if (utf8) {
+        int n = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, buf, bufLen);
+        return n > 0;
+    }
+    return LoadStringW(hInst, id, buf, bufLen) > 0;
+}
