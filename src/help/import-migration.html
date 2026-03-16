@@ -1,34 +1,68 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Import from PuTTY/WinSCP</title><link rel="stylesheet" href="assets/style.css"></head>
+<head><meta charset="utf-8"><title>Import from PuTTY / WinSCP</title><link rel="stylesheet" href="assets/style.css"></head>
 <body>
 <h1>Import from PuTTY / WinSCP</h1>
 
-<h2>What import reads</h2>
+<p>The <b>Import...</b> button in the connection dialog opens a wizard that migrates sessions from PuTTY or WinSCP into the plugin without modifying the source data.</p>
+
+<h2>Supported sources</h2>
+
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Source</th><th>Location</th></tr>
+  <tr><td><b>PuTTY (registry)</b></td><td><code>HKCU\Software\SimonTatham\PuTTY\Sessions</code></td></tr>
+  <tr><td><b>PuTTY Portable (folder)</b></td><td>Browse to the PuTTY Portable folder — the plugin finds <code>putty.reg</code> automatically (recursive search up to 4 levels deep)</td></tr>
+  <tr><td><b>WinSCP (registry)</b></td><td><code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></td></tr>
+  <tr><td><b>WinSCP Portable (.ini)</b></td><td>Browse to <code>WinSCP.ini</code> directly</td></tr>
+</table>
+
+<h2>Checkbox picker dialog</h2>
+<p>After scanning the source, the plugin shows a <b>checkbox list</b> of all found sessions:</p>
 <ul>
-  <li>Registry sessions from PuTTY and WinSCP in current user profile.</li>
-  <li>Host, port, username, selected key path, and selected SSH-agent usage flags.</li>
+  <li>Every session has an individual checkbox — pick any combination.</li>
+  <li><b>Select All</b> and <b>Deselect All</b> buttons for bulk operations.</li>
+  <li>Only checked sessions are imported; the rest are skipped silently.</li>
+  <li>Already-existing sessions with the same name are not overwritten unless you explicitly re-check them.</li>
 </ul>
+
+<h2>Path memory (4-path history)</h2>
+<p>The folder/file browse dialog for portable sources remembers the last 4 used paths. They are persisted in the <code>[ImportPaths]</code> section of <code>sftpplug.ini</code> and pre-selected on next open, so you do not need to navigate to the same folder twice.</p>
+
+<h2>What is imported</h2>
+<ul>
+  <li>Hostname and port</li>
+  <li>Username</li>
+  <li>Key file path (if set)</li>
+  <li>SSH agent flag</li>
+</ul>
+<p>Passwords are <b>not</b> imported (PuTTY and WinSCP store them in formats incompatible with the plugin's DPAPI storage). You will be prompted for a password on the first connection.</p>
 
 <h2>Protocol mapping</h2>
 <ul>
-  <li>WinSCP SFTP sessions import as normal SSH mode.</li>
-  <li>WinSCP SCP sessions import with <code>scponly=1</code> and <code>scpfordata=1</code>.</li>
-  <li>Unsupported WinSCP protocols are skipped and reported in summary.</li>
+  <li>WinSCP SFTP sessions → SSH (SFTP/SCP) mode.</li>
+  <li>WinSCP SCP sessions → <code>scponly=1</code> and <code>scpfordata=1</code>.</li>
+  <li>Unsupported WinSCP protocols (FTP, WebDAV, S3) → skipped, reported in summary.</li>
 </ul>
 
-<h2>Key compatibility</h2>
+<h2>Key file compatibility</h2>
 <ul>
-  <li>Imported key paths may include <code>.pem</code> or <code>.ppk</code>.</li>
-  <li>Plugin supports native PPK conversion for authentication workflow.</li>
+  <li>Imported key paths may point to <code>.pem</code> (OpenSSH) or <code>.ppk</code> (PuTTY) files.</li>
+  <li>The plugin converts PPK v2 and PPK v3 (Argon2) natively — no external puttygen needed.</li>
+  <li>Verify the path is still valid after import, especially for portable setups.</li>
 </ul>
 
 <h2>After import checklist</h2>
 <ol>
-  <li>Open imported session with <code>Alt+Enter</code>.</li>
-  <li>Verify transfer mode and proxy.</li>
-  <li>Test connection and adjust SCP/Shell options if host is restrictive.</li>
+  <li>Open an imported session with <code>Alt+Enter</code>.</li>
+  <li>Verify transfer mode matches server capabilities.</li>
+  <li>Check proxy settings if the host is behind a proxy.</li>
+  <li>Enter password and save if needed.</li>
+  <li>Test connection and adjust SCP/Shell options for restrictive hosts.</li>
 </ol>
+
+<div class="note">
+  <b>Tip:</b> For PuTTY Portable, navigate to the folder that contains <code>Data\settings\</code> or the root of the portable installation. The plugin recurses up to 4 directory levels looking for <code>putty.reg</code>.
+</div>
 
 <p><a href="index.html">Back to index</a></p>
 </body>

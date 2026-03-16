@@ -13,6 +13,15 @@
 //   language\esp.lng   (Spanish)
 //   language\ita.lng   (Italian)
 //   language\rus.lng   (Russian)
+//   language\cs.lng    (Czech)
+//   language\hu.lng    (Hungarian)
+//   language\ja.lng    (Japanese)
+//   language\nl.lng    (Dutch)
+//   language\pt-br.lng (Portuguese — Brazil)
+//   language\ro.lng    (Romanian)
+//   language\sk.lng    (Slovak)
+//   language\uk.lng    (Ukrainian)
+//   language\zh-cn.lng (Chinese Simplified)
 
 #include <windows.h>
 #include <string>
@@ -66,18 +75,32 @@ static bool ParseLngLine(const std::string& line, UINT& outId, std::string& outT
     return true;
 }
 
-// Map LANGID to the 3-letter TC language code used in language\XX.lng filenames.
-// The codes match the stems in TC's own .LNG filenames (WCMD_POL.LNG → "pol").
+// Map LANGID to the lng filename stem used in language\XX.lng filenames.
+// Simple 3-letter codes match TC's own .LNG stems (WCMD_POL.LNG → "pol").
+// Languages with multiple regional variants are handled before the switch.
 static const char* LangIdToTcCode(LANGID id) noexcept
 {
+    // Sublanguage disambiguation for Portuguese and Chinese
+    if (PRIMARYLANGID(id) == LANG_PORTUGUESE)
+        return (SUBLANGID(id) == SUBLANG_PORTUGUESE_BRAZILIAN) ? "pt-br" : nullptr;
+    if (PRIMARYLANGID(id) == LANG_CHINESE)
+        return (SUBLANGID(id) == SUBLANG_CHINESE_SIMPLIFIED)   ? "zh-cn" : nullptr;
+
     switch (PRIMARYLANGID(id)) {
-    case LANG_POLISH:   return "pol";
-    case LANG_GERMAN:   return "deu";
-    case LANG_FRENCH:   return "fra";
-    case LANG_SPANISH:  return "esp";
-    case LANG_ITALIAN:  return "ita";
-    case LANG_RUSSIAN:  return "rus";
-    default:            return nullptr;
+    case LANG_POLISH:     return "pol";
+    case LANG_GERMAN:     return "deu";
+    case LANG_FRENCH:     return "fra";
+    case LANG_SPANISH:    return "esp";
+    case LANG_ITALIAN:    return "ita";
+    case LANG_RUSSIAN:    return "rus";
+    case LANG_CZECH:      return "cs";
+    case LANG_HUNGARIAN:  return "hu";
+    case LANG_JAPANESE:   return "ja";
+    case LANG_DUTCH:      return "nl";
+    case LANG_ROMANIAN:   return "ro";
+    case LANG_SLOVAK:     return "sk";
+    case LANG_UKRAINIAN:  return "uk";
+    default:              return nullptr;
     }
 }
 

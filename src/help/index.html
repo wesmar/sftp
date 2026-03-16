@@ -114,13 +114,23 @@
     <li>Separate fingerprint and authentication state for jump host and target host</li>
   </ul>
 
-  <h3>Session Management</h3>
+  <h3>Session Management &amp; Import</h3>
   <ul>
     <li>Unlimited saved sessions</li>
     <li>Encrypted password storage (Windows DPAPI)</li>
-    <li>Import from PuTTY and WinSCP</li>
-    <li>Native PPK conversion (no external tools)</li>
+    <li>Import from PuTTY (registry + Portable) and WinSCP (registry + .ini)</li>
+    <li>Checkbox picker — select any combination of sessions in one step</li>
+    <li>4-path import memory — last 4 browse paths remembered per install</li>
+    <li>Native PPK conversion (v2 and v3/Argon2, no external tools)</li>
     <li>Proxy settings per session</li>
+  </ul>
+
+  <h3>Localization</h3>
+  <ul>
+    <li>15 languages: EN, PL, DE, FR, ES, IT, RU, CS, HU, NL, PT-BR, RO, SK, UK, JA, ZH-CN</li>
+    <li>External <code>.lng</code> files loaded at runtime — no rebuild needed</li>
+    <li>Auto-detected from Total Commander <code>wincmd.ini</code></li>
+    <li>Dynamic dialog layout adjusts for label length in all languages</li>
   </ul>
 
   <h2>Quick Reference</h2>
@@ -158,7 +168,7 @@
   </div>
 
   <h2>About This Plugin</h2>
-  <p>SFTPplug is a Total Commander filesystem plugin providing secure file transfer over SSH (SFTP, SCP), HTTP (PHP Agent), and direct local pairing (LAN Pair). It features comprehensive authentication support, Jump Host / ProxyJump support for bastion-based SSH access, shell fallback for restrictive hosts, and PHP-based agent mode for web hosting environments.</p>
+  <p>SFTPplug is a Total Commander filesystem plugin providing secure file transfer over SSH (SFTP, SCP), HTTP (PHP Agent), and direct local pairing (LAN Pair). It features comprehensive authentication support, Jump Host / ProxyJump support for bastion-based SSH access, shell fallback for restrictive hosts, PHP-based agent mode for web hosting environments, and 15-language runtime localization (EN/PL/DE/FR/ES/IT/RU/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN).</p>
 
   <h2>Version Information</h2>
   <ul>

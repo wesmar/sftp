@@ -77,35 +77,42 @@
 
 <h2>Import Sessions</h2>
 
-<h3>Import from PuTTY</h3>
-<ol>
-  <li>Click <b>Import...</b> button</li>
-  <li>Select "PuTTY" as source</li>
-  <li>Sessions imported from registry: <code>HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions</code></li>
-  <li>Imported: hostname, port, username, key settings</li>
-</ol>
+<p>Click <b>Import...</b> to open the import wizard. Sessions are imported without modifying the source data. See <a href="import-migration.html">Import from PuTTY / WinSCP</a> for full details.</p>
 
-<h3>Import from WinSCP</h3>
-<ol>
-  <li>Click <b>Import...</b> button</li>
-  <li>Select "WinSCP" as source</li>
-  <li>Sessions imported from registry: <code>HKEY_CURRENT_USER\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
-  <li>Imported: hostname, port, username, key paths, protocol settings</li>
-</ol>
+<h3>Supported sources</h3>
+<ul>
+  <li><b>PuTTY (registry)</b> — <code>HKCU\Software\SimonTatham\PuTTY\Sessions</code></li>
+  <li><b>PuTTY Portable</b> — browse to the portable folder; plugin finds <code>putty.reg</code> automatically (up to 4 levels deep)</li>
+  <li><b>WinSCP (registry)</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
+  <li><b>WinSCP Portable</b> — browse to <code>WinSCP.ini</code> directly</li>
+</ul>
+
+<h3>Checkbox picker</h3>
+<ul>
+  <li>All found sessions are shown in a checkbox list — pick any combination</li>
+  <li>Select All / Deselect All buttons for bulk operations</li>
+  <li>Only checked sessions are imported</li>
+</ul>
+
+<h3>Path memory</h3>
+<ul>
+  <li>Last 4 used folder/file paths stored in <code>[ImportPaths]</code> of <code>sftpplug.ini</code></li>
+  <li>Browse dialog pre-selects the last used location automatically</li>
+</ul>
 
 <h3>Protocol Mapping</h3>
 <ul>
   <li><b>WinSCP SFTP:</b> Imported as SSH (SFTP/SCP) mode</li>
   <li><b>WinSCP SCP:</b> Imported with <code>scponly=1</code> and <code>scpfordata=1</code></li>
-  <li><b>Unsupported protocols:</b> Skipped with summary report</li>
+  <li><b>Unsupported protocols (FTP, WebDAV, S3):</b> Skipped with summary report</li>
 </ul>
 
 <h3>Key File Compatibility</h3>
 <ul>
   <li>Imported key paths preserved as-is</li>
   <li>Supports both <code>.pem</code> and <code>.ppk</code> extensions</li>
-  <li>PPK files converted natively (no puttygen needed)</li>
-  <li>May need to verify key paths after import</li>
+  <li>PPK v2 and PPK v3 (Argon2) converted natively — no external puttygen needed</li>
+  <li>Passwords are not imported — you will be prompted on first connection</li>
 </ul>
 
 <h2>After Import Checklist</h2>

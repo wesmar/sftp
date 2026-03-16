@@ -96,6 +96,15 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     // - WCMD_ES.LNG / WCMD_ESP.LNG
     // - WCMD_IT.LNG / WCMD_ITA.LNG
     // - WCMD_RU.LNG  / WCMD_RUS.LNG
+    // - WCMD_CZ.LNG / WCMD_CSY.LNG
+    // - WCMD_HU.LNG / WCMD_HUN.LNG
+    // - WCMD_JP.LNG / WCMD_JPN.LNG
+    // - WCMD_NL.LNG / WCMD_NLD.LNG
+    // - WCMD_BR.LNG / WCMD_PTB.LNG
+    // - WCMD_RO.LNG / WCMD_ROM.LNG
+    // - WCMD_SK.LNG / WCMD_SKY.LNG
+    // - WCMD_UA.LNG / WCMD_UKR.LNG
+    // - WCMD_SC.LNG / WCMD_CHS.LNG
     if (has("_PL") || has(".PL") || has("POL")) {
         return MAKELANGID(LANG_POLISH, SUBLANG_DEFAULT);
     }
@@ -113,6 +122,33 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     }
     if (has("_RU") || has(".RU") || has("RUS")) {
         return MAKELANGID(LANG_RUSSIAN, SUBLANG_DEFAULT);
+    }
+    if (has("_CZ") || has(".CZ") || has("CSY") || has("_CS")) {
+        return MAKELANGID(LANG_CZECH, SUBLANG_DEFAULT);
+    }
+    if (has("_HU") || has(".HU") || has("HUN")) {
+        return MAKELANGID(LANG_HUNGARIAN, SUBLANG_DEFAULT);
+    }
+    if (has("_JP") || has(".JP") || has("JPN")) {
+        return MAKELANGID(LANG_JAPANESE, SUBLANG_DEFAULT);
+    }
+    if (has("_NL") || has(".NL") || has("NLD") || has("HOL")) {
+        return MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH);
+    }
+    if (has("_BR") || has("PTB") || has("PT-B")) {
+        return MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
+    }
+    if (has("_RO") || has(".RO") || has("ROM") || has("RUM")) {
+        return MAKELANGID(LANG_ROMANIAN, SUBLANG_DEFAULT);
+    }
+    if (has("_SK") || has(".SK") || has("SKY")) {
+        return MAKELANGID(LANG_SLOVAK, SUBLANG_DEFAULT);
+    }
+    if (has("_UA") || has(".UA") || has("UKR") || has("_UK")) {
+        return MAKELANGID(LANG_UKRAINIAN, SUBLANG_DEFAULT);
+    }
+    if (has("_SC") || has("_CN") || has("CHS") || has("CHI")) {
+        return MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED);
     }
     if (has("_EN") || has(".EN") || has("ENU") || has("ENG")) {
         return MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);

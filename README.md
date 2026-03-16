@@ -38,7 +38,6 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - [Packaging and Installation](#packaging-and-installation)
 - [PHP Agent Deployment](#php-agent-deployment)
 - [Localization](#localization)
-- [Recent Fixes (v1.0.0.x)](#recent-fixes-v1000)
 - [Roadmap](#roadmap)
 
 ---
@@ -89,7 +88,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 - Automatic UTF-8 filename detection via remote `locale` command.
 - Automatic CRLF/LF conversion on text-mode transfers.
 - Symlink tracking including `~` home directory shortcut protection.
-- Multi-language UI via external `.lng` files: English (built-in), Polish, German, French, Spanish, Italian, Russian. Language detected automatically from TC's `wincmd.ini`.
+- External `.lng` file localization — **15 languages** (EN/PL/RU/DE/FR/ES/IT/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN) — dynamic dialog translation at runtime, auto-detected from TC `wincmd.ini`, language-aware control layout (`ArrangeInlineRow`)
 - Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
 - Built-in CHM help (`sftpplug.chm`) opened from the plugin dialog Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
@@ -455,10 +454,12 @@ Implemented in `ProxyNegotiator.cpp`, isolated from the main connection path.
 | PuTTY | `HKCU\Software\SimonTatham\PuTTY\Sessions` |
 | WinSCP | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` |
 
-Conversion rules:
-- Non-conflicting merge into plugin INI — existing entries are not overwritten.
-- Host, port, username, and key paths are preserved.
-- No auto-connect side effects during import.
+**Import Features:**
+- Non-conflicting conversion to plugin INI format
+- Preserves connectivity fields (host, port, user, keys)
+- **Checkbox picker dialog** — select any combination of sessions and import in one step
+- **4-path memory** — the last 4 used folder/file paths are remembered and pre-selected on next open
+- **No auto-connect** side effects during import
 
 ### Host Key Verification
 
@@ -917,12 +918,21 @@ Distribution archive: `SFTPplug.zip`
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `SFTPplug.chm` | Full offline documentation |
 | `readme.txt` | Package notes |
-| `language\pol.lng` | Polish translations |
-| `language\deu.lng` | German translations |
-| `language\fra.lng` | French translations |
-| `language\esp.lng` | Spanish translations |
-| `language\ita.lng` | Italian translations |
-| `language\rus.lng` | Russian translations |
+| `language\pol.lng` | Polish |
+| `language\rus.lng` | Russian |
+| `language\deu.lng` | German |
+| `language\fra.lng` | French |
+| `language\esp.lng` | Spanish |
+| `language\ita.lng` | Italian |
+| `language\cs.lng` | Czech |
+| `language\hu.lng` | Hungarian |
+| `language\nl.lng` | Dutch |
+| `language\pt-br.lng` | Brazilian Portuguese |
+| `language\ro.lng` | Romanian |
+| `language\sk.lng` | Slovak |
+| `language\uk.lng` | Ukrainian |
+| `language\ja.lng` | Japanese |
+| `language\zh-cn.lng` | Simplified Chinese |
 
 No external DLLs required. libssh2 and Argon2 are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
 
@@ -932,60 +942,30 @@ Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin ins
 
 ## Localization
 
-UI language is resolved at startup from `wincmd.ini` (key `[Configuration] → LanguageIni`). The plugin reads the registry key `HKCU\Software\Ghisler\Total Commander\IniFileName` to locate `wincmd.ini` directly, with a fallback derived from `FsSetDefaultParams`. Language loading is triggered from both `FsSetDefaultParams` and `FsInit` to cover all TC load orders.
+On startup the plugin reads `HKCU\Software\Ghisler\Total Commander\IniFileName` to locate `wincmd.ini`, then reads `LanguageIni` from the `[Configuration]` section (e.g. `WCMD_POL.LNG` → Polish, `WCMD_CZ.LNG` → Czech, `WCMD_JP.LNG` → Japanese). The matched language ID selects the correct `.lng` file. Language loading is triggered from both `FsSetDefaultParams` and `FsInit` to cover all TC load orders.
 
 The binary ships with an English-only compiled resource (`sftpplug.rc`). All non-English translations are provided as external UTF-8 files in the `language\` subdirectory and loaded at runtime via `LngLoader`. Dialog labels, checkboxes, buttons and window captions are all translated dynamically in `WM_INITDIALOG` using `SetDlgItemTextW`. Layout of variable-length rows (e.g. the Jump host line) is adjusted dynamically based on measured text width so all languages fit without overlap or excessive gaps.
 
-| Language | File | Notes |
-|----------|------|-------|
-| English (US) | built-in RC | Default fallback when no `.lng` entry exists |
-| Polish | `language\pol.lng` | |
-| German | `language\deu.lng` | |
-| French | `language\fra.lng` | |
-| Spanish | `language\esp.lng` | |
-| Italian | `language\ita.lng` | |
-| Russian | `language\rus.lng` | Treated identically to other languages |
+| File | Language |
+|------|----------|
+| *(binary)* | English (US) — built-in fallback |
+| `language\pol.lng` | Polish |
+| `language\rus.lng` | Russian |
+| `language\deu.lng` | German |
+| `language\fra.lng` | French |
+| `language\esp.lng` | Spanish |
+| `language\ita.lng` | Italian |
+| `language\cs.lng` | Czech |
+| `language\hu.lng` | Hungarian |
+| `language\nl.lng` | Dutch |
+| `language\pt-br.lng` | Brazilian Portuguese |
+| `language\ro.lng` | Romanian |
+| `language\sk.lng` | Slovak |
+| `language\uk.lng` | Ukrainian |
+| `language\ja.lng` | Japanese |
+| `language\zh-cn.lng` | Simplified Chinese |
 
 To add a new language: create `language\XYZ.lng` (UTF-8) following the existing format (`ID=text`, `#` comments, RC-style `\n \t \\` escapes), deploy it alongside the plugin, and add the language code mapping to `LangIdToTcCode` in `LngLoader.cpp`.
-
----
-
-## Recent Fixes (v1.0.0.x)
-
-### Critical Bug Fixes
-
-| Issue | Symptom | Fix |
-|-------|---------|-----|
-| SFTP Resume broken | Resume always restarted from offset 0 | Added `LIBSSH2_SFTP_ATTR_SIZE` flag to `fstat` request before seek |
-| Setstat after SCP | Potential null-pointer crash in SCP-only mode | Added null check for `sftpsession` before `setstat` call |
-| Tilde download bug | TC attempted to download `~` as a regular file | Added reconnect + retry logic with tilde detection guard in `FsGetFileW` |
-| `FsSetAttrW` missing | File attribute changes silently ignored | Implemented `SftpSetAttr` (lstat → read-modify-write permission bits → setstat) and exported via `.def` |
-| December month parse | `ParseMonth` returned 0 for December | Fixed `i % 12` → `((i-1) % 12) + 1` in `FtpDirectoryParser.cpp` |
-| Debug logging in Release | File I/O performance hit in production | Tied `SFTP_DEBUG_ENABLED` and `SFTP_DEBUG_TO_FILE` to `NDEBUG` macro |
-
-### Code Quality
-
-| Change | Impact |
-|--------|--------|
-| Removed duplicate `openSftpFile` lambda | DRY compliance, single maintenance point |
-| `AUTODETECT_PENDING` changed from `char -1` to `int8_t` | Removes signed-char UB on platforms where `char` is unsigned |
-| Removed leftover debug print statements | Clean release logs |
-| Documented legacy XOR key in source | Prevents accidental refactoring that would break existing profiles |
-| `argon2_a.lib` and `libssh2.lib` rebuilt with `/MT` | Plugin loads on clean systems — no VC++ Redistributable or external DLLs required |
-| Added x86 (Win32) build | Single ZIP ships both `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86); `pluginst.inf` updated with `file64=` / `file=` entries; TC auto-installs correct architecture |
-| Documented base64 3-byte alignment requirement | Explains chunk size constraint in shell fallback |
-| `UpdateCertSectionState` consolidation | Single authoritative function controls cert section enable/disable state for SSH, PHP Agent, PHP Shell, and LAN Pair modes — replaces scattered `EnableControlsPageant` + `UpdateKeyControlsForPrivateKey` calls |
-| `ConnectionGuard` RAII | Guarantees connection cleanup on every error/early-return path in `FsFindFirstW` |
-| LAN Pair session timeout enforcement | `setTimeoutMin` now enforced at session level via `std::chrono::steady_clock` check on every `cmd()` call |
-
-### Security
-
-| Enhancement | Description |
-|-------------|-------------|
-| `DllExceptionBarrier` | Every exported `Fs*` function wrapped; C++ exceptions cannot reach TC host; DbgHelp stack trace captured and shown to user |
-| `SecureZeroMemory` in DPAPI path | Password plaintext zeroed from heap immediately after use |
-| `ConnectionGuard` RAII | No connection object left allocated or registered on auth/network failure paths |
-| Legacy XOR key annotated | Explicit comment explains non-encryption nature and why key must remain stable |
 
 ---
 
@@ -1013,6 +993,11 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - `UpdateCertSectionState` — unified cert section control for all transport modes
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
+- **PuTTY Portable folder import** — auto-finds `putty.reg` recursively; WinSCP.ini portable import
+- **Checkbox session picker** — replaces flat submenus; SysListView32 with LVS_EX_CHECKBOXES; Select All / Deselect All; imports any combination in one step
+- **4-path import memory** — last 4 folder/file paths persisted in `[ImportPaths]` of sftpplug.ini; browse dialog pre-selects last used location
+- **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
+- **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
 
 ### In Progress
 
@@ -1031,6 +1016,8 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - Full parser module rewrite
 
 ---
+
+**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini import, no VC++ Redistributable required
 
 *Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*
