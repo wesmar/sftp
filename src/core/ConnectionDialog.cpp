@@ -94,6 +94,27 @@ static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
 static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
     std::initializer_list<std::pair<int, UINT>> controls);
 
+// Tighten and right-align the protocol radio buttons to maximize label width.
+static void ArrangeProtocolButtons(HWND hDlg)
+{
+    const int ids[] = { IDC_PROTOAUTO, IDC_PROTOV4, IDC_PROTOV6 };
+    RECT rDlg{};
+    GetClientRect(hDlg, &rDlg);
+
+    // Slightly smaller gap than the default to reclaim a few extra pixels.
+    const int gap = 2;
+    int right = rDlg.right - DlgLayout::kGap - 4;
+
+    for (int i = 2; i >= 0; --i) {
+        const RECT r = DlgLayout::GetRect(hDlg, ids[i]);
+        const int textW = DlgLayout::MeasureText(hDlg, GetDlgItem(hDlg, ids[i]));
+        const int w = (std::max)(DlgLayout::kBoxW + textW + gap * 2, 10);
+        right -= w;
+        DlgLayout::Move(hDlg, ids[i], right, r.top, w, r.bottom - r.top);
+        right -= gap;
+    }
+}
+
 // Jump Host settings dialog procedure.
 static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -1897,6 +1918,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
     ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
     ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
+    ArrangeProtocolButtons(m_hWnd);
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
     ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);

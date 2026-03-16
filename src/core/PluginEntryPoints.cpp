@@ -147,7 +147,7 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     if (has("_UA") || has(".UA") || has("UKR") || has("_UK")) {
         return MAKELANGID(LANG_UKRAINIAN, SUBLANG_DEFAULT);
     }
-    if (has("_SC") || has("_CN") || has("CHS") || has("CHI")) {
+    if (has("_SC") || has("_CN") || has("CHS") || has("CHI") || has("CHN")) {
         return MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED);
     }
     if (has("_EN") || has(".EN") || has("ENU") || has("ENG")) {
