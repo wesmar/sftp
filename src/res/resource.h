@@ -328,6 +328,15 @@
 #define IDC_PROXY_LABEL_USER            1099
 #define IDC_PROXY_LABEL_PASS            1100
 
+// ---------------------------------------------------------------------------
+// Session picker dialog
+// ---------------------------------------------------------------------------
+#define IDD_SESSION_PICKER              116
+#define IDC_SESSION_LIST                1101
+#define IDC_SELECTALL                   1102
+#define IDC_DESELECTALL                 1103
+#define IDC_SESSION_SOURCE_LABEL        1104
+
 // Dialog label string IDs for runtime localization via LNG loader
 #define IDS_DLG_CAPTION                 284
 #define IDS_DLG_CONNECTTO               285
