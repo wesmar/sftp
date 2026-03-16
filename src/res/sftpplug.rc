@@ -382,6 +382,8 @@ BEGIN
     IDS_IMP_MENU_ALL        "Import all ({})"
     IDS_IMP_MENU_FROM_PUTTY_PORT "Import from PuTTY Portable folder..."
     IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP.ini file..."
+    IDS_IMP_TITLE_KITTY_PORT "Import KiTTY Portable Sessions"
+    IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
 END
 
 STRINGTABLE
@@ -650,7 +652,7 @@ BEGIN
             VALUE "FileDescription",  "SFTP Plugin for Total Commander"
             VALUE "FileVersion",      VER_FILEVERSION_STR
             VALUE "InternalName",     "sftpplug"
-            VALUE "LegalCopyright",   "Copyright (C) 2024-2026 kvc.pl"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName",      "SFTPplug"
             VALUE "ProductVersion",   VER_PRODUCTVERSION_STR

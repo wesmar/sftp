@@ -394,6 +394,8 @@
 #define IDS_IMP_MENU_ALL                12067
 #define IDS_IMP_MENU_FROM_PUTTY_PORT    12068
 #define IDS_IMP_MENU_FROM_WINSCP        12069
+#define IDS_IMP_TITLE_KITTY_PORT        12070
+#define IDS_IMP_MENU_FROM_KITTY_PORT    12071
 
 // Next default values for new objects
 //
