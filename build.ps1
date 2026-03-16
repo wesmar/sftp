@@ -18,6 +18,16 @@ $phpAgentSource = Join-Path $projectRoot "src\agent\sftp.php"
 $helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
 $helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
 
+# Read plugin version from version.h (single source of truth)
+$pluginVersion = "1.0.0"
+$verHPath = Join-Path $projectRoot "src\include\version.h"
+if (Test-Path $verHPath) {
+    $verHContent = Get-Content $verHPath -Raw
+    if ($verHContent -match '#define\s+VER_FILEVERSION_STR\s+"([^"]+)"') {
+        $pluginVersion = $matches[1]
+    }
+}
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -150,7 +160,14 @@ function Compile-CHM {
     if (Test-Path $helpCompiled) {
         Remove-Item $helpCompiled -Force -ErrorAction SilentlyContinue
     }
-    
+
+    # Inject version into HHP title
+    if (Test-Path $helpProject) {
+        $hhpContent = Get-Content $helpProject -Raw
+        $hhpContent = $hhpContent -replace '(?m)^Title=.*', "Title=SFTPplug Help v$pluginVersion - Comprehensive Guide"
+        Set-Content $helpProject $hhpContent -NoNewline -Encoding UTF8
+    }
+
     # Compile CHM
     Push-Location (Split-Path $helpProject)
     try {

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "../res/resource.h"
+#include "LngLoader.h"
 
 extern HINSTANCE hinst;
 
@@ -823,12 +824,54 @@ std::string ConvertRegFileToTempIni(const std::string& regPath)
 }
 
 // ---------------------------------------------------------------------------
+// Localization helpers (import dialog)
+// ---------------------------------------------------------------------------
+
+static std::wstring LngStrW(UINT id)
+{
+    const char* u8 = LngGetString(id);
+    if (u8 && u8[0]) {
+        const int n = MultiByteToWideChar(CP_UTF8, 0, u8, -1, nullptr, 0);
+        if (n > 0) {
+            std::wstring w; w.resize(static_cast<size_t>(n - 1));
+            MultiByteToWideChar(CP_UTF8, 0, u8, -1, w.data(), n);
+            return w;
+        }
+    }
+    wchar_t buf[512] = {};
+    const int n = LoadStringW(hinst, id, buf, 511);
+    return n > 0 ? std::wstring(buf, static_cast<size_t>(n)) : std::wstring{};
+}
+
+static std::wstring FormatW(std::wstring templ, std::initializer_list<std::wstring_view> args)
+{
+    size_t pos = 0;
+    for (const auto& arg : args) {
+        const size_t at = templ.find(L"{}", pos);
+        if (at == std::wstring::npos) break;
+        templ.replace(at, 2, arg.data(), arg.size());
+        pos = at + arg.size();
+    }
+    return templ;
+}
+
+static std::string WideToUtf8(const std::wstring& w)
+{
+    if (w.empty()) return {};
+    const int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 0) return {};
+    std::string s; s.resize(static_cast<size_t>(n - 1));
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, s.data(), n, nullptr, nullptr);
+    return s;
+}
+
+// ---------------------------------------------------------------------------
 // Session picker dialog with checkboxes
 // ---------------------------------------------------------------------------
 
 struct SessionPickerDlgData {
-    const char*                     title;
-    const char*                     subtitle;
+    std::wstring                    title;
+    std::wstring                    subtitle;
     const std::vector<std::string>* items;
     std::vector<size_t>             result;
 };
@@ -840,8 +883,17 @@ static INT_PTR CALLBACK SessionPickerDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     case WM_INITDIALOG: {
         data = reinterpret_cast<SessionPickerDlgData*>(lParam);
         SetWindowLongPtrA(hDlg, DWLP_USER, reinterpret_cast<LONG_PTR>(data));
-        SetWindowTextA(hDlg, data->title);
-        SetDlgItemTextA(hDlg, IDC_SESSION_SOURCE_LABEL, data->subtitle);
+        SetWindowTextW(hDlg, data->title.c_str());
+        SetDlgItemTextW(hDlg, IDC_SESSION_SOURCE_LABEL, data->subtitle.c_str());
+
+        const std::wstring selAll = LngStrW(IDS_IMP_BTN_SELECT_ALL);
+        if (!selAll.empty())     SetDlgItemTextW(hDlg, IDC_SELECTALL,   selAll.c_str());
+        const std::wstring deselAll = LngStrW(IDS_IMP_BTN_DESELECT_ALL);
+        if (!deselAll.empty())   SetDlgItemTextW(hDlg, IDC_DESELECTALL, deselAll.c_str());
+        const std::wstring impBtn = LngStrW(IDS_IMP_BTN_IMPORT);
+        if (!impBtn.empty())     SetDlgItemTextW(hDlg, IDOK,            impBtn.c_str());
+        const std::wstring cancelBtn = LngStrW(IDS_IMP_BTN_CANCEL);
+        if (!cancelBtn.empty())  SetDlgItemTextW(hDlg, IDCANCEL,        cancelBtn.c_str());
 
         HWND hList = GetDlgItem(hDlg, IDC_SESSION_LIST);
         ListView_SetExtendedListViewStyle(hList, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT);
@@ -897,13 +949,13 @@ static INT_PTR CALLBACK SessionPickerDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 
 static std::vector<size_t> ShowSessionPickerDlg(
     HWND owner,
-    const char* caption,
-    const char* subtitle,
+    std::wstring caption,
+    std::wstring subtitle,
     const std::vector<std::string>& items)
 {
     SessionPickerDlgData data;
-    data.title    = caption;
-    data.subtitle = subtitle;
+    data.title    = std::move(caption);
+    data.subtitle = std::move(subtitle);
     data.items    = &items;
     if (DialogBoxParamA(hinst, MAKEINTRESOURCE(IDD_SESSION_PICKER), owner,
                         SessionPickerDlgProc, reinterpret_cast<LPARAM>(&data)) != IDOK)
@@ -945,12 +997,23 @@ int ShowExternalSessionImportMenu(HWND owner,
     if (hasWinScp)
         AppendMenuA(menu, MF_STRING, kCmdPickWinScp,
                     std::format("WinSCP ({})...", winScpSessions.size()).c_str());
-    if (hasPutty && hasWinScp)
-        AppendMenuA(menu, MF_STRING, kCmdImportAll,
-                    std::format("Import all ({})", puttySessions.size() + winScpSessions.size()).c_str());
+    if (hasPutty && hasWinScp) {
+        std::wstring allTempl = LngStrW(IDS_IMP_MENU_ALL);
+        if (allTempl.empty()) allTempl = L"Import all ({})";
+        AppendMenuW(menu, MF_STRING, kCmdImportAll,
+                    FormatW(allTempl, { std::to_wstring(puttySessions.size() + winScpSessions.size()) }).c_str());
+    }
     AppendMenuA(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuA(menu, MF_STRING, kCmdImportFromPuttyReg,  "Import from PuTTY Portable folder...");
-    AppendMenuA(menu, MF_STRING, kCmdImportFromWinScpIni, "Import from WinSCP.ini file...");
+    {
+        std::wstring fromPutty = LngStrW(IDS_IMP_MENU_FROM_PUTTY_PORT);
+        if (fromPutty.empty()) fromPutty = L"Import from PuTTY Portable folder...";
+        AppendMenuW(menu, MF_STRING, kCmdImportFromPuttyReg, fromPutty.c_str());
+    }
+    {
+        std::wstring fromWinScp = LngStrW(IDS_IMP_MENU_FROM_WINSCP);
+        if (fromWinScp.empty()) fromWinScp = L"Import from WinSCP.ini file...";
+        AppendMenuW(menu, MF_STRING, kCmdImportFromWinScpIni, fromWinScp.c_str());
+    }
 
     POINT pt;
     GetCursorPos(&pt);
@@ -988,7 +1051,7 @@ int ShowExternalSessionImportMenu(HWND owner,
         else if (skippedUnsupported > 0)
             fb.ShowMessage("No sessions imported (unsupported protocol type).", "SFTP");
         else
-            fb.ShowMessage("No sessions imported.", "SFTP");
+            fb.ShowMessage(WideToUtf8([&]{ auto s = LngStrW(IDS_IMP_MSG_NONE); return s.empty() ? std::wstring(L"No sessions imported.") : s; }()), "SFTP");
     };
 
     if (cmd == kCmdImportAll) {
@@ -999,13 +1062,17 @@ int ShowExternalSessionImportMenu(HWND owner,
     }
 
     auto pickRegistrySessions = [&](const std::vector<SessionDescriptor>& sessions,
-                                    const char* source) -> int {
+                                    const char* source, UINT titleId) -> int {
         std::vector<std::string> names;
         names.reserve(sessions.size());
         for (const auto& s : sessions) names.push_back(s.displayName);
-        const std::string subtitle = std::format("Found {} {} sessions (registry):", sessions.size(), source);
-        const std::string caption  = std::format("Import {} Sessions", source);
-        const std::vector<size_t> sel = ShowSessionPickerDlg(owner, caption.c_str(), subtitle.c_str(), names);
+        std::wstring subTempl = LngStrW(IDS_IMP_FOUND_REG);
+        if (subTempl.empty()) subTempl = L"Found {} {} sessions (registry):";
+        const std::wstring sourceW(source, source + strlen(source));
+        const std::wstring subtitle = FormatW(subTempl, {std::to_wstring(sessions.size()), sourceW});
+        std::wstring caption = LngStrW(titleId);
+        if (caption.empty()) caption = std::wstring(L"Import ") + sourceW + L" Sessions";
+        const std::vector<size_t> sel = ShowSessionPickerDlg(owner, std::move(caption), subtitle, names);
         if (sel.empty()) return 0;
         int count = 0;
         for (size_t idx : sel) {
@@ -1019,30 +1086,38 @@ int ShowExternalSessionImportMenu(HWND owner,
     };
 
     if (cmd == kCmdPickPutty) {
-        imported = pickRegistrySessions(puttySessions, "PuTTY");
+        imported = pickRegistrySessions(puttySessions, "PuTTY", IDS_IMP_TITLE_PUTTY);
         maybeApply();
         showFeedback("unsupported session(s)");
         return imported;
     }
     if (cmd == kCmdPickWinScp) {
-        imported = pickRegistrySessions(winScpSessions, "WinSCP");
+        imported = pickRegistrySessions(winScpSessions, "WinSCP", IDS_IMP_TITLE_WINSCP);
         maybeApply();
         showFeedback("unsupported WinSCP session(s)");
         return imported;
     }
 
     auto handlePortableImport = [&](const std::vector<PortableSessionDescriptor>& sessions,
-                                    const char* caption, const char* sourceDesc) -> int {
+                                    UINT captionId, const char* sourceDesc) -> int {
         if (sessions.empty()) {
             WindowsUserFeedback fb(owner);
-            fb.ShowMessage(std::format("No sessions found in {}.", sourceDesc), "SFTP");
+            std::wstring msgTempl = LngStrW(IDS_IMP_MSG_NOT_FOUND);
+            if (msgTempl.empty()) msgTempl = L"No sessions found in {}.";
+            const std::wstring descW(sourceDesc, sourceDesc + strlen(sourceDesc));
+            fb.ShowMessage(WideToUtf8(FormatW(msgTempl, {descW})), "SFTP");
             return 0;
         }
         std::vector<std::string> names;
         names.reserve(sessions.size());
         for (const auto& s : sessions) names.push_back(s.displayName);
-        const std::string subtitle = std::format("Found {} sessions in {}:", sessions.size(), sourceDesc);
-        const std::vector<size_t> sel = ShowSessionPickerDlg(owner, caption, subtitle.c_str(), names);
+        std::wstring subTempl = LngStrW(IDS_IMP_FOUND_FILE);
+        if (subTempl.empty()) subTempl = L"Found {} sessions in {}:";
+        const std::wstring descW(sourceDesc, sourceDesc + strlen(sourceDesc));
+        const std::wstring subtitle = FormatW(subTempl, {std::to_wstring(sessions.size()), descW});
+        std::wstring captionW = LngStrW(captionId);
+        if (captionW.empty()) captionW = std::wstring(L"Import ") + descW + L" Sessions";
+        const std::vector<size_t> sel = ShowSessionPickerDlg(owner, std::move(captionW), subtitle, names);
         if (sel.empty()) return 0;
         int count = 0;
         for (size_t idx : sel) {
@@ -1067,7 +1142,7 @@ int ShowExternalSessionImportMenu(HWND owner,
 
         std::vector<PortableSessionDescriptor> portableSessions;
         EnumeratePortableSessions(iniPath.c_str(), SessionSource::winscp, portableSessions);
-        imported = handlePortableImport(portableSessions, "Import WinSCP Sessions", "WinSCP.ini");
+        imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_WINSCP, "WinSCP.ini");
         maybeApply();
         showFeedback("unsupported WinSCP session(s)");
         return imported;
@@ -1094,7 +1169,7 @@ int ShowExternalSessionImportMenu(HWND owner,
         }
         std::vector<PortableSessionDescriptor> portableSessions;
         EnumeratePortableSessions(tempIni.c_str(), SessionSource::putty, portableSessions);
-        imported = handlePortableImport(portableSessions, "Import PuTTY Portable Sessions", "putty.reg");
+        imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_PUTTY_PORT, "putty.reg");
         DeleteFileA(tempIni.c_str());
         maybeApply();
         showFeedback("unsupported session(s)");

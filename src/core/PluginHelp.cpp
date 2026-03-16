@@ -3,10 +3,44 @@
 #include <shellapi.h>
 #include <array>
 #include <string>
+#include <vector>
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "WindowsUserFeedback.h"
 #include "res/resource.h"
+
+#pragma comment(lib, "version.lib")
+
+// Reads FileVersion from own VERSIONINFO resource, returns e.g. "1.0.0.10"
+// Returns empty string on failure.
+std::wstring GetPluginVersionW()
+{
+    std::array<wchar_t, MAX_PATH> path{};
+    if (!GetModuleFileNameW(hinst, path.data(), static_cast<DWORD>(path.size())))
+        return {};
+
+    DWORD dummy{};
+    const DWORD size = GetFileVersionInfoSizeW(path.data(), &dummy);
+    if (!size)
+        return {};
+
+    std::vector<BYTE> buf(size);
+    if (!GetFileVersionInfoW(path.data(), 0, size, buf.data()))
+        return {};
+
+    VS_FIXEDFILEINFO* pvi{};
+    UINT len{};
+    if (!VerQueryValueW(buf.data(), L"\\", reinterpret_cast<void**>(&pvi), &len) || !pvi)
+        return {};
+
+    wchar_t ver[32]{};
+    swprintf_s(ver, L"%u.%u.%u.%u",
+        HIWORD(pvi->dwFileVersionMS),
+        LOWORD(pvi->dwFileVersionMS),
+        HIWORD(pvi->dwFileVersionLS),
+        LOWORD(pvi->dwFileVersionLS));
+    return ver;
+}
 
 bool GetPluginDirectoryA(std::string& outDir)
 {
@@ -32,6 +66,12 @@ void OpenPluginHelp(HWND hWnd)
         return;
     }
 
+    // Build title with version: "SFTP Plugin v1.0.0.10"
+    std::wstring helpTitle = L"SFTP Plugin";
+    const std::wstring ver = GetPluginVersionW();
+    if (!ver.empty())
+        helpTitle += L" v" + ver;
+
     std::string chmPath = pluginDir + "\\sftpplug.chm";
     DWORD attrs = GetFileAttributesA(chmPath.c_str());
     if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
@@ -50,5 +90,9 @@ void OpenPluginHelp(HWND hWnd)
     std::string msg(needed > 0 ? needed - 1 : 0, '\0');
     if (needed > 0)
         WideCharToMultiByte(CP_ACP, 0, msgW.c_str(), -1, msg.data(), needed, nullptr, nullptr);
-    feedback.ShowError(msg, "Help");
+    int titleNeeded = WideCharToMultiByte(CP_ACP, 0, helpTitle.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string title(titleNeeded > 0 ? titleNeeded - 1 : 0, '\0');
+    if (titleNeeded > 0)
+        WideCharToMultiByte(CP_ACP, 0, helpTitle.c_str(), -1, title.data(), titleNeeded, nullptr, nullptr);
+    feedback.ShowError(msg, title);
 }

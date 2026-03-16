@@ -1,6 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
+#include "version.h"
 #include <winresrc.h>
 #ifndef IDC_STATIC
 #define IDC_STATIC -1
@@ -167,18 +168,17 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,242,163,50,14
 END
 
-
-IDD_SESSION_PICKER DIALOGEX 0, 0, 260, 200
+IDD_SESSION_PICKER DIALOGEX 0, 0, 278, 201
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Import Sessions"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     LTEXT           "",IDC_SESSION_SOURCE_LABEL,7,7,246,8
-    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,18,246,152
-    PUSHBUTTON      "Select &All",IDC_SELECTALL,7,178,52,14
-    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,65,178,54,14
-    DEFPUSHBUTTON   "&Import",IDOK,149,178,52,14
-    PUSHBUTTON      "Cancel",IDCANCEL,207,178,46,14
+    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,18,265,152
+    PUSHBUTTON      "Select &All",IDC_SELECTALL,7,178,62,14
+    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,78,178,66,14
+    DEFPUSHBUTTON   "&Import",IDOK,153,178,60,14
+    PUSHBUTTON      "Cancel",IDCANCEL,221,178,50,14
 END
 
 
@@ -215,6 +215,12 @@ BEGIN
 
     IDD_JUMPHOST, DIALOG
     BEGIN
+    END
+
+    IDD_SESSION_PICKER, DIALOG
+    BEGIN
+        RIGHTMARGIN, 260
+        BOTTOMMARGIN, 200
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -274,6 +280,11 @@ BEGIN
 END
 
 IDD_PROXY AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_SESSION_PICKER AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
@@ -353,6 +364,34 @@ BEGIN
     IDS_STRING12053         "Insert CD-ROM"
     IDS_LAN_ROLE_PROMPT     "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
     IDS_LAN_SESSION_TIMEOUT "Session timeout: [__] min (0=no limit)"
+    IDS_IMP_TITLE_PUTTY     "Import PuTTY Sessions"
+    IDS_IMP_TITLE_WINSCP    "Import WinSCP Sessions"
+    IDS_IMP_TITLE_PUTTY_PORT "Import PuTTY Portable Sessions"
+    IDS_IMP_FOUND_REG       "Found {} {} sessions (registry):"
+    IDS_IMP_FOUND_FILE      "Found {} sessions in {}:"
+    IDS_IMP_BTN_SELECT_ALL  "Select &All"
+    IDS_IMP_BTN_DESELECT_ALL "&Deselect All"
+    IDS_IMP_BTN_IMPORT      "&Import"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_IMP_BTN_CANCEL      "Cancel"
+    IDS_IMP_MSG_NONE        "No sessions imported."
+    IDS_IMP_MSG_NOT_FOUND   "No sessions found in {}."
+    IDS_IMP_MENU_ALL        "Import all ({})"
+    IDS_IMP_MENU_FROM_PUTTY_PORT "Import from PuTTY Portable folder..."
+    IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP.ini file..."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_JUMP_DLG_PASS       "&Password:"
+    IDS_JUMP_DLG_PUBKEY     "Public key file (*.pub):"
+    IDS_JUMP_DLG_PRIVKEY    "Private key file (*.pem;*.ppk):"
+    IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
+    IDS_BTN_HELP            "Help"
+    IDS_BTN_CANCEL          "Cancel"
 END
 
 STRINGTABLE
@@ -584,12 +623,43 @@ BEGIN
     IDS_JUMP_DLG_USER       "User name:"
 END
 
-STRINGTABLE
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION VER_FILEVERSION
+ PRODUCTVERSION VER_FILEVERSION
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
 BEGIN
-    IDS_JUMP_DLG_PASS       "&Password:"
-    IDS_JUMP_DLG_PUBKEY     "Public key file (*.pub):"
-    IDS_JUMP_DLG_PRIVKEY    "Private key file (*.pem;*.ppk):"
-    IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "kvc.pl"
+            VALUE "FileDescription",  "SFTP Plugin for Total Commander"
+            VALUE "FileVersion",      VER_FILEVERSION_STR
+            VALUE "InternalName",     "sftpplug"
+            VALUE "LegalCopyright",   "Copyright (C) 2024-2026 kvc.pl"
+            VALUE "OriginalFilename", "sftpplug.wfx"
+            VALUE "ProductName",      "SFTPplug"
+            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
 END
 
 #endif    // English (United States) resources

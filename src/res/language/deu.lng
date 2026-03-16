@@ -194,6 +194,17 @@
 280=Pairing-Passwort:
 12054=LAN Pair Peer gefunden.\nRolle wählen:\n\nJa = Sender\nNein = Empfänger\nAbbrechen = keine Änderung
 12055=Sitzungs-Timeout: [__] Min (0=kein Limit)
+12056=PuTTY-Sitzungen importieren
+12057=WinSCP-Sitzungen importieren
+12058=Portable PuTTY-Sitzungen importieren
+12059={} {}-Sitzungen gefunden (Registrierung):
+12060={} Sitzungen gefunden in {}:
+12061=&Alle auswählen
+12062=&Alle abwählen
+12063=&Importieren
+12064=Abbrechen
+12065=Keine Sitzungen importiert.
+12066=Keine Sitzungen gefunden in {}.
 281=LAN Pair Empfanger läuft bereits.
 282=LAN Pair akzeptiert: {} ({})
 283=LAN Pair: Lausche. Rollendialog erscheint bei Peer-Erkennung.
@@ -240,3 +251,8 @@
 322=Datei mit privatem Schlüssel (*.pem;*.ppk):
 323=SSH-&Agent (Pageant) für Jump-Host-Authentifizierung verwenden
 
+324=Hilfe
+325=Abbrechen
+12067=Alle importieren ({})
+12068=Aus PuTTY Portable-Ordner importieren...
+12069=Aus WinSCP.ini-Datei importieren...

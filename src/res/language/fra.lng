@@ -194,6 +194,17 @@
 280=Mot de passe pairage:
 12054=Peer LAN Pair trouvé.\nChoisissez le rôle:\n\nOui = Donneur\nNon = Receveur\nAnnuler = pas de changement
 12055=Délai session: [__] min (0=illimité)
+12056=Importer les sessions PuTTY
+12057=Importer les sessions WinSCP
+12058=Importer les sessions PuTTY Portable
+12059={} sessions {} trouvées (registre) :
+12060={} sessions trouvées dans {} :
+12061=&Tout sélectionner
+12062=Tout &désélectionner
+12063=&Importer
+12064=Annuler
+12065=Aucune session importée.
+12066=Aucune session trouvée dans {}.
 281=Receveur LAN Pair déjà en cours.
 282=LAN Pair accepté: {} ({})
 283=LAN Pair: en écoute. Dialogue de rôle au premier peer détecté.
@@ -240,3 +251,8 @@
 322=Fichier de clé privée (*.pem;*.ppk) :
 323=Utiliser l'&agent SSH (Pageant) pour l'auth. de l'hôte intermédiaire
 
+324=Aide
+325=Annuler
+12067=Tout importer ({})
+12068=Importer depuis le dossier PuTTY Portable...
+12069=Importer depuis le fichier WinSCP.ini...

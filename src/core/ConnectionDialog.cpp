@@ -36,6 +36,9 @@
 #include "LngLoader.h"
 #include "DialogLayout.h"
 
+// Forward declaration - implemented in PluginHelp.cpp
+std::wstring GetPluginVersionW();
+
 extern bool serverfieldchangedbyuser;
 
 struct ProxyDialogContext {
@@ -1877,7 +1880,19 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
         { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
         { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
+        { IDC_PLUGINHELP,         IDS_BTN_HELP              },
+        { IDCANCEL,               IDS_BTN_CANCEL            },
     });
+
+    // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.10"
+    {
+        const std::wstring ver = GetPluginVersionW();
+        if (!ver.empty()) {
+            std::array<wchar_t, 256> cur{};
+            GetWindowTextW(m_hWnd, cur.data(), static_cast<int>(cur.size() - 1));
+            SetWindowTextW(m_hWnd, (std::wstring(cur.data()) + L" v" + ver).c_str());
+        }
+    }
 
     ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
     ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);

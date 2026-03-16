@@ -194,6 +194,17 @@
 280=Contrasena pairado:
 12054=Peer LAN Pair encontrado.\nElija rol:\n\nSí = Donante\nNo = Receptor\nCancelar = sin cambios
 12055=Tiempo sesión: [__] min (0=sin límite)
+12056=Importar sesiones de PuTTY
+12057=Importar sesiones de WinSCP
+12058=Importar sesiones portátiles de PuTTY
+12059=Se encontraron {} sesiones de {} (registro):
+12060=Se encontraron {} sesiones en {}:
+12061=&Seleccionar todo
+12062=&Deseleccionar todo
+12063=&Importar
+12064=Cancelar
+12065=No se importaron sesiones.
+12066=No se encontraron sesiones en {}.
 281=Receptor LAN Pair ya en ejecucion.
 282=LAN Pair aceptado: {} ({})
 283=LAN Pair: escuchando. Dialogo de rol al detectar peer.
@@ -240,3 +251,8 @@
 322=Archivo de clave privada (*.pem;*.ppk):
 323=Usar &agente SSH (Pageant) para autenticación del host intermediario
 
+324=Ayuda
+325=Cancelar
+12067=Importar todo ({})
+12068=Importar desde carpeta PuTTY Portable...
+12069=Importar desde archivo WinSCP.ini...

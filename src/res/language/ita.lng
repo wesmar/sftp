@@ -194,6 +194,17 @@
 280=Password abbinamento:
 12054=Trovato peer LAN Pair.\nScegli ruolo:\n\nSì = Donante\nNo = Ricevente\nAnnulla = nessun cambiamento
 12055=Timeout sessione: [__] min (0=nessun limite)
+12056=Importa sessioni PuTTY
+12057=Importa sessioni WinSCP
+12058=Importa sessioni PuTTY Portable
+12059=Trovate {} sessioni {} (registro):
+12060=Trovate {} sessioni in {}:
+12061=Seleziona &tutto
+12062=&Deseleziona tutto
+12063=&Importa
+12064=Annulla
+12065=Nessuna sessione importata.
+12066=Nessuna sessione trovata in {}.
 281=Ricevente LAN Pair già in esecuzione.
 282=LAN Pair accettato: {} ({})
 283=LAN Pair: in ascolto. Il dialogo del ruolo apparirà quando viene rilevato un peer.
@@ -239,3 +250,8 @@
 321=File chiave pubblica (*.pub):
 322=File chiave privata (*.pem;*.ppk):
 323=Usa &agente SSH (Pageant) per autenticazione host intermediario
+324=Guida
+325=Annulla
+12067=Importa tutto ({})
+12068=Importa dalla cartella PuTTY Portable...
+12069=Importa dal file WinSCP.ini...

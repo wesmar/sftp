@@ -281,6 +281,17 @@
 #define IDS_STRING12053                 12053
 #define IDS_LAN_ROLE_PROMPT             12054
 #define IDS_LAN_SESSION_TIMEOUT         12055
+#define IDS_IMP_TITLE_PUTTY             12056
+#define IDS_IMP_TITLE_WINSCP            12057
+#define IDS_IMP_TITLE_PUTTY_PORT        12058
+#define IDS_IMP_FOUND_REG               12059
+#define IDS_IMP_FOUND_FILE              12060
+#define IDS_IMP_BTN_SELECT_ALL          12061
+#define IDS_IMP_BTN_DESELECT_ALL        12062
+#define IDS_IMP_BTN_IMPORT              12063
+#define IDS_IMP_BTN_CANCEL              12064
+#define IDS_IMP_MSG_NONE                12065
+#define IDS_IMP_MSG_NOT_FOUND           12066
 #define IDC_LANPAIR_GROUP               1061
 #define IDC_LAN_TIMEOUT                 1062
 #define IDC_PERMISSIONS_GROUP           1063
@@ -378,6 +389,11 @@
 #define IDS_JUMP_DLG_PUBKEY             321
 #define IDS_JUMP_DLG_PRIVKEY            322
 #define IDS_JUMP_DLG_USEAGENT           323
+#define IDS_BTN_HELP                    324
+#define IDS_BTN_CANCEL                  325
+#define IDS_IMP_MENU_ALL                12067
+#define IDS_IMP_MENU_FROM_PUTTY_PORT    12068
+#define IDS_IMP_MENU_FROM_WINSCP        12069
 
 // Next default values for new objects
 //
