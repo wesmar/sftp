@@ -22,6 +22,7 @@ namespace {
 enum class SessionSource {
     putty,
     winscp,
+    kitty,
 };
 
 struct SessionDescriptor {
@@ -824,6 +825,216 @@ std::string ConvertRegFileToTempIni(const std::string& regPath)
 }
 
 // ---------------------------------------------------------------------------
+// KiTTY Portable import (per-session files, Key\Value\ format)
+// ---------------------------------------------------------------------------
+
+struct KittySessionDescriptor {
+    std::string filePath;    // full path to the session file
+    std::string displayName; // URL-decoded session name
+};
+
+// Reads the value for a given key from a KiTTY session file.
+// Format per line: KeyName\URL-encoded-value\
+// Returns true if the key was found.
+static bool ReadKittyString(const std::string& filePath, const char* key, std::string& out)
+{
+    HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                               nullptr, OPEN_EXISTING, 0, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE)
+        return false;
+
+    DWORD fileSize = GetFileSize(hFile, nullptr);
+    if (fileSize == INVALID_FILE_SIZE || fileSize == 0) {
+        CloseHandle(hFile);
+        return false;
+    }
+
+    std::string content(fileSize, '\0');
+    DWORD bytesRead = 0;
+    ReadFile(hFile, content.data(), fileSize, &bytesRead, nullptr);
+    CloseHandle(hFile);
+    content.resize(bytesRead);
+
+    const size_t keyLen = strlen(key);
+    size_t pos = 0;
+    while (pos < content.size()) {
+        size_t eol = content.find('\n', pos);
+        std::string line;
+        if (eol == std::string::npos) {
+            line = content.substr(pos);
+            pos = content.size();
+        } else {
+            line = content.substr(pos, eol - pos);
+            pos = eol + 1;
+        }
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty())
+            continue;
+
+        // Line format: KeyName backslash URLencodedValue backslash
+        const size_t sep = line.find('\\');
+        if (sep == std::string::npos)
+            continue;
+        const std::string lineKey = line.substr(0, sep);
+        if (_stricmp(lineKey.c_str(), key) != 0)
+            continue;
+
+        // Value is between first backslash and trailing backslash
+        const size_t valStart = sep + 1;
+        const size_t valEnd   = line.rfind('\\');
+        if (valEnd == std::string::npos || valEnd <= sep)
+            continue;
+        out = UrlDecode(line.substr(valStart, valEnd - valStart));
+        return true;
+    }
+    return false;
+}
+
+// Searches dir (up to maxDepth levels) for a folder named "Sessions".
+static std::string FindKittySessionsFolder(const std::string& dir, int maxDepth = 4)
+{
+    if (maxDepth < 0)
+        return {};
+
+    const std::string pattern = dir + "\\*";
+    WIN32_FIND_DATAA fd = {};
+    HANDLE hFind = FindFirstFileA(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE)
+        return {};
+
+    std::string result;
+    std::vector<std::string> subdirs;
+
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+            continue;
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+            continue;
+        if (_stricmp(fd.cFileName, "Sessions") == 0) {
+            result = dir + "\\" + fd.cFileName;
+            break;
+        }
+        subdirs.push_back(dir + "\\" + fd.cFileName);
+    } while (FindNextFileA(hFind, &fd));
+    FindClose(hFind);
+
+    if (!result.empty())
+        return result;
+
+    for (const auto& sub : subdirs) {
+        result = FindKittySessionsFolder(sub, maxDepth - 1);
+        if (!result.empty())
+            return result;
+    }
+    return {};
+}
+
+// Enumerates session files in the KiTTY Sessions folder.
+// A valid session file must contain "Protocol\ssh\" line.
+static void EnumerateKittyFolder(const std::string& sessionsFolder,
+                                  std::vector<KittySessionDescriptor>& out)
+{
+    const std::string pattern = sessionsFolder + "\\*";
+    WIN32_FIND_DATAA fd = {};
+    HANDLE hFind = FindFirstFileA(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE)
+        return;
+
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            continue;
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+            continue;
+
+        const std::string filePath = sessionsFolder + "\\" + fd.cFileName;
+        std::string protocol;
+        ReadKittyString(filePath, "Protocol", protocol);
+        if (!EqualsI(protocol, "ssh"))
+            continue;
+
+        KittySessionDescriptor item;
+        item.filePath    = filePath;
+        item.displayName = UrlDecode(fd.cFileName);
+        out.push_back(std::move(item));
+    } while (FindNextFileA(hFind, &fd));
+    FindClose(hFind);
+
+    std::sort(out.begin(), out.end(), [](const KittySessionDescriptor& a,
+                                         const KittySessionDescriptor& b) {
+        std::string al = a.displayName;
+        std::string bl = b.displayName;
+        std::transform(al.begin(), al.end(), al.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(bl.begin(), bl.end(), bl.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return al < bl;
+    });
+}
+
+static bool ImportKittySessionToIni(const KittySessionDescriptor& session,
+                                     LPCSTR iniFileName,
+                                     ImportedSessionData* importedData)
+{
+    std::string host;
+    if (!ReadKittyString(session.filePath, "HostName", host) || host.empty())
+        return false;
+
+    std::string portStr;
+    DWORD port = 0;
+    bool hasPort = false;
+    if (ReadKittyString(session.filePath, "PortNumber", portStr)) {
+        char* end = nullptr;
+        port = strtoul(portStr.c_str(), &end, 10);
+        hasPort = (end && *end == '\0');
+    }
+
+    std::string userName;
+    ReadKittyString(session.filePath, "UserName", userName);
+
+    std::string publicKeyFile;
+    ReadKittyString(session.filePath, "PublicKeyFile", publicKeyFile);
+
+    std::string serverField = host;
+    if (hasPort && port > 0 && port != 22)
+        serverField += std::format(":{}", port);
+
+    const std::string sectionName = MakeUniqueIniSection(session.displayName, SessionSource::putty, iniFileName);
+
+    WritePrivateProfileStringA(sectionName.c_str(), "server", serverField.c_str(), iniFileName);
+    if (!userName.empty())
+        WritePrivateProfileStringA(sectionName.c_str(), "user", userName.c_str(), iniFileName);
+    WritePrivateProfileStringA(sectionName.c_str(), "utf8",           "0", iniFileName);
+    WritePrivateProfileStringA(sectionName.c_str(), "unixlinebreaks", "0", iniFileName);
+
+    if (!publicKeyFile.empty()) {
+        std::string expandedKeyFile(MAX_PATH, '\0');
+        const DWORD expandedLen = ExpandEnvironmentStringsA(publicKeyFile.c_str(),
+                                                            expandedKeyFile.data(),
+                                                            static_cast<DWORD>(expandedKeyFile.size()));
+        if (expandedLen > 0 && expandedLen <= expandedKeyFile.size()) {
+            expandedKeyFile.resize(expandedLen - 1);
+            publicKeyFile = expandedKeyFile;
+        }
+        if (EndsWithI(publicKeyFile, ".ppk") || EndsWithI(publicKeyFile, ".pem")) {
+            WritePrivateProfileStringA(sectionName.c_str(), "privkeyfile", publicKeyFile.c_str(), iniFileName);
+            if (importedData)
+                importedData->privkeyfile = publicKeyFile;
+        } else if (EndsWithI(publicKeyFile, ".pub")) {
+            WritePrivateProfileStringA(sectionName.c_str(), "pubkeyfile", publicKeyFile.c_str(), iniFileName);
+            if (importedData)
+                importedData->pubkeyfile = publicKeyFile;
+        }
+    }
+
+    if (importedData) {
+        importedData->sectionName = sectionName;
+        importedData->server      = serverField;
+        importedData->userName    = userName;
+        importedData->useagent    = false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Localization helpers (import dialog)
 // ---------------------------------------------------------------------------
 
@@ -984,11 +1195,12 @@ int ShowExternalSessionImportMenu(HWND owner,
     const bool hasPutty = EnumerateSessions(SessionSource::putty, puttySessions);
     const bool hasWinScp = EnumerateSessions(SessionSource::winscp, winScpSessions);
 
-    constexpr UINT kCmdPickPutty           = 50001;
-    constexpr UINT kCmdPickWinScp          = 50002;
-    constexpr UINT kCmdImportAll           = 50000;
-    constexpr UINT kCmdImportFromWinScpIni = 50004;
-    constexpr UINT kCmdImportFromPuttyReg  = 50005;
+    constexpr UINT kCmdPickPutty              = 50001;
+    constexpr UINT kCmdPickWinScp             = 50002;
+    constexpr UINT kCmdImportAll              = 50000;
+    constexpr UINT kCmdImportFromWinScpIni    = 50004;
+    constexpr UINT kCmdImportFromPuttyReg     = 50005;
+    constexpr UINT kCmdImportFromKittyFolder  = 50006;
 
     HMENU menu = CreatePopupMenu();
     if (hasPutty)
@@ -1013,6 +1225,11 @@ int ShowExternalSessionImportMenu(HWND owner,
         std::wstring fromWinScp = LngStrW(IDS_IMP_MENU_FROM_WINSCP);
         if (fromWinScp.empty()) fromWinScp = L"Import from WinSCP.ini file...";
         AppendMenuW(menu, MF_STRING, kCmdImportFromWinScpIni, fromWinScp.c_str());
+    }
+    {
+        std::wstring fromKitty = LngStrW(IDS_IMP_MENU_FROM_KITTY_PORT);
+        if (fromKitty.empty()) fromKitty = L"Import from KiTTY Portable folder...";
+        AppendMenuW(menu, MF_STRING, kCmdImportFromKittyFolder, fromKitty.c_str());
     }
 
     POINT pt;
@@ -1171,6 +1388,53 @@ int ShowExternalSessionImportMenu(HWND owner,
         EnumeratePortableSessions(tempIni.c_str(), SessionSource::putty, portableSessions);
         imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_PUTTY_PORT, "putty.reg");
         DeleteFileA(tempIni.c_str());
+        maybeApply();
+        showFeedback("unsupported session(s)");
+        return imported;
+    }
+
+    if (cmd == kCmdImportFromKittyFolder) {
+        const std::string lastFolder = LoadRecentImportPath(iniFileName, "KittyFolder");
+        std::string folderPath;
+        if (!BrowseForFolder(owner, "Select KiTTY Portable folder", lastFolder.c_str(), folderPath))
+            return 0;
+        SaveRecentImportPaths(iniFileName, "KittyFolder", folderPath);
+
+        const std::string sessionsFolder = FindKittySessionsFolder(folderPath);
+        if (sessionsFolder.empty()) {
+            WindowsUserFeedback fb(owner);
+            fb.ShowMessage("Sessions folder not found in the selected KiTTY Portable directory.", "SFTP");
+            return 0;
+        }
+
+        std::vector<KittySessionDescriptor> kittySessions;
+        EnumerateKittyFolder(sessionsFolder, kittySessions);
+
+        if (kittySessions.empty()) {
+            WindowsUserFeedback fb(owner);
+            std::wstring msgTempl = LngStrW(IDS_IMP_MSG_NOT_FOUND);
+            if (msgTempl.empty()) msgTempl = L"No sessions found in {}.";
+            fb.ShowMessage(WideToUtf8(FormatW(msgTempl, {L"KiTTY Portable"})), "SFTP");
+            return 0;
+        }
+
+        std::vector<std::string> names;
+        names.reserve(kittySessions.size());
+        for (const auto& s : kittySessions) names.push_back(s.displayName);
+
+        std::wstring subTempl = LngStrW(IDS_IMP_FOUND_FILE);
+        if (subTempl.empty()) subTempl = L"Found {} sessions in {}:";
+        const std::wstring subtitle = FormatW(subTempl, {std::to_wstring(kittySessions.size()), L"KiTTY Portable"});
+        std::wstring captionW = LngStrW(IDS_IMP_TITLE_KITTY_PORT);
+        if (captionW.empty()) captionW = L"Import KiTTY Portable Sessions";
+
+        const std::vector<size_t> sel = ShowSessionPickerDlg(owner, std::move(captionW), subtitle, names);
+        if (sel.empty()) return 0;
+
+        for (size_t idx : sel) {
+            if (ImportKittySessionToIni(kittySessions[idx], iniFileName, &selectedData))
+                ++imported;
+        }
         maybeApply();
         showFeedback("unsupported session(s)");
         return imported;
