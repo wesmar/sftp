@@ -18,6 +18,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd);
 bool UpdateLocalPhpAgentScriptWithPassword(LPCSTR plainPassword);
 bool GetPluginDirectoryA(std::string& outDir);
 void OpenPluginHelp(HWND hWnd);
+std::wstring GetPluginVersionW();
 
 constexpr int kCodepageListCount = 24;
 extern int codepagelist[kCodepageListCount];

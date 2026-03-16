@@ -89,12 +89,12 @@ void ArrangePasswordRow(HWND hDlg, int labelId, int helpBtnId, int checkId)
     const int  szCheck = DlgLayout::MeasureText(hDlg, hCheck);
     const int labelX = rLabel.left;
     const int labelW = szLabel + DlgLayout::kGap;
-    const int helpX  = labelX + labelW + DlgLayout::kGap;
+    const int helpX  = labelX + labelW;
     const int helpW  = rHelp.right  - rHelp.left;
     const int helpH  = rHelp.bottom - rHelp.top;
 
     // Checkbox right-anchored: text measured, placed at dialog right edge.
-    const int checkW = DlgLayout::kBoxW + szCheck + DlgLayout::kGap;
+    const int checkW = DlgLayout::kBoxW + szCheck + DlgLayout::kGap * 2;
     const int checkX = rDlg.right - checkW - DlgLayout::kGap;
 
     DlgLayout::Move(hDlg, labelId,   labelX, rLabel.top,  labelW, rLabel.bottom - rLabel.top);

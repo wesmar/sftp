@@ -194,6 +194,22 @@
 12054=Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian
 280=Hasło parowania:
 12055=Czas sesji: [__] min (0=bez limitu)
+12056=Importuj sesje PuTTY
+12057=Importuj sesje WinSCP
+12058=Importuj przenośne sesje PuTTY
+12059=Znaleziono {} sesji {} (rejestr):
+12060=Znaleziono {} sesji w {}:
+12061=Zaznacz &wszystko
+12062=&Odznacz wszystko
+12063=&Importuj
+12064=Anuluj
+12065=Nie zaimportowano żadnych sesji.
+12066=Nie znaleziono sesji w {}.
+12067=Importuj wszystko ({})
+12068=Importuj z przenośnego folderu PuTTY...
+12069=Importuj z pliku WinSCP.ini...
+324=Pomoc
+325=Anuluj
 281=Biorca LAN Pair już działa.
 282=LAN Pair zaakceptowany: {} ({})
 283=LAN Pair: nasłuch aktywny. Okno roli pojawi się po wykryciu peera.
