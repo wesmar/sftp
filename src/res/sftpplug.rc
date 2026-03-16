@@ -1,7 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
-#include "version.h"
+#include "..\\include\\version.h"
 #include <winresrc.h>
 #ifndef IDC_STATIC
 #define IDC_STATIC -1

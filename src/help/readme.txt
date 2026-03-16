@@ -1,4 +1,4 @@
-Secure FTP plugin (x64 only)
+Secure FTP Plugin
 Copyright (C) Marek Wesolowski
 
 Help:
@@ -8,27 +8,27 @@ Help:
 Installation:
 - Open this ZIP in Total Commander and press Enter on the archive.
 - Confirm plugin installation when prompted.
+- Total Commander selects the correct architecture (x64 or x86) automatically.
 
 Package contents:
-- sftpplug.wfx64 (x64 plugin binary)
-- sftp.php (current PHP Agent for modern environments)
-- pluginst.inf (TC auto-install descriptor)
+- sftpplug.wfx64 (64-bit plugin binary)
+- sftpplug.wfx   (32-bit plugin binary)
+- sftpplug.chm   (offline help)
+- sftp.php        (PHP Agent for HTTP transfer mode)
+- pluginst.inf    (TC auto-install descriptor)
 - readme.txt
 
 Important:
-- This package is x64-only.
-- No external libssh2.dll is required in this package.
-- Do not mix with old x86 package files.
+- No external libssh2.dll or VC++ Redistributable required.
 
 Highlights:
 - SFTP + SCP support
 - Shell transfer fallback for restricted hosts
 - Jump Host / ProxyJump for bastion-routed SSH sessions
 - PHP Agent (HTTP) transfer mode for hosts without SSH account access
-- PHP Agent script: sftp.php
 - PHP Shell (HTTP) pseudo-terminal for remote command execution
-- LAN Pair (SMB-like) for direct Windows-to-Windows local pairing
-- PuTTY/WinSCP session import
+- LAN Pair for direct Windows-to-Windows local network pairing
+- Session import from PuTTY, WinSCP, and KiTTY Portable
 - PPK/PEM key support
 - Password manager integration (TC master password)
-- More features are coming soon, including a planned SMB workflow for Windows-to-Windows scenarios.
+- 15-language localization (auto-detected from Total Commander settings)
