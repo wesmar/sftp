@@ -2,9 +2,9 @@
 <html>
 <head><meta charset="utf-8"><title>Import from PuTTY / WinSCP</title><link rel="stylesheet" href="assets/style.css"></head>
 <body>
-<h1>Import from PuTTY / WinSCP</h1>
+<h1>Import from PuTTY / WinSCP / KiTTY</h1>
 
-<p>The <b>Import...</b> button in the connection dialog opens a wizard that migrates sessions from PuTTY or WinSCP into the plugin without modifying the source data.</p>
+<p>The <b>Import...</b> button in the connection dialog migrates sessions from PuTTY, WinSCP, or KiTTY into the plugin without modifying the source data.</p>
 
 <h2>Supported sources</h2>
 
@@ -14,6 +14,7 @@
   <tr><td><b>PuTTY Portable (folder)</b></td><td>Browse to the PuTTY Portable folder — the plugin finds <code>putty.reg</code> automatically (recursive search up to 4 levels deep)</td></tr>
   <tr><td><b>WinSCP (registry)</b></td><td><code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></td></tr>
   <tr><td><b>WinSCP Portable (.ini)</b></td><td>Browse to <code>WinSCP.ini</code> directly</td></tr>
+  <tr><td><b>KiTTY Portable (folder)</b></td><td>Browse to the KiTTYPortable root — the plugin finds the <code>Sessions</code> folder automatically (recursive search up to 4 levels deep)</td></tr>
 </table>
 
 <h2>Checkbox picker dialog</h2>
@@ -28,14 +29,24 @@
 <h2>Path memory (4-path history)</h2>
 <p>The folder/file browse dialog for portable sources remembers the last 4 used paths. They are persisted in the <code>[ImportPaths]</code> section of <code>sftpplug.ini</code> and pre-selected on next open, so you do not need to navigate to the same folder twice.</p>
 
+<h2>KiTTY Portable — session format</h2>
+<p>KiTTY Portable stores sessions as <b>individual files</b> inside the <code>Data\Sessions\</code> subfolder. The filename is the URL-encoded session name. Each file uses a simple line-by-line format:</p>
+<pre>HostName\myserver.example.com\
+PortNumber\22\
+UserName\admin\
+Protocol\ssh\</pre>
+<p>Each line is <code>KeyName\URL-encoded-value\</code>. The plugin searches the selected folder recursively (up to 4 levels) for a folder named <code>Sessions</code>, so you can point it at the KiTTYPortable root and it will find the sessions automatically. Only SSH sessions (those with <code>Protocol\ssh\</code>) are imported; sessions for other protocols are silently skipped.</p>
+
 <h2>What is imported</h2>
-<ul>
-  <li>Hostname and port</li>
-  <li>Username</li>
-  <li>Key file path (if set)</li>
-  <li>SSH agent flag</li>
-</ul>
-<p>Passwords are <b>not</b> imported (PuTTY and WinSCP store them in formats incompatible with the plugin's DPAPI storage). You will be prompted for a password on the first connection.</p>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Field</th><th>PuTTY / WinSCP</th><th>KiTTY Portable</th></tr>
+  <tr><td>Hostname and port</td><td>✔</td><td>✔</td></tr>
+  <tr><td>Username</td><td>✔</td><td>✔</td></tr>
+  <tr><td>Key file path</td><td>✔</td><td>✔</td></tr>
+  <tr><td>SSH agent flag</td><td>✔</td><td>—</td></tr>
+  <tr><td>Password</td><td>—</td><td>—</td></tr>
+</table>
+<p>Passwords are <b>never</b> imported regardless of source — you will be prompted on the first connection.</p>
 
 <h2>Protocol mapping</h2>
 <ul>
@@ -61,7 +72,7 @@
 </ol>
 
 <div class="note">
-  <b>Tip:</b> For PuTTY Portable, navigate to the folder that contains <code>Data\settings\</code> or the root of the portable installation. The plugin recurses up to 4 directory levels looking for <code>putty.reg</code>.
+  <b>Tip:</b> For PuTTY Portable, navigate to the root of the portable installation. The plugin recurses up to 4 directory levels looking for <code>putty.reg</code>. For KiTTY Portable, similarly point to the KiTTYPortable root — the plugin will locate the <code>Data\Sessions\</code> folder automatically.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

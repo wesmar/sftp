@@ -81,6 +81,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 
 - Session import from PuTTY and WinSCP Windows Registry.
 - Session import from PuTTY Portable: select the PuTTY Portable folder — the plugin finds `putty.reg` automatically (recursive search up to 4 levels deep).
+- Session import from KiTTY Portable: select the KiTTYPortable root — the plugin finds the `Sessions` folder automatically (recursive search up to 4 levels deep); individual session files, only SSH sessions imported.
 - Proxy support: HTTP CONNECT, SOCKS4, SOCKS4a, SOCKS5 (with or without credentials).
 - Dual-stack IPv4/IPv6 (`getaddrinfo`, `AF_INET6`).
 - Host key fingerprint verification with first-connection warning and change alert.
@@ -447,16 +448,20 @@ Implemented in `ProxyNegotiator.cpp`, isolated from the main connection path.
 
 ### Session Import
 
-`SessionImport.cpp` reads from Windows Registry:
+`SessionImport.cpp` reads from Windows Registry and portable installations:
 
-| Source | Registry path |
-|--------|--------------|
-| PuTTY | `HKCU\Software\SimonTatham\PuTTY\Sessions` |
-| WinSCP | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` |
+| Source | Location |
+|--------|---------|
+| PuTTY (registry) | `HKCU\Software\SimonTatham\PuTTY\Sessions` |
+| WinSCP (registry) | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` |
+| PuTTY Portable | Browse to portable folder — finds `putty.reg` recursively (up to 4 levels) |
+| WinSCP Portable | Browse to `WinSCP.ini` directly |
+| KiTTY Portable | Browse to KiTTYPortable root — finds `Sessions` folder recursively (up to 4 levels); individual session files per session; only SSH sessions imported |
 
 **Import Features:**
 - Non-conflicting conversion to plugin INI format
 - Preserves connectivity fields (host, port, user, keys)
+- Passwords are never imported — prompted on first connection
 - **Checkbox picker dialog** — select any combination of sessions and import in one step
 - **4-path memory** — the last 4 used folder/file paths are remembered and pre-selected on next open
 - **No auto-connect** side effects during import
@@ -741,7 +746,7 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
 | `PpkConverter.cpp` | PPK v2/v3 → PEM conversion | BCrypt + Argon2; no tools |
 | `PasswordCrypto.cpp` | DPAPI encrypt/decrypt, legacy XOR read | `DataBlob` RAII |
-| `SessionImport.cpp` | PuTTY / WinSCP registry → INI | Non-destructive merge |
+| `SessionImport.cpp` | PuTTY / WinSCP registry + Portable + KiTTY Portable → INI | Non-destructive merge |
 | `ServerRegistry.cpp` | In-memory server profile registry | |
 | `ProfileSettings.cpp` | INI read/write for connection profiles | |
 | `LanPair.cpp` | PAIR1 auth protocol, UDP discovery, PBKDF2 | `namespace smb` |
@@ -994,6 +999,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 - **PuTTY Portable folder import** — auto-finds `putty.reg` recursively; WinSCP.ini portable import
+- **KiTTY Portable import** — auto-finds `Sessions` folder recursively; individual session files (`KeyName\value\` format); only SSH sessions imported
 - **Checkbox session picker** — replaces flat submenus; SysListView32 with LVS_EX_CHECKBOXES; Select All / Deselect All; imports any combination in one step
 - **4-path import memory** — last 4 folder/file paths persisted in `[ImportPaths]` of sftpplug.ini; browse dialog pre-selects last used location
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
@@ -1017,7 +1023,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 
 ---
 
-**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini import, no VC++ Redistributable required
+**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, no VC++ Redistributable required
 
 *Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*
