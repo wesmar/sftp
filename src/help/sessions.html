@@ -77,7 +77,7 @@
 
 <h2>Import Sessions</h2>
 
-<p>Click <b>Import...</b> to open the import wizard. Sessions are imported without modifying the source data. See <a href="import-migration.html">Import from PuTTY / WinSCP</a> for full details.</p>
+<p>Click <b>Import...</b> to open the import menu. Sessions are imported without modifying the source data. See <a href="import-migration.html">Import from PuTTY / WinSCP / KiTTY</a> for full details.</p>
 
 <h3>Supported sources</h3>
 <ul>
@@ -85,6 +85,7 @@
   <li><b>PuTTY Portable</b> — browse to the portable folder; plugin finds <code>putty.reg</code> automatically (up to 4 levels deep)</li>
   <li><b>WinSCP (registry)</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
   <li><b>WinSCP Portable</b> — browse to <code>WinSCP.ini</code> directly</li>
+  <li><b>KiTTY Portable</b> — browse to the KiTTYPortable root; plugin finds the <code>Sessions</code> folder automatically (up to 4 levels deep); only SSH sessions imported</li>
 </ul>
 
 <h3>Checkbox picker</h3>
@@ -168,8 +169,9 @@ aws-eu-west-web         - Cloud provider + region
 
 <h3>Import fails</h3>
 <ul>
-  <li>Verify source sessions exist in registry</li>
-  <li>Check registry permissions</li>
+  <li>Verify source sessions exist in registry (PuTTY/WinSCP) or in the correct folder (Portable/KiTTY)</li>
+  <li>Check registry permissions for registry-based sources</li>
+  <li>For KiTTY Portable: ensure the folder contains a <code>Sessions</code> subdirectory with session files</li>
   <li>Run Total Commander as administrator if needed</li>
 </ul>
 
