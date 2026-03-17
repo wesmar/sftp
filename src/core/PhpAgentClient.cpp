@@ -1,5 +1,6 @@
 #include "global.h"
 #include "PhpAgentClient.h"
+#include "res/resource.h"
 #include <winhttp.h>
 #include <array>
 #include <string>
@@ -19,6 +20,28 @@
 #pragma comment(lib, "winhttp.lib")
 
 #define PHP_LOG(fmt, ...) SFTP_LOG("PHP", fmt, ##__VA_ARGS__)
+
+// Load a translated string as UTF-8 (LNG takes priority, then RC).
+static std::string PhpLngStr(UINT id, const char* fallback)
+{
+    const char* s = LngGetString(id);
+    if (s) return s;
+    std::array<char, 512> buf{};
+    const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+    return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fallback ? fallback : "");
+}
+
+// Replace first occurrence of "{}" in templ with each arg in order.
+static std::string PhpFmtStr(UINT id, const char* fallback, std::initializer_list<std::string> args)
+{
+    std::string s = PhpLngStr(id, fallback);
+    for (const auto& a : args) {
+        const auto p = s.find("{}");
+        if (p == std::string::npos) break;
+        s = s.substr(0, p) + a + s.substr(p + 2);
+    }
+    return s;
+}
 
 namespace {
 
@@ -398,11 +421,13 @@ static void ReportPhpAgentHttpError(pConnectSettings cs, DWORD code, const char*
     if (!cs || !cs->feedback)
         return;
     if (code == 401 || code == 403) {
-        cs->feedback->ShowError(std::format("Wrong credentials for PHP Agent (HTTP {}).", static_cast<unsigned long>(code)), "PHP Agent");
+        cs->feedback->ShowError(PhpFmtStr(IDS_PHP_ERR_WRONG_CREDS_HTTP, "Wrong credentials for PHP Agent (HTTP {}).", {std::to_string(static_cast<unsigned long>(code))}),
+                                PhpLngStr(IDS_PHP_AGENT_TITLE, "PHP Agent"));
         return;
     }
     if (code >= 400) {
-        cs->feedback->ShowError(std::format("PHP Agent request failed for {} (HTTP {}).", op ? op : "operation", static_cast<unsigned long>(code)), "PHP Agent");
+        cs->feedback->ShowError(PhpFmtStr(IDS_PHP_ERR_REQUEST_FAILED, "PHP Agent request failed for {} (HTTP {}).", {op ? op : "operation", std::to_string(static_cast<unsigned long>(code))}),
+                                PhpLngStr(IDS_PHP_AGENT_TITLE, "PHP Agent"));
     }
 }
 
@@ -673,7 +698,9 @@ int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText)
     std::string body;
     const int rc = SendSimpleRequest(cs, L"GET", L"LIST", L"op=LIST&path=.&format=plain", nullptr, 0, &code, &body);
     if (rc != SFTP_OK) {
-        outErrorText = "Cannot reach PHP agent endpoint.";
+        std::array<char, 256> msg{};
+        const int n = LoadStr(msg, IDS_PHP_ERR_UNREACHABLE);
+        outErrorText = (n > 0) ? msg.data() : "Cannot reach PHP agent endpoint.";
         return rc;
     }
     if (IsHttpSuccess(code))
@@ -682,17 +709,19 @@ int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText)
     std::string serverMsg;
     ExtractErrorMessage(body, &serverMsg);
     if (code == 401 || code == 403) {
-        outErrorText = "Wrong credentials for PHP Agent (HTTP " + std::to_string(static_cast<unsigned long>(code)) + ").";
+        outErrorText = PhpFmtStr(IDS_PHP_ERR_WRONG_CREDS_HTTP, "Wrong credentials for PHP Agent (HTTP {}).", {std::to_string(static_cast<unsigned long>(code))});
     } else if (code == 404) {
-        outErrorText = "PHP agent endpoint not found (HTTP 404).\n"
-                       "Check URL path/filename and upload sftp.php to that location.";
+        std::array<char, 512> msg{};
+        const int n = LoadStr(msg, IDS_PHP_ERR_NOT_FOUND);
+        outErrorText = (n > 0) ? msg.data() : "PHP agent endpoint not found (HTTP 404).\nCheck URL path/filename and upload sftp.php to that location.";
     } else if (code == 503) {
-        outErrorText = "PHP agent is not configured on server (HTTP 503).\n"
-                       "Set AGENT_PSK / AGENT_PSK_SHA256 in sftp.php and upload again.";
+        std::array<char, 512> msg{};
+        const int n = LoadStr(msg, IDS_PHP_ERR_UNCONFIGURED);
+        outErrorText = (n > 0) ? msg.data() : "PHP agent is not configured on server (HTTP 503).\nSet AGENT_PSK / AGENT_PSK_SHA256 in sftp.php and upload again.";
     } else if (!serverMsg.empty()) {
-        outErrorText = "PHP Agent rejected request: " + serverMsg;
+        outErrorText = PhpFmtStr(IDS_PHP_ERR_REJECTED, "PHP Agent rejected request: {}", {serverMsg});
     } else {
-        outErrorText = "PHP Agent validation failed (HTTP " + std::to_string(static_cast<unsigned long>(code)) + ").";
+        outErrorText = PhpFmtStr(IDS_PHP_ERR_VALIDATION, "PHP Agent validation failed (HTTP {}).", {std::to_string(static_cast<unsigned long>(code))});
     }
     return SFTP_FAILED;
 }
@@ -952,6 +981,583 @@ int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
         ReportPhpAgentHttpError(cs, code, isdir ? "RMDIR" : "DELETE");
         return SFTP_FAILED;
     }
+    return SFTP_OK;
+}
+
+// ---------------------------------------------------------------------------
+// TAR streaming download (PHP Agent php_tar mode)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct TarRawHeader {
+    char name[100];
+    char mode[8];
+    char uid[8];
+    char gid[8];
+    char size[12];
+    char mtime[12];
+    char checksum[8];
+    char typeflag;
+    char linkname[100];
+    char magic[6];
+    char version[2];
+    char uname[32];
+    char gname[32];
+    char devmajor[8];
+    char devminor[8];
+    char prefix[155];
+    char pad[12];
+};
+static_assert(sizeof(TarRawHeader) == 512, "TarRawHeader must be 512 bytes");
+
+static bool TarIsZeroBlock(const uint8_t* p)
+{
+    for (int i = 0; i < 512; ++i)
+        if (p[i]) return false;
+    return true;
+}
+
+static int64_t TarParseOctal(const char* s, int len)
+{
+    int64_t v = 0;
+    for (int i = 0; i < len; ++i) {
+        if (s[i] == ' ' || s[i] == '\0') break;
+        if (s[i] >= '0' && s[i] <= '7')
+            v = v * 8 + (s[i] - '0');
+    }
+    return v;
+}
+
+static bool TarIsSafePath(const std::string& p)
+{
+    if (p.empty() || p[0] == '/') return false;
+    size_t i = 0;
+    while (i <= p.size()) {
+        size_t slash = p.find('/', i);
+        if (slash == std::string::npos) slash = p.size();
+        std::string_view comp(p.data() + i, slash - i);
+        if (comp == ".." || comp == ".") return false;
+        i = slash + 1;
+    }
+    return true;
+}
+
+static bool TarEnsureDirW(const std::wstring& path)
+{
+    std::wstring p = path;
+    while (!p.empty() && (p.back() == L'\\' || p.back() == L'/'))
+        p.pop_back();
+    if (p.empty()) return true;
+    DWORD attr = GetFileAttributesW(p.c_str());
+    if (attr != INVALID_FILE_ATTRIBUTES)
+        return !!(attr & FILE_ATTRIBUTE_DIRECTORY);
+    size_t sep = p.rfind(L'\\');
+    if (sep == std::wstring::npos) sep = p.rfind(L'/');
+    if (sep != std::wstring::npos && !TarEnsureDirW(p.substr(0, sep)))
+        return false;
+    return CreateDirectoryW(p.c_str(), nullptr) || GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+// Buffered HTTP reader — keeps at least 512 KB in flight
+struct TarReader {
+    HINTERNET req;
+    std::vector<uint8_t> buf;
+    size_t pos = 0, end_ = 0;
+    bool eof_ = false;
+
+    explicit TarReader(HINTERNET r) : req(r), buf(512 * 1024) {}
+
+    bool fill(size_t need) {
+        while (!eof_ && (end_ - pos) < need) {
+            if (pos > 0) {
+                memmove(buf.data(), buf.data() + pos, end_ - pos);
+                end_ -= pos;
+                pos = 0;
+            }
+            if (end_ + need > buf.size())
+                buf.resize(end_ + need + 64 * 1024);
+            DWORD got = 0;
+            if (!WinHttpReadData(req, buf.data() + end_,
+                                 (DWORD)(buf.size() - end_), &got) || got == 0)
+                eof_ = true;
+            else
+                end_ += got;
+        }
+        return (end_ - pos) >= need;
+    }
+
+    const uint8_t* peek(size_t n) { return fill(n) ? buf.data() + pos : nullptr; }
+    void advance(size_t n) { pos += n; }
+    void skip(size_t n) {
+        while (n > 0) {
+            if (pos >= end_) { if (!fill(1)) return; }
+            size_t avail = end_ - pos;
+            size_t s = n < avail ? n : avail;
+            pos += s; n -= s;
+        }
+    }
+};
+
+} // namespace
+
+int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR localDirW, bool overwrite)
+{
+    if (!cs || !remoteDirW || !localDirW)
+        return SFTP_FAILED;
+
+    AgentUrl url;
+    if (!ParseAgentUrl(cs, &url))
+        return SFTP_FAILED;
+
+    HttpHandles h;
+    h.session = WinHttpOpen(L"TC-SFTP-PHP-Agent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!h.session) return SFTP_FAILED;
+    WinHttpSetTimeouts(h.session, 15000, 15000, 300000, 300000);
+    h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
+    if (!h.connect) return SFTP_FAILED;
+
+    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::wstring query   = L"op=TAR_STREAM&path=" + UrlEncodeUtf8(pathUtf8);
+    const std::wstring object  = BuildObjectPath(url.object, query);
+    h.request = WinHttpOpenRequest(h.connect, L"GET", object.c_str(), nullptr,
+                                   WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                   url.secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!h.request) return SFTP_FAILED;
+
+    std::wstring headers = L"X-SFTP-OP: TAR_STREAM\r\nX-SFTP-AUTH: ";
+    headers += unicode_util::utf8_to_wstring(cs->password);
+    headers += L"\r\n";
+    if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0))
+        return SFTP_FAILED;
+    if (!WinHttpReceiveResponse(h.request, nullptr))
+        return SFTP_FAILED;
+
+    DWORD httpCode = 0;
+    if (!QueryStatus(h.request, &httpCode) || !IsHttpSuccess(httpCode)) {
+        PHP_LOG("TAR_STREAM HTTP status=%lu", (unsigned long)httpCode);
+        return SFTP_FAILED;
+    }
+
+    int64_t totalBytes = 0;
+    QueryHeaderInt64(h.request, L"Content-Length", &totalBytes);
+
+    if (!CreateDirectoryW(localDirW, nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return SFTP_WRITEFAILED;
+
+    std::wstring localRoot = localDirW;
+    while (!localRoot.empty() && (localRoot.back() == L'\\' || localRoot.back() == L'/'))
+        localRoot.pop_back();
+
+    TarReader reader(h.request);
+    int64_t bytesRead = 0;
+    std::string pendingLongName;
+
+    for (;;) {
+        const uint8_t* hdrPtr = reader.peek(512);
+        if (!hdrPtr) return SFTP_READFAILED;
+        reader.advance(512);
+        bytesRead += 512;
+
+        if (TarIsZeroBlock(hdrPtr)) {
+            const uint8_t* hdr2 = reader.peek(512);
+            if (hdr2 && TarIsZeroBlock(hdr2)) { reader.advance(512); }
+            break;
+        }
+
+        const auto* hdr = reinterpret_cast<const TarRawHeader*>(hdrPtr);
+        const int64_t fileSize = TarParseOctal(hdr->size, 12);
+        const char    typeflag = hdr->typeflag;
+
+        // Build full path (ustar prefix + name)
+        std::string entryPath;
+        if (hdr->prefix[0] != '\0') {
+            entryPath.assign(hdr->prefix, strnlen(hdr->prefix, 155));
+            entryPath += '/';
+        }
+        entryPath += std::string(hdr->name, strnlen(hdr->name, 100));
+
+        // GNU long name: data block contains the real filename
+        if (typeflag == 'L') {
+            if (fileSize > 0) {
+                std::string longBuf(static_cast<size_t>(fileSize), '\0');
+                size_t rem = longBuf.size(), off = 0;
+                while (rem > 0) {
+                    size_t want = rem < 65536 ? rem : 65536;
+                    const uint8_t* p = reader.peek(want);
+                    if (!p) { rem = 0; break; }
+                    memcpy(longBuf.data() + off, p, want);
+                    reader.advance(want);
+                    bytesRead += (int64_t)want;
+                    off += want; rem -= want;
+                }
+                const int64_t padded = ((fileSize + 511) / 512) * 512;
+                const int64_t pad    = padded - (int64_t)off;
+                if (pad > 0) { reader.skip((size_t)pad); bytesRead += pad; }
+                while (!longBuf.empty() && longBuf.back() == '\0') longBuf.pop_back();
+                pendingLongName = std::move(longBuf);
+            }
+            continue;
+        }
+
+        if (!pendingLongName.empty()) {
+            entryPath = std::move(pendingLongName);
+            pendingLongName.clear();
+        }
+
+        // Progress (also enables abort even when Content-Length is missing).
+        int pct = 0;
+        if (totalBytes > 0) {
+            pct = (int)(bytesRead * 100 / totalBytes);
+            if (pct > 100) pct = 100;
+        }
+        if (UpdatePercentBar(cs, pct, remoteDirW, localDirW))
+            return SFTP_ABORT;
+
+        // Normalise and sanitise path
+        std::replace(entryPath.begin(), entryPath.end(), '\\', '/');
+        while (!entryPath.empty() && entryPath[0] == '/') entryPath.erase(entryPath.begin());
+        const bool isDirEntry = (typeflag == '5');
+        while (!entryPath.empty() && entryPath.back() == '/') entryPath.pop_back();
+
+        if (entryPath.empty() || !TarIsSafePath(entryPath)) {
+            reader.skip((size_t)(((fileSize + 511) / 512) * 512));
+            bytesRead += ((fileSize + 511) / 512) * 512;
+            continue;
+        }
+
+        std::wstring localPath = localRoot + L'\\' + unicode_util::utf8_to_wstring(entryPath);
+        std::replace(localPath.begin(), localPath.end(), L'/', L'\\');
+
+        if (isDirEntry) {
+            TarEnsureDirW(localPath);
+            if (fileSize > 0) {
+                reader.skip((size_t)(((fileSize + 511) / 512) * 512));
+                bytesRead += ((fileSize + 511) / 512) * 512;
+            }
+            continue;
+        }
+
+        // Create parent directories
+        {
+            size_t sep = localPath.rfind(L'\\');
+            if (sep != std::wstring::npos) TarEnsureDirW(localPath.substr(0, sep));
+        }
+
+        const DWORD createDisp = overwrite ? CREATE_ALWAYS : CREATE_NEW;
+        HANDLE hf = CreateFileW(localPath.c_str(), GENERIC_WRITE, 0, nullptr,
+                                createDisp, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+
+        const int64_t paddedSize = ((fileSize + 511) / 512) * 512;
+
+        if (hf == INVALID_HANDLE_VALUE) {
+            reader.skip((size_t)paddedSize);
+            bytesRead += paddedSize;
+            continue;
+        }
+        AutoFileHandle localFile(hf);
+
+        int64_t remaining = fileSize;
+        while (remaining > 0) {
+            size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
+            const uint8_t* p = reader.peek(want);
+            if (!p) return SFTP_READFAILED;
+            DWORD wr = 0;
+            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+                return SFTP_WRITEFAILED;
+            reader.advance(want);
+            bytesRead += (int64_t)want;
+            remaining -= (int64_t)want;
+        }
+        // Skip padding
+        const int64_t dataConsumed = fileSize - remaining;
+        const int64_t pad = paddedSize - dataConsumed;
+        if (pad > 0) { reader.skip((size_t)pad); bytesRead += pad; }
+    }
+
+    UpdatePercentBar(cs, 100, remoteDirW, localDirW);
+    return SFTP_OK;
+}
+
+// ---------------------------------------------------------------------------
+// TAR streaming upload (PHP Agent php_tar mode)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+static std::array<uint8_t, 512> BuildTarUploadHeader(const std::string& name, int64_t size, time_t mtime, char type)
+{
+    std::array<uint8_t, 512> blk{};
+    const size_t nameLen = std::min<size_t>(name.size(), 99);
+    memcpy(blk.data() + 0, name.c_str(), nameLen);
+    const char* mode = (type == '5') ? "0000755" : "0000644";
+    memcpy(blk.data() + 100, mode, 7);
+    memcpy(blk.data() + 108, "0000000", 7);
+    memcpy(blk.data() + 116, "0000000", 7);
+    char szbuf[12] = {};
+    snprintf(szbuf, sizeof(szbuf), "%011llo", (unsigned long long)(uint64_t)size);
+    memcpy(blk.data() + 124, szbuf, 11);
+    char mtbuf[12] = {};
+    snprintf(mtbuf, sizeof(mtbuf), "%011llo", (unsigned long long)(uint64_t)(time_t)mtime);
+    memcpy(blk.data() + 136, mtbuf, 11);
+    memset(blk.data() + 148, ' ', 8);
+    blk[156] = (uint8_t)type;
+    memcpy(blk.data() + 257, "ustar", 5);
+    memcpy(blk.data() + 263, "00", 2);
+    unsigned int chksum = 0;
+    for (int i = 0; i < 512; ++i) chksum += blk[i];
+    char ckbuf[8] = {};
+    snprintf(ckbuf, 7, "%06o", chksum);
+    ckbuf[7] = ' ';
+    memcpy(blk.data() + 148, ckbuf, 8);
+    return blk;
+}
+
+} // namespace
+
+struct TarUploadSession {
+    pConnectSettings          cs = nullptr;
+    std::wstring              remoteBaseRel;
+    std::vector<TarUploadEntry> entries;
+    bool                      active = false;
+};
+
+static TarUploadSession s_tarSession;
+
+void TarUploadSessionBegin(pConnectSettings cs)
+{
+    s_tarSession.cs = cs;
+    s_tarSession.remoteBaseRel.clear();
+    s_tarSession.entries.clear();
+    s_tarSession.active = true;
+}
+
+void TarUploadSessionClear()
+{
+    s_tarSession.active = false;
+    s_tarSession.cs = nullptr;
+    s_tarSession.remoteBaseRel.clear();
+    s_tarSession.entries.clear();
+}
+
+bool TarUploadSessionIsActive(pConnectSettings cs)
+{
+    return s_tarSession.active && (cs == nullptr || s_tarSession.cs == cs);
+}
+
+bool TarUploadSessionQueue(pConnectSettings cs, LPCWSTR localPath, const char* remotePath)
+{
+    if (!s_tarSession.active || s_tarSession.cs != cs || !localPath || !remotePath)
+        return false;
+
+    std::string remoteA = remotePath;
+    for (char& c : remoteA) if (c == '\\') c = '/';
+
+    // Compute remoteBase from first queued entry
+    if (s_tarSession.remoteBaseRel.empty() && s_tarSession.entries.empty()) {
+        size_t slash = remoteA.rfind('/');
+        if (slash != std::string::npos)
+            s_tarSession.remoteBaseRel = unicode_util::utf8_to_wstring(remoteA.substr(0, slash));
+        else
+            s_tarSession.remoteBaseRel = L".";
+    }
+
+    // Compute TAR name: strip remoteBase prefix
+    std::string baseA = unicode_util::wide_to_narrow(s_tarSession.remoteBaseRel.c_str());
+    std::string tarName;
+    if (!baseA.empty() && remoteA.size() > baseA.size() + 1
+        && _strnicmp(remoteA.c_str(), baseA.c_str(), baseA.size()) == 0
+        && remoteA[baseA.size()] == '/')
+    {
+        tarName = remoteA.substr(baseA.size() + 1);
+    } else {
+        tarName = remoteA;
+    }
+    if (tarName.empty()) return false;
+
+    WIN32_FILE_ATTRIBUTE_DATA fad{};
+    if (!GetFileAttributesExW(localPath, GetFileExInfoStandard, &fad))
+        return false;
+
+    TarUploadEntry e;
+    e.localPath = localPath;
+    e.tarName   = tarName;
+    e.isDir     = !!(fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+    if (!e.isDir) {
+        LARGE_INTEGER sz;
+        sz.LowPart  = fad.nFileSizeLow;
+        sz.HighPart = (LONG)fad.nFileSizeHigh;
+        e.fileSize  = sz.QuadPart;
+    }
+    ULARGE_INTEGER ull;
+    ull.LowPart  = fad.ftLastWriteTime.dwLowDateTime;
+    ull.HighPart = fad.ftLastWriteTime.dwHighDateTime;
+    e.mtime = (time_t)((ull.QuadPart - 116444736000000000ULL) / 10000000ULL);
+    s_tarSession.entries.push_back(std::move(e));
+    return true;
+}
+
+int TarUploadSessionExecuteAndClear()
+{
+    if (!s_tarSession.active) return SFTP_OK;
+    if (s_tarSession.entries.empty()) {
+        TarUploadSessionClear();
+        return SFTP_OK;
+    }
+    pConnectSettings cs = s_tarSession.cs;
+    std::wstring remoteBase = s_tarSession.remoteBaseRel;
+    const int rc = PhpAgentUploadDirAsTar(cs, remoteBase.c_str(), s_tarSession.entries);
+    TarUploadSessionClear();
+    return rc;
+}
+
+int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
+                            const std::vector<TarUploadEntry>& entries)
+{
+    if (!cs || !remoteDirW || entries.empty())
+        return SFTP_OK;
+
+    // --- Pass 1: compute total TAR stream size for Content-Length ---
+    int64_t totalTarSize = 0;
+    for (const auto& e : entries) {
+        if (e.tarName.size() > 99) {
+            int64_t lnameDataSize = (int64_t)e.tarName.size() + 1;
+            totalTarSize += 512 + ((lnameDataSize + 511) / 512) * 512;
+        }
+        totalTarSize += 512; // entry header
+        if (!e.isDir)
+            totalTarSize += ((e.fileSize + 511) / 512) * 512;
+    }
+    totalTarSize += 1024; // end-of-archive
+
+    ShowStatusId(IDS_LOG_TAR_UPLOAD, (" " + std::to_string(entries.size())).c_str(), true);
+    PHP_LOG("TAR_EXTRACT upload start entries=%u size=%lld", (unsigned)entries.size(), (long long)totalTarSize);
+
+    // --- Setup WinHTTP ---
+    AgentUrl url;
+    if (!ParseAgentUrl(cs, &url))
+        return SFTP_FAILED;
+
+    HttpHandles h;
+    h.session = WinHttpOpen(L"TC-SFTP-PHP-Agent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!h.session) return SFTP_FAILED;
+    WinHttpSetTimeouts(h.session, 15000, 15000, 300000, 300000);
+    h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
+    if (!h.connect) return SFTP_FAILED;
+
+    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::wstring query   = L"op=TAR_EXTRACT&path=" + UrlEncodeUtf8(pathUtf8);
+    const std::wstring object  = BuildObjectPath(url.object, query);
+    h.request = WinHttpOpenRequest(h.connect, L"POST", object.c_str(), nullptr,
+                                   WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                   url.secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!h.request) return SFTP_FAILED;
+
+    std::wstring headers = L"X-SFTP-OP: TAR_EXTRACT\r\nX-SFTP-AUTH: ";
+    headers += unicode_util::utf8_to_wstring(cs->password);
+    headers += L"\r\nContent-Type: application/x-tar\r\n";
+
+    if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
+                            WINHTTP_NO_REQUEST_DATA, 0, (DWORD)totalTarSize, 0))
+        return SFTP_FAILED;
+
+    // Helper lambda: write raw bytes to WinHTTP
+    auto writeRaw = [&](const void* data, DWORD len) -> bool {
+        DWORD wr = 0;
+        return WinHttpWriteData(h.request, data, len, &wr) && wr == len;
+    };
+    auto writeBlock = [&](const std::array<uint8_t, 512>& blk) -> bool {
+        return writeRaw(blk.data(), 512);
+    };
+
+    static const std::array<uint8_t, 512> s_zeroBlock{};
+
+    // --- Pass 2: stream TAR blocks ---
+    const int totalFiles = (int)entries.size();
+    int filesDone = 0;
+
+    for (const auto& e : entries) {
+        if (UpdatePercentBar(cs, (filesDone * 100) / std::max<int>(1, totalFiles),
+                             e.localPath.c_str(), remoteDirW))
+            return SFTP_ABORT;
+
+        // GNU LongLink if needed
+        if (e.tarName.size() > 99) {
+            std::string lnameData = e.tarName + '\0';
+            int64_t lnamePadded   = ((int64_t)lnameData.size() + 511) / 512 * 512;
+            auto lhdr = BuildTarUploadHeader("././@LongLink", (int64_t)lnameData.size(), 0, 'L');
+            if (!writeBlock(lhdr)) return SFTP_WRITEFAILED;
+            if (!writeRaw(lnameData.c_str(), (DWORD)lnameData.size())) return SFTP_WRITEFAILED;
+            int64_t pad = lnamePadded - (int64_t)lnameData.size();
+            if (pad > 0) {
+                std::vector<uint8_t> zeros((size_t)pad, 0);
+                if (!writeRaw(zeros.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
+            }
+        }
+
+        // Entry header (dir names must end with '/')
+        std::string entryName = e.tarName.substr(0, 99);
+        if (e.isDir && !entryName.empty() && entryName.back() != '/')
+            entryName += '/';
+        auto hdrBlk = BuildTarUploadHeader(entryName, e.fileSize, e.mtime, e.isDir ? '5' : '0');
+        if (!writeBlock(hdrBlk)) return SFTP_WRITEFAILED;
+
+        // File data
+        if (!e.isDir && e.fileSize > 0) {
+            AutoFileHandle lf(CreateFileW(e.localPath.c_str(), GENERIC_READ,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                          OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                          nullptr));
+            const int64_t paddedSize = ((e.fileSize + 511) / 512) * 512;
+            if (lf.get() == INVALID_HANDLE_VALUE) {
+                // Write zeros in place of unreadable file to preserve Content-Length
+                std::vector<uint8_t> zeros((size_t)std::min<int64_t>(paddedSize, 65536), 0);
+                int64_t rem = paddedSize;
+                while (rem > 0) {
+                    DWORD chunk = (DWORD)std::min<int64_t>(rem, (int64_t)zeros.size());
+                    if (!writeRaw(zeros.data(), chunk)) return SFTP_WRITEFAILED;
+                    rem -= chunk;
+                }
+            } else {
+                std::vector<uint8_t> buf(65536);
+                int64_t remaining = e.fileSize;
+                while (remaining > 0) {
+                    DWORD toRead = (DWORD)std::min<int64_t>(remaining, (int64_t)buf.size());
+                    DWORD rd = 0;
+                    if (!ReadFile(lf.get(), buf.data(), toRead, &rd, nullptr) || rd == 0)
+                        return SFTP_READFAILED;
+                    if (!writeRaw(buf.data(), rd)) return SFTP_WRITEFAILED;
+                    remaining -= rd;
+                }
+                int64_t pad = paddedSize - e.fileSize;
+                if (pad > 0) {
+                    std::vector<uint8_t> zeros((size_t)pad, 0);
+                    if (!writeRaw(zeros.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
+                }
+            }
+        }
+        ++filesDone;
+    }
+
+    // End-of-archive: two zero blocks
+    if (!writeBlock(s_zeroBlock) || !writeBlock(s_zeroBlock))
+        return SFTP_WRITEFAILED;
+
+    // Receive response
+    if (!WinHttpReceiveResponse(h.request, nullptr))
+        return SFTP_FAILED;
+    DWORD code = 0;
+    if (!QueryStatus(h.request, &code) || !IsHttpSuccess(code)) {
+        PHP_LOG("TAR_EXTRACT HTTP status=%lu", (unsigned long)code);
+        return SFTP_WRITEFAILED;
+    }
+
+    UpdatePercentBar(cs, 100, nullptr, remoteDirW);
+    PHP_LOG("TAR_EXTRACT upload done files=%d", filesDone);
     return SFTP_OK;
 }
 

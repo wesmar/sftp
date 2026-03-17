@@ -52,7 +52,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **SCP (native)** | Faster than SFTP on many servers. Includes >2 GB file detection via 64-bit server check. |
 | **Shell Fallback** | `cat` / `dd` / `base64` chunk pipeline for servers blocking SFTP subsystem and `scp`. Operates over a hidden interactive SSH channel. |
 | **Jump Host (ProxyJump)** | Bastion-routed SSH via `direct-tcpip` tunneling. No external `ssh.exe` required. |
-| **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. |
+| **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. Directory uploads streamed as a single TAR archive (opt-in via `php_tar` checkbox). |
 | **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Persistent command history (Up/Down arrows, 128-entry ring buffer) stored in `%APPDATA%\GHISLER\shell_history.txt`. Maintains working-directory context across requests. |
 | **LAN Pair** | Direct Windows-to-Windows pairing mode. Custom PAIR1 authentication protocol, LAN2 file-transfer command protocol, UDP broadcast peer discovery. |
 
@@ -81,7 +81,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 
 - Session import from PuTTY and WinSCP Windows Registry.
 - Session import from PuTTY Portable: select the PuTTY Portable folder — the plugin finds `putty.reg` automatically (recursive search up to 4 levels deep).
-- Session import from KiTTY Portable: select the KiTTYPortable root — the plugin finds the `Sessions` folder automatically (recursive search up to 4 levels deep); individual session files, only SSH sessions imported.
+- Session import from KiTTY Portable: select the KiTTYPortable root — the plugin finds the `Sessions` folder automatically (recursive search up to 4 levels deep); individual session files, only SSH sessions imported; stored passwords are automatically decrypted and saved to the plugin profile (DPAPI-protected).
 - Proxy support: HTTP CONNECT, SOCKS4, SOCKS4a, SOCKS5 (with or without credentials).
 - Dual-stack IPv4/IPv6 (`getaddrinfo`, `AF_INET6`).
 - Host key fingerprint verification with first-connection warning and change alert.
@@ -456,12 +456,12 @@ Implemented in `ProxyNegotiator.cpp`, isolated from the main connection path.
 | WinSCP (registry) | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` |
 | PuTTY Portable | Browse to portable folder — finds `putty.reg` recursively (up to 4 levels) |
 | WinSCP Portable | Browse to `WinSCP.ini` directly |
-| KiTTY Portable | Browse to KiTTYPortable root — finds `Sessions` folder recursively (up to 4 levels); individual session files per session; only SSH sessions imported |
+| KiTTY Portable | Browse to KiTTYPortable root — finds `Sessions` folder recursively (up to 4 levels); individual session files per session; only SSH sessions imported; stored passwords decrypted and saved as DPAPI |
 
 **Import Features:**
 - Non-conflicting conversion to plugin INI format
 - Preserves connectivity fields (host, port, user, keys)
-- Passwords are never imported — prompted on first connection
+- **KiTTY passwords**: automatically decrypted via embedded `dp.exe` (extracted on first use from a CAB resource inside the DLL; Windows Defender path and process exclusion added before extraction via WMI/COM)
 - **Checkbox picker dialog** — select any combination of sessions and import in one step
 - **4-path memory** — the last 4 used folder/file paths are remembered and pre-selected on next open
 - **No auto-connect** side effects during import
@@ -548,7 +548,11 @@ Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero t
 
 Single-file `sftp.php` deployed on the web server. The plugin communicates via WinHTTP (`winhttp.lib`), sending chunked `multipart/form-data` for uploads and receiving raw bytes for downloads.
 
-Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`.
+Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`, `TAR_EXTRACT`.
+
+#### TAR Streaming Upload
+
+When the `php_tar` checkbox is enabled in the connection profile, directory uploads to a PHP Agent server are streamed as a single TAR archive instead of individual `PUT` requests. The plugin uses TC's `FsStatusInfo` batch session (`FS_STATUS_OP_PUT_MULTI` / `FS_STATUS_OP_PUT_MULTI_THREAD`) to collect all files, computes the exact `Content-Length` in a first pass, then streams the complete POSIX ustar TAR in a single WinHTTP POST to `op=TAR_EXTRACT`. PHP extracts files on-the-fly using a streaming parser (`tar_extract_stream`) — no temporary files on the server. GNU LongLink extension is used for paths longer than 99 characters. Regular `.tar` file uploads (without `php_tar` enabled) are unaffected and transferred normally.
 
 `AgentUrl` struct parsed from connection profile: `secure` (HTTPS), `host`, `port`, `object` path.
 
@@ -741,7 +745,8 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `SftpRemoteOps.cpp` | Listing, remote file operations | Marker-aware parsing; `SftpSetAttr` |
 | `SftpShell.cpp` | Shell channel execution, EAGAIN guards | |
 | `TransferUtils.cpp` | Progress, rate, shared transfer helpers | |
-| `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP) | |
+| `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP); TAR streaming upload session (`TarUploadSession`, `PhpAgentUploadDirAsTar`) | |
+| `KittyDecryptDeploy.cpp` | Embeds `dp.exe` as CAB RCDATA resource; deploys on first use via FDI; adds Defender path+process exclusion via WMI/COM before extraction | `KittyDecryptDeploy.h` |
 | `PhpShellConsole.cpp` | PHP Shell pseudo-terminal; keyboard input, Tab completion, Up/Down history navigation | |
 | `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
 | `PpkConverter.cpp` | PPK v2/v3 → PEM conversion | BCrypt + Argon2; no tools |
@@ -825,6 +830,7 @@ src/
     sftpplug.rc                # String tables: EN / PL / DE / FR / ES
     resource.h
     icon*.ico
+    kitty-decrypt.cab          # dp.exe packed as LZX CAB (RCDATA resource IDR_KITTY_DECRYPT_CAB)
 third_party/
   build.ps1                    # Builds all dependency libs (argon2 + libssh2, x64 + x86, /MT)
   argon/
@@ -999,11 +1005,13 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 - **PuTTY Portable folder import** — auto-finds `putty.reg` recursively; WinSCP.ini portable import
-- **KiTTY Portable import** — auto-finds `Sessions` folder recursively; individual session files (`KeyName\value\` format); only SSH sessions imported
+- **KiTTY Portable import** — auto-finds `Sessions` folder recursively; individual session files (`KeyName\value\` format); only SSH sessions imported; stored passwords decrypted via embedded `dp.exe` (CAB resource, FDI extraction, WMI/COM Defender exclusion) and saved as DPAPI
 - **Checkbox session picker** — replaces flat submenus; SysListView32 with LVS_EX_CHECKBOXES; Select All / Deselect All; imports any combination in one step
 - **4-path import memory** — last 4 folder/file paths persisted in `[ImportPaths]` of sftpplug.ini; browse dialog pre-selects last used location
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
+- **KiTTY password import** — stored KiTTY session passwords decrypted automatically via `dp.exe` (Blowfish/nbcrypt); exe embedded as LZX CAB RCDATA resource, extracted on first use via Windows FDI API; Windows Defender path and process exclusion added before extraction via WMI/COM (`MSFT_MpPreference::Add`, no PowerShell); decrypted password saved as DPAPI
+- **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected
 
 ### In Progress
 
@@ -1023,7 +1031,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 
 ---
 
-**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, no VC++ Redistributable required
+**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, **KiTTY password import** (embedded dp.exe CAB + WMI/COM Defender exclusion + DPAPI), **PHP Agent TAR upload** (streaming ustar POST, on-the-fly server extraction), no VC++ Redistributable required
 
 *Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*

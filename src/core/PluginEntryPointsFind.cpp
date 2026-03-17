@@ -17,6 +17,7 @@
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
+#include "PhpAgentClient.h"
 
 // RAII guard for a freshly-established server connection.
 // Prevents connection leaks on error paths without manual cleanup pairing.
@@ -394,6 +395,9 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
                 if (!serverid->lanSession || !serverid->lanSession->isConnected()) return false;
                 return serverid->lanSession->mkdir(LanRemotePathToUtf8(remotedir.data()));
             }
+            // PHP Agent TAR mode: skip remote mkdir; directories are created by TAR extraction.
+            if (IsPhpAgentTransport(serverid) && serverid->php_tar && TarUploadSessionIsActive(serverid))
+                return true;
             int rc = SftpCreateDirectoryW(serverid, remotedir.data());
             return (rc == SFTP_OK) ? true : false;
         }
@@ -403,17 +407,24 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
         walcopy(remotedirA.data(), Path + 1, remotedirA.size() - 1);
         remotedirA.resize(strlen(remotedirA.data()));
 
+        // Capture TC main window before opening any modal dialog (GetActiveWindow is valid here)
+        HWND hTcPanel = GetActiveWindow();
+        HWND hTcMain  = hTcPanel ? GetAncestor(hTcPanel, GA_ROOTOWNER) : nullptr;
+        if (!hTcMain)
+            hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+
         // Handling cases where user presses F7 on virtual items and accepts the autofilled name
         if (strcmp(remotedirA.data(), s_quickconnect) == 0 || strcmp(remotedirA.data(), s_f7newconnection) == 0) {
-            // Pop the Quick Connect dialog
             SftpConnectToServer(s_quickconnect, inifilename, nullptr);
             LoadServersFromIniW(inifilenameW, s_quickconnect);
+            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
             return true;
         }
 
         // Normal new named connection
         if (SftpConfigureServer(remotedirA.data(), inifilename)) {
             LoadServersFromIniW(inifilenameW, s_quickconnect);
+            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
             return true;
         }
         return false;

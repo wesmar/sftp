@@ -115,6 +115,30 @@ static void ArrangeProtocolButtons(HWND hDlg)
     }
 }
 
+// Position the PHP TAR checkbox 4px to the right of the permissions-row right edit.
+// Must be called after ArrangePermissionsRow so IDC_DIRMOD is already at its final position.
+static void ArrangePhpTarCheckbox(HWND hDlg)
+{
+    HWND hTar    = GetDlgItem(hDlg, IDC_PHP_TAR);
+    HWND hDirmod = GetDlgItem(hDlg, IDC_DIRMOD);
+    if (!hTar || !hDirmod)
+        return;
+
+    const RECT rTar    = DlgLayout::GetRect(hDlg, IDC_PHP_TAR);
+    const RECT rDirmod = DlgLayout::GetRect(hDlg, IDC_DIRMOD);
+    RECT rDlg{};
+    GetClientRect(hDlg, &rDlg);
+
+    const int gap = DlgLayout::kGap;
+    const int h   = rTar.bottom - rTar.top;
+    const int x   = rDirmod.right + gap * 3;
+    const int w   = rDlg.right - gap - x;
+    if (w <= 0)
+        return;
+
+    DlgLayout::Move(hDlg, IDC_PHP_TAR, x, rTar.top, w, h);
+}
+
 // Jump Host settings dialog procedure.
 static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -140,6 +164,8 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             { IDC_JUMP_USEAGENT,     IDS_JUMP_DLG_USEAGENT },
             { IDC_JUMP_CRYPTPASS,    IDS_DLG_CRYPTPASS     },
             { IDC_JUMP_EDITPASS,     IDS_DLG_CHANGEPASS    },
+            { IDOK,                  IDS_BTN_OK            },
+            { IDCANCEL,              IDS_BTN_CANCEL        },
         });
 
         CheckDlgButton(hWnd, IDC_JUMP_ENABLE, cs->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
@@ -541,33 +567,10 @@ static void SetLanTimeoutMinutes(HWND hWnd, int minutes)
 
 static void GetPhpOptionLabels(std::string& methodLabel, std::string& chunkLabel) noexcept
 {
-    const WORD lang = PRIMARYLANGID(GetConfiguredUiLanguageId());
-    switch (lang) {
-    case LANG_POLISH:
-        methodLabel = "Metoda:";
-        chunkLabel = "Fragmenty:";
-        break;
-    case LANG_GERMAN:
-        methodLabel = "Methode:";
-        chunkLabel = "Fragmente:";
-        break;
-    case LANG_FRENCH:
-        methodLabel = "Methode:";
-        chunkLabel = "Fragments:";
-        break;
-    case LANG_SPANISH:
-        methodLabel = "Metodo:";
-        chunkLabel = "Fragmentos:";
-        break;
-    case LANG_ITALIAN:
-        methodLabel = "Metodo:";
-        chunkLabel = "Frammenti:";
-        break;
-    default:
-        methodLabel = "Method:";
-        chunkLabel = "Chunks:";
-        break;
-    }
+    const std::wstring m = LoadResStringW(IDS_DLG_PHP_METHOD);
+    const std::wstring c = LoadResStringW(IDS_DLG_PHP_CHUNKS);
+    methodLabel = m.empty() ? "Method:" : WideToUtf8(m);
+    chunkLabel  = c.empty() ? "Chunks:" : WideToUtf8(c);
 }
 
 constexpr UINT WM_APP_LAN_PEER = WM_APP + 77;
@@ -640,7 +643,12 @@ static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const s
         ++nextIndex;
     }
     SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL, selectedIndex, 0);
-    SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, 240, 0);
+    {
+        RECT rRef{};
+        GetWindowRect(GetDlgItem(hWnd, IDC_TRANSFERMODE), &rRef);
+        const int refW = rRef.right - rRef.left;
+        SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, (WPARAM)(refW > 0 ? refW * 11 / 10 : 240), 0);
+    }
 }
 
 static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
@@ -873,48 +881,56 @@ static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectS
     }
     if (transferMode != static_cast<int>(sftp::TransferMode::php_shell)) {
         WindowsUserFeedback tempFeedback(hWnd);
-        tempFeedback.ShowMessage("Select Transfer = PHP Shell (HTTP).", "PHP Shell");
+        tempFeedback.ShowMessage(WideToUtf8(LoadResStringW(IDS_PHP_SHELL_SELECT).empty() ? L"Select Transfer = PHP Shell (HTTP)." : LoadResStringW(IDS_PHP_SHELL_SELECT)),
+                                 WideToUtf8(LoadResStringW(IDS_PHP_SHELL_TITLE).empty()  ? L"PHP Shell"                          : LoadResStringW(IDS_PHP_SHELL_TITLE)));
         return;
     }
     tConnectSettings shellSettings{};
     shellSettings.sock = INVALID_SOCKET;
-    
+
     // Use std::string instead of std::array for modern C++ style
     std::string server, user, password;
     server.resize(MAX_PATH);
     user.resize(MAX_PATH);
     password.resize(MAX_PATH);
-    
+
     const UINT serverLen = GetDlgItemTextA(hWnd, IDC_CONNECTTO, server.data(), static_cast<int>(server.size()));
     const UINT userLen = GetDlgItemTextA(hWnd, IDC_USERNAME, user.data(), static_cast<int>(user.size()));
     const UINT passLen = GetDlgItemTextA(hWnd, IDC_PASSWORD, password.data(), static_cast<int>(password.size()));
-    
+
     server.resize(serverLen);
     user.resize(userLen);
     password.resize(passLen);
-    
+
     shellSettings.server = std::move(server);
     shellSettings.user = std::move(user);
     shellSettings.password = std::move(password);
-    
+
     std::string authError;
     if (PhpAgentValidateAuth(&shellSettings, authError) != SFTP_OK) {
+        auto lngU8 = [](UINT id, const char* fb) -> std::string {
+            const char* s = LngGetString(id);
+            if (s) return s;
+            std::array<char, 512> buf{};
+            const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+            return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fb ? fb : "");
+        };
         std::string localPhpPath;
         std::string pluginDir;
         if (GetPluginDirectoryA(pluginDir)) {
             localPhpPath = pluginDir;
             localPhpPath += "\\sftp.php";
         }
-        std::string msg = authError.empty() ? "Wrong credentials for PHP Agent." : authError;
+        std::string msg = authError.empty() ? lngU8(IDS_PHP_ERR_WRONG_CREDS, "Wrong credentials for PHP Agent.") : authError;
         if (!localPhpPath.empty()) {
-            msg += "\n\nPlease copy your plugin script from:\n";
+            msg += lngU8(IDS_PHP_COPY_FROM, "\n\nPlease copy your plugin script from:\n");
             msg += localPhpPath;
-            msg += "\nand upload it to your server URL path.";
+            msg += lngU8(IDS_PHP_UPLOAD_TO, "\nand upload it to your server URL path.");
         } else {
-            msg += "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server.";
+            msg += lngU8(IDS_PHP_CHECK_URL, "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server.");
         }
         WindowsUserFeedback tempFeedback(hWnd);
-        tempFeedback.ShowError(msg, "PHP Shell");
+        tempFeedback.ShowError(msg, lngU8(IDS_PHP_SHELL_TITLE, "PHP Shell"));
         return;
     }
     ShowPhpShellConsole(hWnd, std::move(shellSettings));
@@ -1043,7 +1059,12 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         break;
     }
     SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL, cbline, 0);
-    SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, 220, 0);
+    {
+        RECT rRef{};
+        GetWindowRect(GetDlgItem(hWnd, IDC_TRANSFERMODE), &rRef);
+        const int refW = rRef.right - rRef.left;
+        SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, (WPARAM)(refW > 0 ? refW * 11 / 10 : 220), 0);
+    }
 }
 
 static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept
@@ -1180,6 +1201,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     const bool phpMode = transferMode != static_cast<int>(sftp::TransferMode::ssh_auto);
     const bool phpShellMode = transferMode == static_cast<int>(sftp::TransferMode::php_shell);
     const bool scpOnly = IsDlgButtonChecked(hWnd, IDC_SCP_ALL) == BST_CHECKED;
+    const bool phpAgentMode = transferMode == static_cast<int>(sftp::TransferMode::php_agent);
     HWND scpData = GetDlgItem(hWnd, IDC_SCP_DATA);
     HWND shellTransfer = GetDlgItem(hWnd, IDC_SHELLTRANSFER);
     HWND scpAll = GetDlgItem(hWnd, IDC_SCP_ALL);
@@ -1223,6 +1245,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(phpShellBtn, TRUE);
         const std::wstring pairBtn = LoadResStringW(IDS_BUTTON_PAIR);
         SetWindowTextW(phpShellBtn, pairBtn.empty() ? L"Pair..." : pairBtn.c_str());
+        EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), FALSE);
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
         ShowWindow(GetDlgItem(hWnd, IDC_LANPAIR_GROUP),     SW_SHOW);
@@ -1270,6 +1293,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, phpShellMode ? TRUE : FALSE);
+        EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), (phpAgentMode || phpShellMode) ? TRUE : FALSE);
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
         UpdateCertSectionState(hWnd);
@@ -1293,6 +1317,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     EnableWindow(certHelp, TRUE);
     EnableWindow(certHelpPriv, TRUE);
     EnableWindow(phpShellBtn, FALSE);
+    EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), FALSE);
     const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
     SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
     UpdateCertSectionState(hWnd);
@@ -1360,6 +1385,7 @@ static void ApplyLoadedSessionToDialog(HWND hWnd, pConnectSettings s, LPCSTR ini
     CheckDlgButton(hWnd, IDC_SCP_ALL, s->scponly ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hWnd, IDC_SHELLTRANSFER, (s->shell_transfer_dd && s->shell_transfer_force) ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE, s->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hWnd, IDC_PHP_TAR, s->php_tar ? BST_CHECKED : BST_UNCHECKED);
     SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, s->transfermode)), 0);
     RebuildSystemAndEncodingCombos(hWnd, dlgCtx, s);
     if (dlgCtx)
@@ -1398,6 +1424,8 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS  },
             { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS   },
             { IDC_EDITPASS,         IDS_DLG_CHANGEPASS  },
+            { IDOK,                 IDS_BTN_OK          },
+            { IDCANCEL,             IDS_BTN_CANCEL      },
         });
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
@@ -1891,6 +1919,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_SCP_DATA,           IDS_DLG_SCP_DATA          },
         { IDC_SCP_ALL,            IDS_DLG_SCP_ALL           },
         { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
+        { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
         { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
         { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
         { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
@@ -1899,9 +1928,11 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
         { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
         { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
+        { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
         { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
         { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
         { IDC_PLUGINHELP,         IDS_BTN_HELP              },
+        { IDOK,                   IDS_BTN_OK                },
         { IDCANCEL,               IDS_BTN_CANCEL            },
     });
 
@@ -1918,6 +1949,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
     ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
     ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
+    ArrangePhpTarCheckbox(m_hWnd);
     ArrangeProtocolButtons(m_hWnd);
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
     ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
@@ -1945,10 +1977,16 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     FillSessionCombo(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
     serverfieldchangedbyuser = false;
 
-    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"SSH (SFTP/SCP)");
-    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Agent (HTTP)");
-    SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0, (LPARAM)"PHP Shell (HTTP)");
     {
+        const std::wstring ssh = LoadResStringW(IDS_TRANSFERMODE_SSH);
+        SendDlgItemMessageW(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0,
+            (LPARAM)(ssh.empty() ? L"SSH (SFTP/SCP)" : ssh.c_str()));
+        const std::wstring phpAgent = LoadResStringW(IDS_TRANSFERMODE_PHP_AGENT);
+        SendDlgItemMessageW(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0,
+            (LPARAM)(phpAgent.empty() ? L"PHP Agent (HTTP)" : phpAgent.c_str()));
+        const std::wstring phpShell = LoadResStringW(IDS_TRANSFERMODE_PHP_SHELL);
+        SendDlgItemMessageW(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0,
+            (LPARAM)(phpShell.empty() ? L"PHP Shell (HTTP)" : phpShell.c_str()));
         const std::wstring lanMode = LoadResStringW(IDS_TRANSFERMODE_LANPAIR);
         SendDlgItemMessageW(m_hWnd, IDC_TRANSFERMODE, CB_ADDSTRING, 0,
             (LPARAM)(lanMode.empty() ? L"LAN Pair (SMB-like)" : lanMode.c_str()));
@@ -1995,6 +2033,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
             CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_CHECKED);
         if (m_settings->use_jump_host)
             CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
+        if (m_settings->php_tar)
+            CheckDlgButton(m_hWnd, IDC_PHP_TAR, BST_CHECKED);
 
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, m_settings->transfermode)), 0);
 
@@ -2254,6 +2294,7 @@ void ConnectionDialog::OnOk()
     GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
+    m_settings->php_tar       = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR)      == BST_CHECKED;
     m_settings->detailedlog   = IsDlgButtonChecked(m_hWnd, IDC_DETAILED_LOG) == BST_CHECKED;
     m_settings->compressed    = IsDlgButtonChecked(m_hWnd, IDC_COMPRESS)     == BST_CHECKED;
     m_settings->scpfordata    = IsDlgButtonChecked(m_hWnd, IDC_SCP_DATA)     == BST_CHECKED;
@@ -2346,6 +2387,7 @@ void ConnectionDialog::OnOk()
         WritePrivateProfileString(targetProfile.data(), "phphttpmode", m_settings->php_http_mode == 0 ? nullptr : buf.data(), dlgIniFileName);
         _itoa_s(m_settings->php_chunk_mib, buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), "phpchunkmb", m_settings->php_chunk_mib == 0 ? nullptr : buf.data(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "phptar", m_settings->php_tar ? "1" : nullptr, dlgIniFileName);
         _itoa_s(max(0, min(2, m_settings->lan_pair_role)), buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), "lanpairrole", m_settings->lan_pair_role == 0 ? nullptr : buf.data(), dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "lanpairpeer", m_settings->lan_pair_peer.empty() ? nullptr : m_settings->lan_pair_peer.c_str(), dlgIniFileName);
@@ -2420,7 +2462,7 @@ void ConnectionDialog::OnOk()
         transferMode == static_cast<int>(sftp::TransferMode::php_shell)) {
         if (!UpdateLocalPhpAgentScriptWithPassword(m_settings->password.c_str())) {
             SFTP_LOG("PHP", "Local sftp.php update skipped: file missing or not writable in plugin directory.");
-            ShowStatus("PHP Agent: local sftp.php update skipped (missing or read-only file).");
+            ShowStatusId(IDS_LOG_PHP_SKIP_UPDATE, nullptr, true);
         }
     }
     m_settings->customport = 0;  // will be set later by the connection logic
@@ -2468,6 +2510,9 @@ void ConnectionDialog::OnTransferModeChanged()
                 m_settings->php_http_mode = 0;
             m_settings->php_chunk_mib = PhpChunkComboIndexToValue(
                 (int)SendDlgItemMessage(m_hWnd, IDC_UTF8, CB_GETCURSEL, 0, 0));
+            if (m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_agent) ||
+                m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::php_shell))
+                m_settings->php_tar = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR) == BST_CHECKED;
         } else if (m_ctx->lastTransferMode == static_cast<int>(sftp::TransferMode::smb_lan)) {
             m_settings->lan_pair_role = LanRoleComboToValue(
                 (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0));

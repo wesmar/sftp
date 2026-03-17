@@ -171,7 +171,7 @@ static bool VerifyJumpFingerprint(
 {
     const char* raw = jmpSession->hostkeyHash(LIBSSH2_HOSTKEY_HASH_MD5);
     if (!raw) {
-        ShowStatus("Jump host: failed to get fingerprint");
+        ShowStatusId(IDS_LOG_JUMP_NO_FP, nullptr, true);
         return false;
     }
 
@@ -226,7 +226,7 @@ static bool AuthJumpHost(
         jump.user.c_str(), static_cast<unsigned>(jump.user.size()));
 
     if (!authList && jmpSession->userauthAuthenticated()) {
-        ShowStatus("Jump host: already authenticated (no auth needed)");
+        ShowStatusId(IDS_LOG_JUMP_AUTH_NONE, nullptr, true);
         return true;
     }
 
@@ -238,7 +238,7 @@ static bool AuthJumpHost(
 
     // --- 1. Agent auth ---
     if (jump.useagent && loadAgent) {
-        ShowStatus("Jump host: trying agent auth...");
+        ShowStatusId(IDS_LOG_JUMP_AGENT_TRY, nullptr, true);
         auto agent = jmpSession->agentInit();
         if (agent && agent->connect() == LIBSSH2_ERROR_NONE) {
             agent->listIdentities();
@@ -252,7 +252,7 @@ static bool AuthJumpHost(
                         IsSocketReadable(jmpSock);
                 }
                 if (r == LIBSSH2_ERROR_NONE) {
-                    ShowStatus("Jump host: agent auth OK");
+                    ShowStatusId(IDS_LOG_JUMP_AGENT_OK, nullptr, true);
                     agent->disconnect();
                     return true;
                 }
@@ -260,12 +260,12 @@ static bool AuthJumpHost(
             }
             agent->disconnect();
         }
-        ShowStatus("Jump host: agent auth failed, trying other methods");
+        ShowStatusId(IDS_LOG_JUMP_AGENT_FAIL, nullptr, true);
     }
 
     // --- 2. Public key auth ---
     if (canPubkey && !jump.privkeyfile.empty()) {
-        ShowStatus("Jump host: trying public key auth...");
+        ShowStatusId(IDS_LOG_JUMP_PUBKEY_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
         while (r == LIBSSH2_ERROR_EAGAIN) {
             r = jmpSession->userauthPubkeyFromFile(
@@ -280,15 +280,15 @@ static bool AuthJumpHost(
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
-            ShowStatus("Jump host: public key auth OK");
+            ShowStatusId(IDS_LOG_JUMP_PUBKEY_OK, nullptr, true);
             return true;
         }
-        ShowStatus("Jump host: public key auth failed");
+        ShowStatusId(IDS_LOG_JUMP_PUBKEY_FAIL, nullptr, true);
     }
 
     // --- 3. Password auth ---
     if (canPassword && !jump.password.empty()) {
-        ShowStatus("Jump host: trying password auth...");
+        ShowStatusId(IDS_LOG_JUMP_PASS_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
         while (r == LIBSSH2_ERROR_EAGAIN) {
             r = jmpSession->userauthPassword(
@@ -301,15 +301,15 @@ static bool AuthJumpHost(
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
-            ShowStatus("Jump host: password auth OK");
+            ShowStatusId(IDS_LOG_JUMP_PASS_OK, nullptr, true);
             return true;
         }
-        ShowStatus("Jump host: password auth failed");
+        ShowStatusId(IDS_LOG_JUMP_PASS_FAIL, nullptr, true);
     }
 
     // --- 4. Keyboard-interactive ---
     if (canKbd && !jump.password.empty()) {
-        ShowStatus("Jump host: trying keyboard-interactive auth...");
+        ShowStatusId(IDS_LOG_JUMP_KBD_TRY, nullptr, true);
         int r = LIBSSH2_ERROR_EAGAIN;
         while (r == LIBSSH2_ERROR_EAGAIN) {
             r = jmpSession->userauthKeyboardInteractive(
@@ -321,13 +321,13 @@ static bool AuthJumpHost(
                 break;
         }
         if (r == LIBSSH2_ERROR_NONE) {
-            ShowStatus("Jump host: keyboard-interactive auth OK");
+            ShowStatusId(IDS_LOG_JUMP_KBD_OK, nullptr, true);
             return true;
         }
-        ShowStatus("Jump host: keyboard-interactive auth failed");
+        ShowStatusId(IDS_LOG_JUMP_KBD_FAIL, nullptr, true);
     }
 
-    ShowStatus("Jump host: all authentication methods failed");
+    ShowStatusId(IDS_LOG_JUMP_AUTH_FAIL, nullptr, true);
     return false;
 }
 
@@ -344,7 +344,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     int&                      loop,
     SYSTICKS&                 lasttime)
 {
-    ShowStatus(" -- ProxyJump -- ");
+    ShowStatusId(IDS_LOG_PROXYJUMP, nullptr, true);
     ShowStatus(("Jump host: " + jump.host + ":" + std::to_string(jump.port)).c_str());
 
     // -----------------------------------------------------------------------
@@ -390,12 +390,12 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     if (!connected) {
         if (jmpSock != INVALID_SOCKET)
             closesocket(jmpSock);
-        ShowStatus(("Jump host: TCP connect failed to " + jump.host).c_str());
+        ShowStatusId(IDS_LOG_JUMP_TCP_FAIL, jump.host.c_str(), true);
         if (cs->feedback)
             cs->feedback->ShowError(("ProxyJump: cannot connect to jump host: " + jump.host).c_str());
         return nullptr;
     }
-    ShowStatus(("Jump host: TCP connected to " + jump.host).c_str());
+    ShowStatusId(IDS_LOG_JUMP_TCP_OK, jump.host.c_str(), true);
 
     // -----------------------------------------------------------------------
     // 2. Create jump SSH session
@@ -406,7 +406,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     auto jmpSession = backend->createSession(jmp_alloc, jmp_free, jmp_realloc, &kbdCtx);
     if (!jmpSession) {
         closesocket(jmpSock);
-        ShowStatus("Jump host: failed to create SSH session");
+        ShowStatusId(IDS_LOG_JUMP_SSH_FAIL, nullptr, true);
         if (cs->feedback)
             cs->feedback->ShowError("ProxyJump: libssh2 session init failed");
         return nullptr;
@@ -414,7 +414,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
     jmpSession->setBlocking(0);
 
     // SSH handshake with jump host.
-    ShowStatus("Jump host: SSH handshake...");
+    ShowStatusId(IDS_LOG_JUMP_HANDSHAKE, nullptr, true);
     {
         int r = LIBSSH2_ERROR_EAGAIN;
         while (r == LIBSSH2_ERROR_EAGAIN) {
@@ -427,7 +427,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         if (r != LIBSSH2_ERROR_NONE) {
             char* msg = nullptr; int mlen = 0;
             jmpSession->lastError(&msg, &mlen, false);
-            ShowStatus(("Jump host: SSH handshake failed: " + (msg ? std::string(msg) : "unknown")).c_str());
+            ShowStatusId(IDS_LOG_JUMP_HANDSHAKE_FAIL, msg ? msg : "unknown", true);
             if (cs->feedback)
                 cs->feedback->ShowError(("ProxyJump: jump host SSH handshake failed: " + (msg ? std::string(msg) : "")).c_str());
             jmpSession->free();
@@ -435,7 +435,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
             return nullptr;
         }
     }
-    ShowStatus("Jump host: SSH handshake OK");
+    ShowStatusId(IDS_LOG_JUMP_HANDSHAKE_OK, nullptr, true);
 
     // -----------------------------------------------------------------------
     // 3. Verify jump host fingerprint
@@ -444,7 +444,7 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
         jmpSession->disconnect("fingerprint rejected");
         jmpSession->free();
         closesocket(jmpSock);
-        ShowStatus("Jump host: fingerprint rejected");
+        ShowStatusId(IDS_LOG_JUMP_FP_REJECTED, nullptr, true);
         return nullptr;
     }
 

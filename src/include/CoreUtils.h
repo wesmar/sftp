@@ -26,6 +26,13 @@ inline int LoadStrInto(char* dest, int maxChars, UINT id)
     if (maxChars <= 0) return 0;
     const char* lngStr = LngGetString(id);
     if (lngStr) {
+        // LNG files are UTF-8; convert to ACP so ANSI TC APIs (LogProc, ProgressProc) display correctly
+        wchar_t wbuf[2048];
+        int wn = MultiByteToWideChar(CP_UTF8, 0, lngStr, -1, wbuf, 2048);
+        if (wn > 0) {
+            int an = WideCharToMultiByte(CP_ACP, 0, wbuf, -1, dest, maxChars, nullptr, nullptr);
+            if (an > 0) return an - 1;
+        }
         strncpy_s(dest, static_cast<size_t>(maxChars) + 1, lngStr, _TRUNCATE);
         return static_cast<int>(strnlen(dest, static_cast<size_t>(maxChars)));
     }

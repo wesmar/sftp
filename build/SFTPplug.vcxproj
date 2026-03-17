@@ -162,6 +162,7 @@
     <ClCompile Include="..\src\core\SftpRemoteOps.cpp" />
     <ClCompile Include="..\src\core\SftpShell.cpp" />
     <ClCompile Include="..\src\core\Libssh2Backend.cpp" />
+    <ClCompile Include="..\src\core\KittyDecryptDeploy.cpp" />
     <ClCompile Include="..\src\core\SessionImport.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPoints.cpp" />
     <ClCompile Include="..\src\core\PluginEntryPointsFind.cpp" />
@@ -202,6 +203,7 @@
     <ClInclude Include="..\src\include\ISshBackend.h" />
     <ClInclude Include="..\src\include\Libssh2Backend.h" />
     <ClInclude Include="..\src\include\SshBackendFactory.h" />
+    <ClInclude Include="..\src\include\KittyDecryptDeploy.h" />
     <ClInclude Include="..\src\include\SessionImport.h" />
     <ClInclude Include="..\src\include\PluginEntryPoints.h" />
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h" />

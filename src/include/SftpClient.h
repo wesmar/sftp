@@ -126,6 +126,7 @@ struct tConnectSettings {
     int php_http_mode;         // 0=auto, 1=POST, 2=PUT
     int php_chunk_mib;         // 0=auto, manual: 2/4/8/16/32/64 MiB
     int php_recommended_chunk_mib; // runtime from PROBE (0=unknown), used only when php_chunk_mib=0
+    bool php_tar = false;          // TAR streaming for directory downloads (PHP Agent only)
     int lan_pair_role;         // 0=auto, 1=receiver, 2=donor
     std::string lan_pair_peer; // peerId of the remote machine (set during pairing)
     std::string lan_pair_ip;   // current IP of remote peer (found by discovery)

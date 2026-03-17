@@ -186,25 +186,25 @@ if (cs->scponly) {
                 int sessErr = cs->session ? cs->session->lastErrno() : -1;
                 if (sockLost || sessErr == LIBSSH2_ERROR_SOCKET_DISCONNECT ||
                     sessErr == LIBSSH2_ERROR_SOCKET_SEND || sessErr == LIBSSH2_ERROR_SOCKET_RECV) {
-                    ShowStatus("SCP: session lost, reconnecting...");
+                    ShowStatusId(IDS_LOG_SCP_SESSION_LOST, nullptr, true);
                     SftpCloseConnection(cs);
                     Sleep(RECONNECT_SLEEP_MS);
                     if (SftpConnect(cs) != SFTP_OK || !EnsureScpShell(cs)) {
                         if (attempt == 1) { // If this is your second attempt, give up
-                            ShowStatus("SCP listing: no shell");
+                            ShowStatusId(IDS_LOG_SCP_NO_SHELL, nullptr, true);
                             return SFTP_FAILED;
                         }
                         continue; // Try again
                     }
                 } else {
-                    ShowStatus("SCP listing: no shell");
+                    ShowStatusId(IDS_LOG_SCP_NO_SHELL, nullptr, true);
                     return SFTP_FAILED;
                 }
             }
 
             ISshChannel* channel = cs->scpShellChannel.get();
             if (!channel) {
-                ShowStatus("SCP listing: no shell");
+                ShowStatusId(IDS_LOG_SCP_NO_SHELL, nullptr, true);
                 return SFTP_FAILED;
             }
 
@@ -280,7 +280,7 @@ if (cs->scponly) {
                     StripEscapeSequences(err.data());
                     ShowStatus(err.c_str());
                 } else {
-                    ShowStatus("SCP listing failed: no output or timeout.");
+                    ShowStatusId(IDS_LOG_SCP_LIST_FAIL, nullptr, true);
                 }
                 CloseScpShell(cs);
 
@@ -494,7 +494,7 @@ int SftpCreateDirectoryW(pConnectSettings cs, LPCWSTR Path)
     if (cs->scponly) {
         auto channel = ConnectChannel(cs->session.get(), cs->sock);
         if (!channel) {
-            ShowStatus("SCP Mkdir: channel creation failed");
+            ShowStatusId(IDS_LOG_SCP_MKDIR_FAIL, nullptr, true);
             return SFTP_FAILED;
         }
 

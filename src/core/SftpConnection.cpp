@@ -369,7 +369,7 @@ static int LanPairConnect(pConnectSettings cs)
         return SFTP_OK;
     cs->lanSession.reset();
 
-    ShowStatus("LAN Pair: locating peer via discovery...");
+    ShowStatusId(IDS_LOG_LAN_DISCOVER, nullptr, true);
 
     // Wait up to 4 seconds for discovery to find the peer.
     const std::string targetPeerId = cs->lan_pair_peer;
@@ -444,7 +444,7 @@ static int LanPairConnect(pConnectSettings cs)
     session->setTimeoutMin(cs->lan_pair_timeout_min);
     cs->lanSession = std::move(session);
 
-    ShowStatus("LAN Pair: connected.");
+    ShowStatusId(IDS_LOG_LAN_CONNECTED, nullptr, true);
     return SFTP_OK;
 }
 
@@ -455,10 +455,13 @@ int SftpConnect(pConnectSettings ConnectSettings)
         return LanPairConnect(ConnectSettings);
     }
     if (IsPhpAgentTransport(ConnectSettings)) {
-        ShowStatus("PHP Agent mode");
+        ShowStatusId(IDS_LOG_PHP_AGENT_MODE, nullptr, true);
         if (PhpAgentProbe(ConnectSettings) != SFTP_OK) {
-            if (ConnectSettings->feedback)
-                ConnectSettings->feedback->ShowError("PHP Agent probe failed. Check URL and key.");
+            if (ConnectSettings->feedback) {
+                std::array<char, 256> msgbuf{};
+                const int n = LoadStr(msgbuf, IDS_PHP_PROBE_FAILED);
+                ConnectSettings->feedback->ShowError(n > 0 ? msgbuf.data() : "PHP Agent probe failed. Check URL and key.");
+            }
             return SFTP_FAILED;
         }
         return SFTP_OK;
@@ -582,7 +585,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     hr = PerformAuthentication(ConnectSettings, progress, loop, lasttime, progressbuf.data(), loadAgent);
     if (hr != 0) return fail(hr);
 
-    ShowStatus("Starting post-auth initialization...");
+    ShowStatusId(IDS_LOG_POST_AUTH_INIT, nullptr, true);
     ShowStatus(ConnectSettings->scponly ? "SCP only mode" : "SFTP mode");
     RunPostAuthAutoDetect(ConnectSettings);
 
@@ -733,7 +736,7 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
         if (sessionGone || sockLost) {
             CONN_LOG("ReconnectSFTP(SCP): session/sock lost (gone=%d sockLost=%d), reconnecting",
                      sessionGone ? 1 : 0, sockLost ? 1 : 0);
-            ShowStatus("SCP: connection lost, trying to reconnect!");
+            ShowStatusId(IDS_LOG_SCP_RECONNECT, nullptr, true);
             SftpCloseConnection(ConnectSettings);
             Sleep(RECONNECT_SLEEP_MS);
             SftpConnect(ConnectSettings);
@@ -771,7 +774,7 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
 
         // Reconnect the full connection when subsystem recovery fails.
         if (!ConnectSettings->sftpsession) {
-            ShowStatus("Connection lost, trying to reconnect.");
+            ShowStatusId(IDS_LOG_RECONNECT, nullptr, true);
             SftpCloseConnection(ConnectSettings);
             Sleep(RECONNECT_SLEEP_MS);
             SftpConnect(ConnectSettings);

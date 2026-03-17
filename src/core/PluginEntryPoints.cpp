@@ -21,6 +21,7 @@
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
 #include "LngLoader.h"
+#include "PhpAgentClient.h"
 
 // Declared in SftpConnection.cpp
 void StartGlobalLanServices();
@@ -529,8 +530,28 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
                 disablereading = (InfoStartEnd == FS_STATUS_START) ? true : false;
 
+        if (InfoOperation == FS_STATUS_OP_PUT_MULTI) {
+            std::array<char, wdirtypemax> remotedir{};
+            pConnectSettings cs = GetServerIdAndRelativePathFromPath(RemoteDir, remotedir.data(), remotedir.size() - 1);
+            if (InfoStartEnd == FS_STATUS_START) {
+                if (cs && IsPhpAgentTransport(cs) && cs->php_tar)
+                    TarUploadSessionBegin(cs);
+            } else {
+                if (TarUploadSessionIsActive()) {
+                    const int rc = TarUploadSessionExecuteAndClear();
+                    if (rc != SFTP_OK && rc != SFTP_ABORT)
+                        ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
+                }
+            }
+        }
+
         if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD || InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD) {
             if (InfoStartEnd != FS_STATUS_START) {
+                if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD && TarUploadSessionIsActive()) {
+                    const int rc = TarUploadSessionExecuteAndClear();
+                    if (rc != SFTP_OK && rc != SFTP_ABORT)
+                        ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
+                }
                 FsDisconnect(RemoteDir);
                 return;
             }
@@ -540,6 +561,9 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             // get password from main thread
             pConnectSettings oldserverid = static_cast<pConnectSettings>(GetServerIdFromName(displayName.data(), mainthreadid));
             if (oldserverid) {
+                if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD
+                    && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
+                    TarUploadSessionBegin(nullptr);  // cs filled in by first FsPutFileW
                 oldpass = oldserverid->password.c_str();
                 if (!oldpass[0])
                     oldpass = nullptr;

@@ -76,7 +76,7 @@ void kbd_callback(LPCSTR name, int name_len,
             }
             if (responses[i].text) {
                 responses[i].length = (unsigned int)strlen(responses[i].text);
-                ShowStatus("sending stored password");
+                ShowStatusId(IDS_LOG_SEND_STORED_PASS, nullptr, true);
             } else {
                 autoSendPassword = false;
             }
@@ -99,14 +99,14 @@ void kbd_callback(LPCSTR name, int name_len,
                 title = std::format("{} {}@{}", title, ConnectSettings->user, ConnectSettings->server);
             retbuf[0] = 0;
 
-            ShowStatus("requesting password from user...");
+            ShowStatusId(IDS_LOG_REQUEST_PASS, nullptr, true);
             if (RequestProc(PluginNumber, RT_Password, title.c_str(), promptMsg.c_str(), retbuf.data(), retbuf.size()-1)) {
                 responses[i].text = _strdup(retbuf.data());
                 responses[i].length = (unsigned int)strlen(retbuf.data());
                 // Remember password for background transfers
                 if (ConnectSettings && ConnectSettings->password.empty())
                     ConnectSettings->password = retbuf.data();
-                ShowStatus("sending password entered by user");
+                ShowStatusId(IDS_LOG_SEND_USER_PASS, nullptr, true);
             } else {
                 responses[i].text = nullptr;
                 responses[i].length = 0;
@@ -136,24 +136,24 @@ static void ShowPpkConversionFailure(PpkConvertError convErr)
 {
     switch (convErr) {
     case PpkConvertError::unsupported_version:
-        ShowStatus("Failed to convert .ppk: unsupported PPK version.");
+        ShowStatusId(IDS_LOG_PPK_ERR_VERSION, nullptr, true);
         break;
     case PpkConvertError::unsupported_algorithm:
-        ShowStatus("Failed to convert .ppk: unsupported key algorithm.");
+        ShowStatusId(IDS_LOG_PPK_ERR_ALGO, nullptr, true);
         break;
     case PpkConvertError::unsupported_encryption:
     case PpkConvertError::unsupported_kdf:
-        ShowStatus("Failed to convert .ppk: unsupported encryption/KDF.");
+        ShowStatusId(IDS_LOG_PPK_ERR_ENC, nullptr, true);
         break;
     case PpkConvertError::kdf_unavailable:
-        ShowStatus("Failed to convert .ppk: Argon2 runtime not available.");
+        ShowStatusId(IDS_LOG_PPK_ERR_ARGON2, nullptr, true);
         break;
     case PpkConvertError::passphrase_required:
     case PpkConvertError::bad_passphrase_or_mac:
-        ShowStatus("Failed to convert .ppk: wrong passphrase or corrupted key.");
+        ShowStatusId(IDS_LOG_PPK_ERR_PASSPHRASE, nullptr, true);
         break;
     default:
-        ShowStatus("Failed to convert .ppk.");
+        ShowStatusId(IDS_LOG_PPK_ERR_GENERIC, nullptr, true);
         break;
     }
 }
@@ -245,7 +245,7 @@ static bool PreparePrivateKeyForAuth(
 
     const char* ppkPass = cs->password.empty() ? "" : cs->password.c_str();
     PpkConvertError convErr = PpkConvertError::internal_error;
-    ShowStatus("Converting PPK file...");
+    ShowStatusId(IDS_LOG_PPK_CONVERTING, nullptr, true);
     bool converted = ConvertPpkToOpenSsh(ioPrivKeyFile, ppkPass, outConvertedPrivateKey, convertedLen - 1, &convErr);
     const std::string convStatus = std::format("PPK conv: {}, err={}", converted, static_cast<int>(convErr));
     AUTH_LOG("PPK conversion: converted=%d, convErr=%d, pemPath=%s", converted, convErr, outConvertedPrivateKey);
@@ -388,7 +388,7 @@ int SftpAuthPageant(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pr
             if (ProgressLoop(progressbuf, progress, progress + 5, ploop, plasttime))
                 return finish(-IDS_AGENT_AUTHFAILED);
             if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                ShowStatus("Pageant authentication timed out.");
+                ShowStatusId(IDS_LOG_PAGEANT_TIMEOUT, nullptr, true);
                 return finish(-IDS_AGENT_AUTHFAILED);
             }
             WaitForTransportReadable(ConnectSettings);  // Sleep to avoid 100% CPU usage.
@@ -536,7 +536,7 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         if (ProgressLoop(buf.data(), progress, progress + 10, ploop, plasttime))
             break;
         if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-            ShowStatus("Public key authentication timed out.");
+            ShowStatusId(IDS_LOG_PUBKEY_TIMEOUT, nullptr, true);
             auth = LIBSSH2_ERROR_TIMEOUT;
             break;
         }

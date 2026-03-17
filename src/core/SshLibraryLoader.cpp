@@ -5,6 +5,8 @@
 #include "CoreUtils.h"
 #include "SshLibraryLoader.h"
 #include "WindowsUserFeedback.h"
+#include "SftpInternal.h"
+#include "res/resource.h"
 
 #ifndef SFTP_ALLINONE
 HINSTANCE sshlib = nullptr;
@@ -88,7 +90,7 @@ bool LoadSSHLib() noexcept
     if (sshlib)
         return loadOK;
 
-    LogProc(PluginNumber, MSGTYPE_DETAILS, "Loading SSH Library");
+    ShowStatusId(IDS_LOG_LOADING_SSH_LIB, nullptr, true);
     int olderrormode = SetErrorMode(0x8001);
     std::array<char, MAX_PATH> dllname{};
     dllname[0] = 0;

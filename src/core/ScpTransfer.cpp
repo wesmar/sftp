@@ -14,6 +14,7 @@
 #include "IUserFeedback.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "res/resource.h"
 
 namespace {
 
@@ -340,7 +341,7 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                 const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - start).count();
                 if (elapsed > SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS) {
-                    ShowStatus("SCP download: open channel timeout.");
+                    ShowStatusId(IDS_LOG_SCP_OPEN_TIMEOUT, nullptr, true);
                     break;
                 }
                 IsSocketReadable(cs->sock);
@@ -349,7 +350,7 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                         err == LIBSSH2_ERROR_SOCKET_RECV ||
                         err == LIBSSH2_ERROR_SOCKET_SEND ||
                         err == LIBSSH2_ERROR_CHANNEL_OUTOFORDER)) {
-                ShowStatus("SCP: connection dropped, reconnecting...");
+                ShowStatusId(IDS_LOG_SCP_DROPPED, nullptr, true);
                 SftpCloseConnection(cs);
                 Sleep(RECONNECT_SLEEP_MS);
                 if (SftpConnect(cs) == SFTP_OK) {

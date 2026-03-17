@@ -80,6 +80,7 @@ BEGIN
     LTEXT           "Jump host:",IDC_LABEL_JUMPHOST_GRP,5,257,42,8
     CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,49,257,104,8
     PUSHBUTTON      "Jump...",IDC_JUMP_BUTTON,224,255,40,14
+    CONTROL         "TAR",IDC_PHP_TAR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,242,224,60,8
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,295,8
     COMBOBOX        IDC_PROXYCOMBO,5,283,282,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      ">>",IDC_PROXYBUTTON,290,282,20,14
@@ -292,6 +293,45 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,12
+ PRODUCTVERSION 1,0,0,12
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "kvc.pl"
+            VALUE "FileDescription", "SFTP Plugin for Total Commander"
+            VALUE "FileVersion", "1.0.0.12"
+            VALUE "InternalName", "sftpplug"
+            VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
+            VALUE "OriginalFilename", "sftpplug.wfx"
+            VALUE "ProductName", "SFTPplug"
+            VALUE "ProductVersion", "1.0.0.12"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // String Table
 //
 
@@ -394,7 +434,104 @@ BEGIN
     IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
     IDS_BTN_HELP            "Help"
     IDS_BTN_CANCEL          "Cancel"
+    IDS_DLG_PHP_TAR         "TAR stream"
+    IDS_DLG_SYSTEM          "System:"
+    IDS_DLG_PHP_METHOD      "Method:"
+    IDS_DLG_PHP_CHUNKS      "Chunks:"
+    IDS_BTN_OK              "OK"
+    IDS_TRANSFERMODE_SSH    "SSH (SFTP/SCP)"
+    IDS_TRANSFERMODE_PHP_AGENT "PHP Agent (HTTP)"
+    IDS_TRANSFERMODE_PHP_SHELL "PHP Shell (HTTP)"
+    IDS_PHP_ERR_UNREACHABLE "Cannot reach PHP agent endpoint."
+    IDS_PHP_ERR_NOT_FOUND   "PHP agent endpoint not found (HTTP 404).\nCheck URL path/filename and upload sftp.php to that location."
+    IDS_PHP_ERR_UNCONFIGURED "PHP agent is not configured on server (HTTP 503).\nSet AGENT_PSK / AGENT_PSK_SHA256 in sftp.php and upload again."
+    IDS_PHP_ERR_WRONG_CREDS_HTTP "Wrong credentials for PHP Agent (HTTP {})."
+    IDS_PHP_ERR_REQUEST_FAILED "PHP Agent request failed for {} (HTTP {})."
+    IDS_PHP_ERR_REJECTED        "PHP Agent rejected request: {}"
+    IDS_PHP_ERR_VALIDATION      "PHP Agent validation failed (HTTP {})."
+    IDS_PHP_ERR_WRONG_CREDS     "Wrong credentials for PHP Agent."
+    IDS_PHP_SHELL_SELECT        "Select Transfer = PHP Shell (HTTP)."
+    IDS_PHP_SHELL_TITLE         "PHP Shell"
+    IDS_PHP_AGENT_TITLE         "PHP Agent"
+    IDS_PHP_COPY_FROM           "\n\nPlease copy your plugin script from:\n"
+    IDS_PHP_UPLOAD_TO           "\nand upload it to your server URL path."
+    IDS_PHP_CHECK_URL           "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server."
+    IDS_PHP_PROBE_FAILED        "PHP Agent probe failed. Check URL and key."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_LOG_SCP_SKIP_PROBE      "SCP-only: skipping auth-methods probe."
+    IDS_LOG_AUTH_METHODS_TIMEOUT "Getting auth methods timed out, using fallback."
+    IDS_LOG_AUTH_METHODS_NONE   "Auth methods list empty, using fallback."
+    IDS_LOG_AUTH_NO_PASSWORD    "User authenticated without password."
+    IDS_LOG_KBD_AUTH_TIMEOUT    "Keyboard-interactive auth timed out."
+    IDS_LOG_PASS_AUTH_TIMEOUT   "Password authentication timed out."
+    IDS_LOG_LOADING_SSH_LIB     "Loading SSH Library..."
+    IDS_LOG_LAN_DISCOVER        "LAN Pair: locating peer via discovery..."
+    IDS_LOG_LAN_CONNECTED       "LAN Pair: connected."
+    IDS_LOG_PHP_AGENT_MODE      "PHP Agent mode"
+    IDS_LOG_POST_AUTH_INIT      "Starting post-auth initialization..."
+    IDS_LOG_SCP_RECONNECT       "SCP: connection lost, trying to reconnect!"
+    IDS_LOG_RECONNECT           "Connection lost, trying to reconnect."
+    IDS_LOG_SFTP_INIT           "Initializing SFTP subsystem..."
+    IDS_LOG_SEND_STORED_PASS    "Sending stored password..."
+    IDS_LOG_REQUEST_PASS        "Requesting password from user..."
+    IDS_LOG_SEND_USER_PASS      "Sending password entered by user..."
+    IDS_LOG_PPK_ERR_VERSION     "Failed to convert .ppk: unsupported PPK version."
+    IDS_LOG_PPK_ERR_ALGO        "Failed to convert .ppk: unsupported key algorithm."
+    IDS_LOG_PPK_ERR_ENC         "Failed to convert .ppk: unsupported encryption/KDF."
+    IDS_LOG_PPK_ERR_ARGON2      "Failed to convert .ppk: Argon2 runtime not available."
+    IDS_LOG_PPK_ERR_PASSPHRASE  "Failed to convert .ppk: wrong passphrase or corrupted key."
+    IDS_LOG_PPK_ERR_GENERIC     "Failed to convert .ppk."
+    IDS_LOG_PPK_CONVERTING      "Converting PPK file..."
+    IDS_LOG_PAGEANT_TIMEOUT     "Pageant authentication timed out."
+    IDS_LOG_PUBKEY_TIMEOUT      "Public key authentication timed out."
+    IDS_LOG_JUMP_NO_FP          "Jump host: failed to get fingerprint"
+    IDS_LOG_JUMP_AUTH_NONE      "Jump host: already authenticated (no auth needed)"
+    IDS_LOG_JUMP_AGENT_TRY      "Jump host: trying agent auth..."
+    IDS_LOG_JUMP_AGENT_OK       "Jump host: agent auth OK"
+    IDS_LOG_JUMP_AGENT_FAIL     "Jump host: agent auth failed, trying other methods"
+    IDS_LOG_JUMP_PUBKEY_TRY     "Jump host: trying public key auth..."
+    IDS_LOG_JUMP_PUBKEY_OK      "Jump host: public key auth OK"
+    IDS_LOG_JUMP_PUBKEY_FAIL    "Jump host: public key auth failed"
+    IDS_LOG_JUMP_PASS_TRY       "Jump host: trying password auth..."
+    IDS_LOG_JUMP_PASS_OK        "Jump host: password auth OK"
+    IDS_LOG_JUMP_PASS_FAIL      "Jump host: password auth failed"
+    IDS_LOG_JUMP_KBD_TRY        "Jump host: trying keyboard-interactive auth..."
+    IDS_LOG_JUMP_KBD_OK         "Jump host: keyboard-interactive auth OK"
+    IDS_LOG_JUMP_KBD_FAIL       "Jump host: keyboard-interactive auth failed"
+    IDS_LOG_JUMP_AUTH_FAIL      "Jump host: all auth methods failed"
+    IDS_LOG_PROXYJUMP           " -- ProxyJump -- "
+    IDS_LOG_JUMP_SSH_FAIL       "Jump host: failed to create SSH session"
+    IDS_LOG_JUMP_HANDSHAKE      "Jump host: SSH handshake..."
+    IDS_LOG_JUMP_HANDSHAKE_OK   "Jump host: SSH handshake OK"
+    IDS_LOG_JUMP_FP_REJECTED    "Jump host: fingerprint rejected"
+    IDS_LOG_JUMP_TCP_FAIL       "Jump host: TCP connect failed to "
+    IDS_LOG_JUMP_TCP_OK         "Jump host: TCP connected to "
+    IDS_LOG_JUMP_HANDSHAKE_FAIL "Jump host: SSH handshake failed: "
+    IDS_LOG_DETECT_UTF8         "Auto-detecting UTF-8 support..."
+    IDS_LOG_DETECT_LINEBREAK    "Auto-detecting line break mode..."
+    IDS_LOG_USER_COMMAND        "Sending user-defined command:"
+    IDS_LOG_SCP64               "64-bit SCP detected!"
+    IDS_LOG_SCP_OPEN_TIMEOUT    "SCP download: open channel timeout."
+    IDS_LOG_SCP_DROPPED         "SCP: connection dropped, reconnecting..."
+    IDS_LOG_SCP_SESSION_LOST    "SCP: session lost, reconnecting..."
+    IDS_LOG_SCP_NO_SHELL        "SCP listing: no shell"
+    IDS_LOG_SCP_LIST_FAIL       "SCP listing failed: no output or timeout."
+    IDS_LOG_SCP_MKDIR_FAIL      "SCP Mkdir: channel creation failed"
+    IDS_LOG_SFTP_OPEN_TIMEOUT   "SFTP open timeout/aborted."
+    IDS_LOG_SCP_DL_TIMEOUT      "SCP download timed out."
+    IDS_LOG_SCP_UL_TIMEOUT      "SCP upload timed out."
+    IDS_LOG_SHELL_DL_START      "Shell transfer: starting download..."
+    IDS_LOG_SHELL_BASE64        "Shell transfer: using base64 (compat mode)..."
+    IDS_LOG_SHELL_UL_START      "Shell transfer: starting upload..."
+    IDS_LOG_PHP_SKIP_UPDATE     "PHP Agent: local sftp.php update skipped (missing or read-only file)."
+    IDS_LOG_TAR_UPLOAD          "TAR upload:"
+    IDS_LOG_TAR_UPLOAD_FAIL     "TAR upload failed"
+END
+
+IDR_KITTY_DECRYPT_CAB   RCDATA  "kitty-decrypt.cab"
 
 STRINGTABLE
 BEGIN
@@ -623,45 +760,6 @@ BEGIN
     IDS_JUMP_DLG_HOST       "Jump host:"
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Version
-//
-
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION VER_FILEVERSION
- PRODUCTVERSION VER_FILEVERSION
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "040904b0"
-        BEGIN
-            VALUE "CompanyName",      "kvc.pl"
-            VALUE "FileDescription",  "SFTP Plugin for Total Commander"
-            VALUE "FileVersion",      VER_FILEVERSION_STR
-            VALUE "InternalName",     "sftpplug"
-            VALUE "LegalCopyright",   "Copyright (C) 2026 kvc.pl"
-            VALUE "OriginalFilename", "sftpplug.wfx"
-            VALUE "ProductName",      "SFTPplug"
-            VALUE "ProductVersion",   VER_PRODUCTVERSION_STR
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x409, 1200
-    END
 END
 
 #endif    // English (United States) resources
