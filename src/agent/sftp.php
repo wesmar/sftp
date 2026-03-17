@@ -99,6 +99,12 @@ try {
         case 'SHELL_EXEC':
             op_shell_exec();
             break;
+        case 'TAR_STREAM':
+            op_tar_stream();
+            break;
+        case 'TAR_EXTRACT':
+            op_tar_extract();
+            break;
         default:
             fail(400, 'UNKNOWN_OPERATION', 'Unsupported operation');
     }
@@ -268,6 +274,266 @@ function op_get(): void
     fclose($out);
     fclose($fp);
     exit;
+}
+
+function op_tar_stream(): void
+{
+    @set_time_limit(0);
+    $relPath = normalize_rel((string)get_param('path', '.'));
+    $absPath = resolve_path($relPath, true);
+    if (!is_dir($absPath)) {
+        fail(404, 'NOT_A_DIRECTORY', 'Path is not a directory');
+    }
+
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    @ini_set('zlib.output_compression', '0');
+    header_remove('Content-Type');
+    header('Content-Type: application/x-tar');
+    header('X-Accel-Buffering: no');
+
+    $out = @fopen('php://output', 'wb');
+    if ($out === false) {
+        fail(500, 'OUTPUT_OPEN_FAILED', 'Failed to open output stream');
+    }
+
+    if (!tar_stream_dir($absPath, $absPath, $out)) {
+        fclose($out);
+        exit;
+    }
+
+    // End-of-archive: two 512-byte zero blocks
+    fwrite($out, str_repeat("\0", 1024));
+    fclose($out);
+    exit;
+}
+
+function tar_stream_dir(string $rootAbs, string $dirAbs, $out): bool
+{
+    $it = new DirectoryIterator($dirAbs);
+    foreach ($it as $entry) {
+        if ($entry->isDot()) {
+            continue;
+        }
+        $childAbs = $entry->getPathname();
+        // Build relative path from root
+        $relPart = ltrim(str_replace(
+            str_replace('\\', '/', $rootAbs),
+            '',
+            str_replace('\\', '/', $childAbs)
+        ), '/');
+
+        if ($entry->isDir() && !$entry->isLink()) {
+            if (!tar_write_header($relPart . '/', 0, $entry->getMTime(), '5', $out)) {
+                return false;
+            }
+            if (!tar_stream_dir($rootAbs, $childAbs, $out)) {
+                return false;
+            }
+        } elseif ($entry->isFile()) {
+            $fp = @fopen($childAbs, 'rb');
+            if ($fp === false) {
+                return false;
+            }
+            $size = $entry->getSize();
+            $mtime = $entry->getMTime();
+            if (!tar_write_header($relPart, $size, $mtime, '0', $out)) {
+                fclose($fp);
+                return false;
+            }
+            $written = 0;
+            while ($written < $size) {
+                $chunk = @fread($fp, 65536);
+                if ($chunk === false || $chunk === '') {
+                    fclose($fp);
+                    return false;
+                }
+                $fw = fwrite($out, $chunk);
+                if ($fw === false || $fw < strlen($chunk)) {
+                    fclose($fp);
+                    return false;
+                }
+                $written += strlen($chunk);
+            }
+            fclose($fp);
+            // Pad to 512-byte boundary
+            $rem = $size % 512;
+            if ($rem > 0) {
+                $pad = str_repeat("\0", 512 - $rem);
+                $fw = fwrite($out, $pad);
+                if ($fw === false || $fw < strlen($pad)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+function tar_write_header(string $name, int $size, int $mtime, string $type, $out): bool
+{
+    // GNU long name extension for names > 99 chars
+    if (strlen($name) > 99) {
+        $longData = $name . "\0";
+        $longSize = strlen($longData);
+        $longHdr = tar_build_header('././@LongLink', $longSize, 0, 'L');
+        $fw = fwrite($out, $longHdr);
+        if ($fw === false || $fw < strlen($longHdr)) {
+            return false;
+        }
+        $fw = fwrite($out, $longData);
+        if ($fw === false || $fw < strlen($longData)) {
+            return false;
+        }
+        $rem = $longSize % 512;
+        if ($rem > 0) {
+            $pad = str_repeat("\0", 512 - $rem);
+            $fw = fwrite($out, $pad);
+            if ($fw === false || $fw < strlen($pad)) {
+                return false;
+            }
+        }
+        $name = substr($name, 0, 99);
+    }
+    $hdr = tar_build_header($name, $size, $mtime, $type);
+    $fw = fwrite($out, $hdr);
+    if ($fw === false || $fw < strlen($hdr)) {
+        return false;
+    }
+    return true;
+}
+
+function tar_build_header(string $name, int $size, int $mtime, string $type): string
+{
+    $h = str_repeat("\0", 512);
+    $name = substr($name, 0, 99);
+    $h = substr_replace($h, $name,                       0,   strlen($name));
+    $h = substr_replace($h, sprintf('%07o', 0644),     100,  7);
+    $h = substr_replace($h, '0000000',                 108,  7);
+    $h = substr_replace($h, '0000000',                 116,  7);
+    $h = substr_replace($h, sprintf('%011o', $size),   124, 11);
+    $h = substr_replace($h, sprintf('%011o', $mtime),  136, 11);
+    $h = substr_replace($h, '        ',                148,  8); // checksum placeholder
+    $h = substr_replace($h, $type,                     156,  1);
+    $h = substr_replace($h, 'ustar',                   257,  5);
+    $h = substr_replace($h, '00',                      263,  2);
+    // Calculate checksum (sum of all bytes with placeholder space = 0x20)
+    $sum = 0;
+    for ($i = 0; $i < 512; $i++) {
+        $sum += ord($h[$i]);
+    }
+    $h = substr_replace($h, sprintf('%06o', $sum) . "\0 ", 148, 8);
+    return $h;
+}
+
+function op_tar_extract(): void
+{
+    @set_time_limit(0);
+    $relPath = normalize_rel((string)get_param('path', '.'));
+    $absPath = resolve_path($relPath, true);
+    if (!is_dir($absPath) && !@mkdir($absPath, 0755, true)) {
+        fail(404, 'NOT_A_DIRECTORY', 'Target path is not a directory');
+    }
+    $in = @fopen('php://input', 'rb');
+    if ($in === false) {
+        fail(500, 'INPUT_OPEN_FAILED', 'Failed to open input stream');
+    }
+    $count = tar_extract_stream($absPath, $in);
+    fclose($in);
+    ok(['extracted' => $count]);
+}
+
+function tar_read_exact($in, int $n): string|false
+{
+    if ($n <= 0) return '';
+    $buf = '';
+    $remaining = $n;
+    while ($remaining > 0) {
+        $chunk = @fread($in, $remaining);
+        if ($chunk === false || $chunk === '') return false;
+        $buf .= $chunk;
+        $remaining -= strlen($chunk);
+    }
+    return $buf;
+}
+
+function tar_skip_exact($in, int $n): bool
+{
+    if ($n <= 0) return true;
+    $remaining = $n;
+    while ($remaining > 0) {
+        $chunk = @fread($in, min(65536, $remaining));
+        if ($chunk === false || $chunk === '') return false;
+        $remaining -= strlen($chunk);
+    }
+    return true;
+}
+
+function tar_extract_stream(string $rootAbs, $in): int
+{
+    $rootAbs = rtrim(str_replace('\\', '/', $rootAbs), '/');
+    $pendingLongName = '';
+    $count = 0;
+    for (;;) {
+        $hdr = tar_read_exact($in, 512);
+        if ($hdr === false || strlen($hdr) < 512) break;
+        if ($hdr === str_repeat("\0", 512)) break;
+        $typeflag   = $hdr[156];
+        $sizeStr    = trim(substr($hdr, 124, 12), "\0 ");
+        $fileSize   = ($sizeStr !== '') ? (int)octdec($sizeStr) : 0;
+        $nameRaw    = rtrim(substr($hdr, 0, 100), "\0");
+        $prefix     = rtrim(substr($hdr, 345, 155), "\0");
+        $entryPath  = ($prefix !== '') ? ($prefix . '/' . $nameRaw) : $nameRaw;
+        $paddedSize = (int)(($fileSize + 511) / 512) * 512;
+        if ($typeflag === 'L') {
+            $longData = ($paddedSize > 0) ? tar_read_exact($in, $paddedSize) : '';
+            if ($longData === false) break;
+            $pendingLongName = rtrim(substr((string)$longData, 0, $fileSize), "\0");
+            continue;
+        }
+        if ($pendingLongName !== '') {
+            $entryPath = $pendingLongName;
+            $pendingLongName = '';
+        }
+        $entryPath = str_replace('\\', '/', trim($entryPath, '/'));
+        if ($entryPath === '' || strpos($entryPath, '..') !== false) {
+            if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
+            continue;
+        }
+        $absTarget = $rootAbs . '/' . $entryPath;
+        if ($typeflag === '5') {
+            @mkdir($absTarget, 0755, true);
+            if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
+            continue;
+        }
+        $parentDir = dirname($absTarget);
+        if (!is_dir($parentDir)) @mkdir($parentDir, 0755, true);
+        $fp = @fopen($absTarget, 'wb');
+        if ($fp === false) {
+            if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
+            continue;
+        }
+        $written     = 0;
+        $padConsumed = 0;
+        $ok          = true;
+        while ($padConsumed < $paddedSize) {
+            $want  = (int)min(65536, $paddedSize - $padConsumed);
+            $chunk = @fread($in, $want);
+            if ($chunk === false || $chunk === '') { $ok = false; break; }
+            $got = strlen($chunk);
+            if ($written < $fileSize) {
+                $toWrite = (int)min($fileSize - $written, $got);
+                fwrite($fp, substr($chunk, 0, $toWrite));
+                $written += $toWrite;
+            }
+            $padConsumed += $got;
+        }
+        fclose($fp);
+        if (!$ok) break;
+        ++$count;
+    }
+    return $count;
 }
 
 function op_put(): void
@@ -1069,6 +1335,7 @@ function collect_capabilities(array $ini): array
     if (pick_shell_method($disabled) !== '') {
         $ops[] = 'SHELL_EXEC';
     }
+    $ops[] = 'TAR_STREAM';
 
     return [
         'recommended_chunk_size' => recommended_chunk_size(),
@@ -1244,4 +1511,3 @@ function execute_shell_command(string $cmd, string $method): array
 
     fail(500, 'SHELL_FAILED', 'No supported shell method selected');
 }
-

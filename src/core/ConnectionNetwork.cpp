@@ -89,7 +89,7 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     std::array<char, 1024> buf{};
     char* errmsg = nullptr;
     int errmsg_len = 0;
-    ShowStatus("Initializing SFTP subsystem...");
+    ShowStatusId(IDS_LOG_SFTP_INIT, nullptr, true);
     SFTP_LOG("CONN", "Initializing SFTP subsystem");
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
     do {

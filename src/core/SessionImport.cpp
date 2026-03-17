@@ -1,6 +1,8 @@
 #include "global.h"
 #include "SessionImport.h"
+#include "KittyDecryptDeploy.h"
 #include "WindowsUserFeedback.h"
+#include "SftpInternal.h"
 
 #include <algorithm>
 #include <array>
@@ -52,6 +54,9 @@ const char* GetSourceLabel(SessionSource source) noexcept
 {
     return source == SessionSource::putty ? "PuTTY" : "WinSCP";
 }
+
+static void ApplyLineCodePageToIni(const char* sectionName, const char* iniFileName, const std::string& lineCodePage);
+static void ApplyEnterSendsCrLfToIni(const char* sectionName, const char* iniFileName, DWORD enterSendsCrLf);
 
 bool EndsWithI(const std::string& value, const char* suffix) noexcept
 {
@@ -127,6 +132,24 @@ bool ReadRegString(HKEY key, const char* valueName, std::string& out)
 
     out.assign(buf.data());
     return !out.empty();
+}
+
+// Like ReadRegString but treats empty strings as valid values.
+bool ReadRegStringAllowEmpty(HKEY key, const char* valueName, std::string& out)
+{
+    DWORD type = 0;
+    DWORD bytes = 0;
+    LONG rc = RegQueryValueExA(key, valueName, nullptr, &type, nullptr, &bytes);
+    if (rc != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ))
+        return false;
+
+    std::vector<char> buf(bytes + 1, 0);
+    rc = RegQueryValueExA(key, valueName, nullptr, &type, reinterpret_cast<LPBYTE>(buf.data()), &bytes);
+    if (rc != ERROR_SUCCESS)
+        return false;
+
+    out.assign(buf.data());
+    return true;
 }
 
 bool ReadRegDword(HKEY key, const char* valueName, DWORD& out)
@@ -268,6 +291,15 @@ bool ImportSessionToIni(const SessionDescriptor& session, LPCSTR iniFileName, bo
     std::string publicKeyFile;
     ReadRegString(sessionKey, "PublicKeyFile", publicKeyFile);
 
+    std::string lineCodePage;
+    DWORD enterSendsCrLf = 0;
+    const bool hasLineCodePage =
+        (session.source == SessionSource::putty) &&
+        ReadRegStringAllowEmpty(sessionKey, "LineCodePage", lineCodePage);
+    const bool hasEnterSendsCrLf =
+        (session.source == SessionSource::putty) &&
+        ReadRegDword(sessionKey, "EnterSendsCrLf", enterSendsCrLf);
+
     RegCloseKey(sessionKey);
 
     host = UrlDecode(host);
@@ -301,6 +333,11 @@ bool ImportSessionToIni(const SessionDescriptor& session, LPCSTR iniFileName, bo
         WritePrivateProfileStringA(sectionName.c_str(), "utf8", "0", iniFileName);
         WritePrivateProfileStringA(sectionName.c_str(), "unixlinebreaks", "0", iniFileName);
     }
+
+    if (hasLineCodePage)
+        ApplyLineCodePageToIni(sectionName.c_str(), iniFileName, lineCodePage);
+    if (hasEnterSendsCrLf)
+        ApplyEnterSendsCrLfToIni(sectionName.c_str(), iniFileName, enterSendsCrLf);
 
     if (!publicKeyFile.empty()) {
         // Expand environment variables in key path (e.g. %USERPROFILE%)
@@ -362,6 +399,18 @@ bool ReadIniString(const char* iniFile, const char* section, const char* key, st
     const DWORD len = GetPrivateProfileStringA(section, key, "", buf.data(),
                                                static_cast<DWORD>(buf.size()), iniFile);
     if (len == 0)
+        return false;
+    out.assign(buf.data(), len);
+    return true;
+}
+
+bool ReadIniStringAllowEmpty(const char* iniFile, const char* section, const char* key, std::string& out)
+{
+    constexpr const char* kMissing = "__SFTPPLUG_MISSING__";
+    std::array<char, 1024> buf{};
+    const DWORD len = GetPrivateProfileStringA(section, key, kMissing, buf.data(),
+                                               static_cast<DWORD>(buf.size()), iniFile);
+    if (_stricmp(buf.data(), kMissing) == 0)
         return false;
     out.assign(buf.data(), len);
     return true;
@@ -480,6 +529,15 @@ bool ImportPortableSessionToIni(const PortableSessionDescriptor& session, LPCSTR
     std::string publicKeyFile;
     ReadIniString(src, sect, "PublicKeyFile", publicKeyFile);
 
+    std::string lineCodePage;
+    DWORD enterSendsCrLf = 0;
+    const bool hasLineCodePage =
+        (session.source == SessionSource::putty) &&
+        ReadIniStringAllowEmpty(src, sect, "LineCodePage", lineCodePage);
+    const bool hasEnterSendsCrLf =
+        (session.source == SessionSource::putty) &&
+        ReadIniDword(src, sect, "EnterSendsCrLf", enterSendsCrLf);
+
     host          = UrlDecode(host);
     userName      = UrlDecode(userName);
     publicKeyFile = UrlDecode(publicKeyFile);
@@ -506,6 +564,11 @@ bool ImportPortableSessionToIni(const PortableSessionDescriptor& session, LPCSTR
         WritePrivateProfileStringA(sectionName.c_str(), "utf8",           "0", iniFileName);
         WritePrivateProfileStringA(sectionName.c_str(), "unixlinebreaks", "0", iniFileName);
     }
+
+    if (hasLineCodePage)
+        ApplyLineCodePageToIni(sectionName.c_str(), iniFileName, lineCodePage);
+    if (hasEnterSendsCrLf)
+        ApplyEnterSendsCrLfToIni(sectionName.c_str(), iniFileName, enterSendsCrLf);
 
     if (!publicKeyFile.empty()) {
         std::string expandedKeyFile(MAX_PATH, '\0');
@@ -891,6 +954,116 @@ static bool ReadKittyString(const std::string& filePath, const char* key, std::s
     return false;
 }
 
+static std::string TrimCopy(const std::string& value)
+{
+    size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+        ++start;
+    size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+        --end;
+    return value.substr(start, end - start);
+}
+
+static bool StartsWithI(const std::string& value, const char* prefix) noexcept
+{
+    const size_t prefixLen = strlen(prefix);
+    if (value.size() < prefixLen)
+        return false;
+    for (size_t i = 0; i < prefixLen; ++i) {
+        if (std::tolower(static_cast<unsigned char>(value[i])) !=
+            std::tolower(static_cast<unsigned char>(prefix[i])))
+            return false;
+    }
+    return true;
+}
+
+static bool ParseLineCodePageValue(const std::string& raw, int& outUtf8, int& outCodepage) noexcept
+{
+    outUtf8 = 0;
+    outCodepage = 0;
+
+    const std::string v = TrimCopy(raw);
+    if (v.empty())
+        return false; // "Use font encoding" in PuTTY — leave plugin defaults unchanged
+    if (EqualsI(v, "UTF-8") || EqualsI(v, "UTF8")) {
+        outUtf8 = 1;
+        return true;
+    }
+
+    if (EqualsI(v, "KOI8-R") || EqualsI(v, "KOI8R")) {
+        outCodepage = 20866;
+        return true;
+    }
+    if (EqualsI(v, "KOI8-U") || EqualsI(v, "KOI8U")) {
+        outCodepage = 21866;
+        return true;
+    }
+
+    if (StartsWithI(v, "ISO-8859-")) {
+        const char* p = v.c_str() + strlen("ISO-8859-");
+        char* end = nullptr;
+        unsigned long n = strtoul(p, &end, 10);
+        if (end && *end == '\0' && n > 0) {
+            outCodepage = (n == 15) ? 28605 : (28590 + static_cast<int>(n));
+            return true;
+        }
+    }
+
+    const char* p = nullptr;
+    if (StartsWithI(v, "CP")) {
+        p = v.c_str() + 2;
+    } else if (StartsWithI(v, "WINDOWS-")) {
+        p = v.c_str() + strlen("WINDOWS-");
+    } else if (StartsWithI(v, "WINDOWS")) {
+        p = v.c_str() + strlen("WINDOWS");
+    } else if (StartsWithI(v, "WIN")) {
+        p = v.c_str() + 3;
+    } else {
+        p = v.c_str();
+    }
+
+    if (p && *p) {
+        while (*p == '-' || *p == '_')
+            ++p;
+        char* end = nullptr;
+        unsigned long cp = strtoul(p, &end, 10);
+        if (end && *end == '\0' && cp > 0) {
+            if (cp == 65001) {
+                outUtf8 = 1;
+                outCodepage = 0;
+            } else {
+                outCodepage = static_cast<int>(cp);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+static void ApplyLineCodePageToIni(const char* sectionName, const char* iniFileName, const std::string& lineCodePage)
+{
+    int utf8 = 0;
+    int codepage = 0;
+    if (!ParseLineCodePageValue(lineCodePage, utf8, codepage))
+        return;
+
+    WritePrivateProfileStringA(sectionName, "utf8", utf8 ? "1" : "0", iniFileName);
+    if (!utf8 && codepage > 0) {
+        const std::string cpStr = std::to_string(codepage);
+        WritePrivateProfileStringA(sectionName, "codepage", cpStr.c_str(), iniFileName);
+    }
+}
+
+static void ApplyEnterSendsCrLfToIni(const char* sectionName, const char* iniFileName, DWORD enterSendsCrLf)
+{
+    if (enterSendsCrLf == 0) {
+        WritePrivateProfileStringA(sectionName, "unixlinebreaks", "1", iniFileName);
+    } else if (enterSendsCrLf == 1) {
+        WritePrivateProfileStringA(sectionName, "unixlinebreaks", "0", iniFileName);
+    }
+}
+
 // Searches dir (up to maxDepth levels) for a folder named "Sessions".
 static std::string FindKittySessionsFolder(const std::string& dir, int maxDepth = 4)
 {
@@ -928,6 +1101,90 @@ static std::string FindKittySessionsFolder(const std::string& dir, int maxDepth 
             return result;
     }
     return {};
+}
+
+// Locates kitty-decryptpassword.exe relative to a KiTTY session file.
+// Searches: KiTTY portable root, App/KiTTY subfolder, Data folder, Sessions folder.
+static std::string FindKittyDecryptExe(const std::string& sessionFilePath)
+{
+    // Build candidate folders by walking up from session file
+    auto parentOf = [](const std::string& p) -> std::string {
+        const size_t s = p.rfind('\\');
+        return s != std::string::npos ? p.substr(0, s) : p;
+    };
+    const std::string sessionsFolder = parentOf(sessionFilePath);
+    const std::string dataFolder     = parentOf(sessionsFolder);
+    const std::string kittyRoot      = parentOf(dataFolder);
+
+    const char* exe = "\\kitty-decryptpassword.exe";
+    for (const std::string& base : { kittyRoot, kittyRoot + "\\App\\KiTTY", dataFolder, sessionsFolder }) {
+        const std::string full = base + exe;
+        if (GetFileAttributesA(full.c_str()) != INVALID_FILE_ATTRIBUTES)
+            return full;
+    }
+    return {};
+}
+
+// Runs kitty-decryptpassword.exe and returns the decrypted password (stdout).
+// Usage: PASSWORD=<enc> kitty-decryptpassword.exe 0 <host> <termtype>
+static std::string RunKittyDecrypt(const std::string& decryptExe,
+                                    const std::string& encryptedPwd,
+                                    const std::string& host,
+                                    const std::string& termtype)
+{
+    if (decryptExe.empty() || encryptedPwd.empty())
+        return {};
+
+    SECURITY_ATTRIBUTES sa = {};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+
+    HANDLE hRead = nullptr, hWrite = nullptr;
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0))
+        return {};
+    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+
+    std::string cmdLine = "\"" + decryptExe + "\" 0 \"" + host + "\" \"" + termtype + "\"";
+
+    STARTUPINFOA si = {};
+    si.cb        = sizeof(si);
+    si.dwFlags   = STARTF_USESTDHANDLES;
+    si.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = hWrite;
+    si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+
+    SetEnvironmentVariableA("PASSWORD", encryptedPwd.c_str());
+    PROCESS_INFORMATION pi = {};
+    const BOOL ok = CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr,
+                                   TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    SetEnvironmentVariableA("PASSWORD", nullptr);
+    CloseHandle(hWrite);
+
+    if (!ok) {
+        CloseHandle(hRead);
+        return {};
+    }
+
+    std::string result;
+    char buf[256];
+    DWORD got = 0;
+    while (ReadFile(hRead, buf, sizeof(buf), &got, nullptr) && got > 0)
+        result.append(buf, got);
+
+    WaitForSingleObject(pi.hProcess, 5000);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(hRead);
+
+    while (!result.empty() && (result.back() == '\r' || result.back() == '\n'))
+        result.pop_back();
+
+    // Sanity check: accept only printable ASCII (typical SSH passwords)
+    for (unsigned char c : result) {
+        if (c < 0x20 || c > 0x7E)
+            return {};
+    }
+    return result;
 }
 
 // Enumerates session files in the KiTTY Sessions folder.
@@ -993,6 +1250,20 @@ static bool ImportKittySessionToIni(const KittySessionDescriptor& session,
     std::string publicKeyFile;
     ReadKittyString(session.filePath, "PublicKeyFile", publicKeyFile);
 
+    std::string lineCodePage;
+    const bool hasLineCodePage = ReadKittyString(session.filePath, "LineCodePage", lineCodePage);
+    std::string enterSendsCrLfStr;
+    DWORD enterSendsCrLf = 0;
+    bool hasEnterSendsCrLf = false;
+    if (ReadKittyString(session.filePath, "EnterSendsCrLf", enterSendsCrLfStr)) {
+        char* end = nullptr;
+        unsigned long parsed = strtoul(enterSendsCrLfStr.c_str(), &end, 0);
+        if (end && *end == '\0') {
+            enterSendsCrLf = static_cast<DWORD>(parsed);
+            hasEnterSendsCrLf = true;
+        }
+    }
+
     std::string serverField = host;
     if (hasPort && port > 0 && port != 22)
         serverField += std::format(":{}", port);
@@ -1004,6 +1275,11 @@ static bool ImportKittySessionToIni(const KittySessionDescriptor& session,
         WritePrivateProfileStringA(sectionName.c_str(), "user", userName.c_str(), iniFileName);
     WritePrivateProfileStringA(sectionName.c_str(), "utf8",           "0", iniFileName);
     WritePrivateProfileStringA(sectionName.c_str(), "unixlinebreaks", "0", iniFileName);
+
+    if (hasLineCodePage)
+        ApplyLineCodePageToIni(sectionName.c_str(), iniFileName, lineCodePage);
+    if (hasEnterSendsCrLf)
+        ApplyEnterSendsCrLfToIni(sectionName.c_str(), iniFileName, enterSendsCrLf);
 
     if (!publicKeyFile.empty()) {
         std::string expandedKeyFile(MAX_PATH, '\0');
@@ -1022,6 +1298,23 @@ static bool ImportKittySessionToIni(const KittySessionDescriptor& session,
             WritePrivateProfileStringA(sectionName.c_str(), "pubkeyfile", publicKeyFile.c_str(), iniFileName);
             if (importedData)
                 importedData->pubkeyfile = publicKeyFile;
+        }
+    }
+
+    // Try to import stored password via kitty-decryptpassword.exe
+    std::string encryptedPassword;
+    if (ReadKittyString(session.filePath, "Password", encryptedPassword) && !encryptedPassword.empty()) {
+        const std::string decryptExe = EnsureKittyDecryptExe(session.filePath);
+        if (!decryptExe.empty()) {
+            std::string termtype;
+            if (!ReadKittyString(session.filePath, "TerminalType", termtype) || termtype.empty())
+                termtype = "xterm";
+            const std::string plainPassword = RunKittyDecrypt(decryptExe, encryptedPassword, host, termtype);
+            if (!plainPassword.empty()) {
+                std::array<char, 1024> encBuf{};
+                EncryptString(plainPassword.c_str(), encBuf.data(), static_cast<UINT>(encBuf.size()));
+                WritePrivateProfileStringA(sectionName.c_str(), "password", encBuf.data(), iniFileName);
+            }
         }
     }
 

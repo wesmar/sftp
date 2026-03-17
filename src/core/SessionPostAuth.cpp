@@ -6,6 +6,7 @@
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "SftpInternal.h"
+#include "res/resource.h"
 
 static void ToUpperInPlace(char* s) noexcept
 {
@@ -150,14 +151,14 @@ void RunPostAuthAutoDetect(pConnectSettings ConnectSettings)
         return;
 
     if (ConnectSettings->utf8names == AUTODETECT_PENDING) {
-        ShowStatus("Auto-detecting UTF-8 support...");
+        ShowStatusId(IDS_LOG_DETECT_UTF8, nullptr, true);
         ConnectSettings->codepage = 0;
         ConnectSettings->utf8names = AUTODETECT_OFF;
         int rc = SftpSessionDetectUtf8(ConnectSettings);
         ConnectSettings->utf8names = (rc == AUTODETECT_ON) ? AUTODETECT_ON : AUTODETECT_OFF;
     }
     if (ConnectSettings->unixlinebreaks == AUTODETECT_PENDING) {
-        ShowStatus("Auto-detecting line break mode...");
+        ShowStatusId(IDS_LOG_DETECT_LINEBREAK, nullptr, true);
         ConnectSettings->unixlinebreaks = AUTODETECT_OFF;
         int rc = SftpSessionDetectLineBreaks(ConnectSettings);
         ConnectSettings->unixlinebreaks = (rc == AUTODETECT_ON) ? AUTODETECT_ON : AUTODETECT_OFF;
@@ -169,7 +170,7 @@ void RunPostAuthUserCommand(pConnectSettings ConnectSettings, LPCSTR progressbuf
     if (ConnectSettings->scponly || ConnectSettings->connectsendcommand.empty())
         return;
 
-    ShowStatus("Sending user-defined command:");
+    ShowStatusId(IDS_LOG_USER_COMMAND, nullptr, true);
     ShowStatus(ConnectSettings->connectsendcommand.c_str());
     SftpSessionSendCommand(ConnectSettings, progressbuf, progress, loop, lasttime);
 
@@ -201,7 +202,7 @@ void ResolveScpLargeFileProbe(pConnectSettings ConnectSettings)
     if (SftpQuoteCommand2(ConnectSettings, nullptr, "file `which scp`", reply.data(), reply.size()-1) == 0) {
         ToUpperInPlace(reply.data());
         if (strstr(reply.data(), "64-BIT")) {
-            ShowStatus("64-bit scp detected!");
+            ShowStatusId(IDS_LOG_SCP64, nullptr, true);
             ConnectSettings->scpserver64bit = 1;
         }
     }

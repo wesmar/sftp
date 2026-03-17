@@ -291,8 +291,17 @@ void ConnectionDialog::OnPhpShellBtn()
         transferMode = static_cast<int>(sftp::TransferMode::php_shell);
     }
     if (transferMode != static_cast<int>(sftp::TransferMode::php_shell)) {
+        auto lngU8 = [](UINT id, const char* fb) -> std::string {
+            const char* s = LngGetString(id);
+            if (s) return s;
+            std::array<char, 512> buf{};
+            const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+            return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fb ? fb : "");
+        };
         WindowsUserFeedback tempFeedback(m_hWnd);
-        tempFeedback.ShowMessage("Select Transfer = PHP Shell (HTTP).", "PHP Shell");
+        tempFeedback.ShowMessage(
+            lngU8(IDS_PHP_SHELL_SELECT, "Select Transfer = PHP Shell (HTTP)."),
+            lngU8(IDS_PHP_SHELL_TITLE, "PHP Shell"));
         return;
     }
     tConnectSettings shellSettings{};
@@ -302,22 +311,29 @@ void ConnectionDialog::OnPhpShellBtn()
     GetDlgItemText(m_hWnd, IDC_PASSWORD, shellSettings.password);
     std::string authError;
     if (PhpAgentValidateAuth(&shellSettings, authError) != SFTP_OK) {
+        auto lngU8 = [](UINT id, const char* fb) -> std::string {
+            const char* s = LngGetString(id);
+            if (s) return s;
+            std::array<char, 512> buf{};
+            const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+            return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fb ? fb : "");
+        };
         std::string localPhpPath;
         std::string pluginDir;
         if (GetPluginDirectoryA(pluginDir)) {
             localPhpPath = pluginDir;
             localPhpPath += "\\sftp.php";
         }
-        std::string msg = authError.empty() ? "Wrong credentials for PHP Agent." : authError;
+        std::string msg = authError.empty() ? lngU8(IDS_PHP_ERR_WRONG_CREDS, "Wrong credentials for PHP Agent.") : authError;
         if (!localPhpPath.empty()) {
-            msg += "\n\nPlease copy your plugin script from:\n";
+            msg += lngU8(IDS_PHP_COPY_FROM, "\n\nPlease copy your plugin script from:\n");
             msg += localPhpPath;
-            msg += "\nand upload it to your server URL path.";
+            msg += lngU8(IDS_PHP_UPLOAD_TO, "\nand upload it to your server URL path.");
         } else {
-            msg += "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server.";
+            msg += lngU8(IDS_PHP_CHECK_URL, "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server.");
         }
         WindowsUserFeedback tempFeedback(m_hWnd);
-        tempFeedback.ShowError(msg, "PHP Shell");
+        tempFeedback.ShowError(msg, lngU8(IDS_PHP_SHELL_TITLE, "PHP Shell"));
         return;
     }
     ShowPhpShellConsole(m_hWnd, std::move(shellSettings));

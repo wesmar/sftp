@@ -91,6 +91,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
           ConnectResults->php_chunk_mib == 32 || ConnectResults->php_chunk_mib == 64))
         ConnectResults->php_chunk_mib = 0;
     ConnectResults->php_recommended_chunk_mib = 0;
+    ConnectResults->php_tar = GetPrivateProfileInt(DisplayName, "phptar", 0, iniFileName) != 0;
     ConnectResults->lan_pair_role = GetPrivateProfileInt(DisplayName, "lanpairrole", 0, iniFileName);
     if (ConnectResults->lan_pair_role < 0 || ConnectResults->lan_pair_role > 2)
         ConnectResults->lan_pair_role = 0;

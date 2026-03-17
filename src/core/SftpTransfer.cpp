@@ -59,7 +59,7 @@ std::unique_ptr<ISftpHandle> OpenSftpFileWithRetry(
             break;
         }
         if (EscapePressed() || get_ticks_between(start) > timeoutMs) {
-            ShowStatus("SFTP open timeout/aborted.");
+            ShowStatusId(IDS_LOG_SFTP_OPEN_TIMEOUT, nullptr, true);
             break;
         }
         IsSocketReadable(cs->sock);
@@ -291,7 +291,7 @@ int DownloadLoop(pConnectSettings cs, Handle& remote, LocalFile& local,
                 const auto now = std::chrono::steady_clock::now();
                 const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgress).count();
                 if (elapsed > SFTP_SCP_READ_IDLE_TIMEOUT_MS) {
-                    ShowStatus("SCP download timed out.");
+                    ShowStatusId(IDS_LOG_SCP_DL_TIMEOUT, nullptr, true);
                     ret = SFTP_READFAILED;
                     break;
                 }
@@ -568,7 +568,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                     const auto now = std::chrono::steady_clock::now();
                     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgress).count();
                     if (elapsed > SFTP_SCP_WRITE_IDLE_TIMEOUT_MS) {
-                        ShowStatus("SCP upload timed out.");
+                        ShowStatusId(IDS_LOG_SCP_UL_TIMEOUT, nullptr, true);
                         ret = SFTP_WRITEFAILED;
                         break;
                     }

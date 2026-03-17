@@ -82,6 +82,9 @@
     <ClCompile Include="..\src\core\UtfConversion.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\KittyDecryptDeploy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\SessionImport.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -200,6 +203,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\UtfConversion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\KittyDecryptDeploy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\SessionImport.h">

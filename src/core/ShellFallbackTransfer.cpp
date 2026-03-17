@@ -13,6 +13,7 @@
 #include "TransferUtils.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "res/resource.h"
 
 // Keep command length safely below shell line limits on restricted hosts.
 // 1024 bytes -> 1368 base64 chars (+ command overhead).
@@ -649,7 +650,7 @@ int ShellDdDownloadFile(
         CloseScpShell(cs);
     }
 
-    ShowStatus("Shell transfer: starting download...");
+    ShowStatusId(IDS_LOG_SHELL_DL_START, nullptr, true);
 
     if (!cs->shell_dd_b64only) {
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
@@ -682,7 +683,7 @@ int ShellDdDownloadFile(
         }
     }
 
-    ShowStatus("Shell transfer: using base64 (compat mode)...");
+    ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
     return ShellDdDownloadBase64(cs, remotePath, remoteNameW,
                                   localfile, localNameW, hintedSize, resumeFrom, outSizeLoaded);
 }
@@ -711,7 +712,7 @@ int ShellDdUploadFile(
         CloseScpShell(cs);
     }
 
-    ShowStatus("Shell transfer: starting upload...");
+    ShowStatusId(IDS_LOG_SHELL_UL_START, nullptr, true);
 
     // For resume: query the actual remote byte count so we skip the right amount.
     if (resumeFrom > 0) {
@@ -751,7 +752,7 @@ int ShellDdUploadFile(
         }
     }
 
-    ShowStatus("Shell transfer: using base64 (compat mode)...");
+    ShowStatusId(IDS_LOG_SHELL_BASE64, nullptr, true);
     return ShellDdUploadBase64(cs, remotePath, remoteNameW,
                                localfile, localNameW, fileSize, resumeFrom, outSizeLoaded);
 }

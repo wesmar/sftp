@@ -17,6 +17,7 @@
 #include "DllExceptionBarrier.h"
 #include "LanPairSession.h"
 #include "PluginEntryPointsInternal.h"
+#include "PhpAgentClient.h"
 
 int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
 {
@@ -366,6 +367,18 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
             DeleteFileT(LocalName);
         }
 
+        // PHP Agent TAR directory download.
+        if (ri && (ri->Attr & FILE_ATTRIBUTE_DIRECTORY) &&
+            IsPhpAgentTransport(serverid) && serverid->php_tar)
+        {
+            CreateDirectoryW(LocalName, nullptr);
+            const int rc = PhpAgentDownloadDirAsTar(serverid, remotedir.data(), LocalName, OverWrite);
+            if (rc == SFTP_OK)    return FS_FILE_OK;
+            if (rc == SFTP_ABORT) return FS_FILE_USERABORT;
+            // On any error fall through to TC-managed recursion.
+            return FS_FILE_NOTSUPPORTED;
+        }
+
         // LAN Pair download.
         if (IsLanPairTransport(serverid)) {
             if (!serverid->lanSession || !serverid->lanSession->isConnected())
@@ -451,6 +464,16 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             int fsResult = FS_FILE_WRITEERROR;
             serverid->lanSession->putFile(LocalName, remoteUtf8, OverWrite, Resume, &fsResult);
             return fsResult;
+        }
+
+        // PHP Agent TAR batch upload: queue file into session, send all as one TAR at FsStatusInfo END.
+        if (IsPhpAgentTransport(serverid) && serverid->php_tar && TarUploadSessionIsActive()) {
+            // Fill in cs on first file if session was started without one (PUT_MULTI_THREAD).
+            if (!TarUploadSessionIsActive(serverid))
+                TarUploadSessionBegin(serverid);
+            const std::string remoteRelA = unicode_util::wide_to_narrow(remotedir.data());
+            TarUploadSessionQueue(serverid, LocalName, remoteRelA.c_str());
+            return FS_FILE_OK;
         }
 
         const bool setattr = !!(CopyFlags & FS_COPYFLAGS_EXISTS_SAMECASE);

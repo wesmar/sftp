@@ -101,7 +101,7 @@ int PerformAuthentication(
     char* userauthlist = nullptr;
     int auth_pw = 0;
     if (ConnectSettings->scponly) {
-        ShowStatus("SCP-only: skipping auth-methods probe.");
+        ShowStatusId(IDS_LOG_SCP_SKIP_PROBE, nullptr, true);
         // SCP-only servers often reject method probing while still accepting auth.
         // Start with a broad method mask and let runtime attempts narrow it.
         auth_pw = SSH_AUTH_PASSWORD | SSH_AUTH_KEYBOARD | SSH_AUTH_PUBKEY;
@@ -113,7 +113,7 @@ int PerformAuthentication(
             if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                 break;
             if (get_ticks_between(authListStart) > SSH_PROBE_TIMEOUT_MS) {
-                ShowStatus("Getting authentication methods timed out, using fallback.");
+                ShowStatusId(IDS_LOG_AUTH_METHODS_TIMEOUT, nullptr, true);
                 break;
             }
             if (!userauthlist && ConnectSettings->session->lastErrno() == LIBSSH2_ERROR_EAGAIN)
@@ -128,7 +128,7 @@ int PerformAuthentication(
             ShowStatusId(IDS_SUPPORTED_AUTH_METHODS, userauthlist, true);
             auth_pw = ParseAuthMethodsFromUserauthList(userauthlist);
             if (auth_pw == 0) {
-                ShowStatus("Auth methods list parsed to none, using fallback methods.");
+                ShowStatusId(IDS_LOG_AUTH_METHODS_NONE, nullptr, true);
                 // Some servers return malformed method lists; keep a compatibility path.
                 auth_pw = SSH_AUTH_PASSWORD | SSH_AUTH_KEYBOARD | SSH_AUTH_PUBKEY;
             }
@@ -141,7 +141,7 @@ int PerformAuthentication(
 
     int auth = 0;
     if (ConnectSettings->session->userauthAuthenticated()) {
-        ShowStatus("User authenticated without password.");
+        ShowStatusId(IDS_LOG_AUTH_NO_PASSWORD, nullptr, true);
     } else if ((auth_pw & SSH_AUTH_PUBKEY) && ConnectSettings->useagent && agentAvailable) {
         progress = 65;
         int rc = SftpAuthPageant(ConnectSettings, progressbuf, progress, &loop, &lasttime, &auth_pw);
@@ -185,7 +185,7 @@ int PerformAuthentication(
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
                 if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                    ShowStatus("Keyboard-interactive authentication timed out.");
+                    ShowStatusId(IDS_LOG_KBD_AUTH_TIMEOUT, nullptr, true);
                     break;
                 }
                 WaitForTransportReadable(ConnectSettings);
@@ -230,7 +230,7 @@ int PerformAuthentication(
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
                 if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                    ShowStatus("Password authentication timed out.");
+                    ShowStatusId(IDS_LOG_PASS_AUTH_TIMEOUT, nullptr, true);
                     break;
                 }
                 WaitForTransportReadable(ConnectSettings);
@@ -255,7 +255,7 @@ int PerformAuthentication(
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
                 if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                    ShowStatus("Keyboard-interactive authentication timed out.");
+                    ShowStatusId(IDS_LOG_KBD_AUTH_TIMEOUT, nullptr, true);
                     break;
                 }
                 WaitForTransportReadable(ConnectSettings);

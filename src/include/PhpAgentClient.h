@@ -19,6 +19,26 @@ int PhpAgentUploadFileW(pConnectSettings cs,
 int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW);
 int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNameW, bool overwrite);
 int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir);
+int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR localDirW, bool overwrite);
+
+struct TarUploadEntry {
+    std::wstring localPath;
+    std::string  tarName;    // relative path in archive (UTF-8, '/' separators)
+    int64_t      fileSize = 0;
+    time_t       mtime    = 0;
+    bool         isDir    = false;
+};
+
+int  PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
+                             const std::vector<TarUploadEntry>& entries);
+
+// TAR upload session — manages deferred batch uploads triggered via FsStatusInfo.
+void TarUploadSessionBegin(pConnectSettings cs);
+void TarUploadSessionClear();
+bool TarUploadSessionIsActive(pConnectSettings cs = nullptr);
+bool TarUploadSessionQueue(pConnectSettings cs, LPCWSTR localPath, const char* remotePath);
+int  TarUploadSessionExecuteAndClear();
+
 int PhpShellExecuteCommand(pConnectSettings cs,
                            const char* command,
                            std::string& outText,
