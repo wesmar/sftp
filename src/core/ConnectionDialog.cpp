@@ -1774,6 +1774,9 @@ static void OnImportSessionsCommand(HWND hWnd, pConnectSettings dlgConnectResult
         tConnectSettings loaded{};
         if (LoadServerSettings(importedSession.data(), &loaded, dlgCtx->iniFileName))
             ApplyLoadedSessionToDialog(hWnd, &loaded, dlgCtx->iniFileName);
+
+        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
     } else {
         FillSessionCombo(hWnd, currentSession.data());
     }
@@ -2707,7 +2710,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             std::array<char, MAX_PATH> passwordBuf{};
             int rc = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, DisplayName, passwordBuf.data(), static_cast<int>(passwordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
-                ConnectSettings.feedback->ShowError("Failed to load password!");
+                ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PASS, "Failed to load password!"));
                 return nullptr;
             }
             ConnectSettings.password = passwordBuf.data();
@@ -2723,7 +2726,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             std::array<char, MAX_PATH> proxyPasswordBuf{};
             int rc = CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_LOAD_PASSWORD, proxyentry.data(), proxyPasswordBuf.data(), static_cast<int>(proxyPasswordBuf.size() - 1));
             if (rc != FS_FILE_OK) {
-                ConnectSettings.feedback->ShowError("Failed to load proxy password!");
+                ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_LOAD_PROXY_PASS, "Failed to load proxy password!"));
                 return nullptr;
             }
             ConnectSettings.proxypassword = proxyPasswordBuf.data();
@@ -2751,7 +2754,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             // look for address and port
             p = strchr(serverBuf.data(), ':');
             if (!ParseAddress(serverBuf.data(), serverBuf.data(), &ConnectSettings.customport, 22)) {
-                ConnectSettings.feedback->ShowError("Invalid server address.");
+                ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_INVALID_SERVER, "Invalid server address."));
                 return nullptr;
             }
             ConnectSettings.server = serverBuf.data();
@@ -2776,7 +2779,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
                 return new tConnectSettings(std::move(ConnectSettings));
             } catch (const std::bad_alloc&) {
                 if (ConnectSettings.feedback) {
-                    ConnectSettings.feedback->ShowError("Out of memory while creating connection settings.");
+                    ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_OOM_CONN_SETTINGS, "Out of memory while creating connection settings."));
                 }
                 return nullptr;
             }

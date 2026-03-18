@@ -466,6 +466,9 @@ void ConnectionDialog::OnImportSessions()
         tConnectSettings loaded{};
         if (LoadServerSettings(importedSession.data(), &loaded, m_ctx->iniFileName))
             ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
+
+        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
     } else {
         FillSessionCombo(m_hWnd, currentSession.data());
     }

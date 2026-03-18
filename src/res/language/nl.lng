@@ -343,3 +343,20 @@
 414=PHP Agent: lokale sftp.php-update overgeslagen (bestand ontbreekt of is alleen-lezen).
 415=TAR-upload:
 416=TAR-upload mislukt
+12072=SCP-protocolfout
+12073=Kan SCP niet uitvoeren om de overdracht te starten. Zorg ervoor dat SCP op de server is geïnstalleerd en dat het pad ernaar is opgenomen in PATH.\n\nU kunt ook SFTP proberen in plaats van SCP (vink 'Gebruik SCP voor alles' uit in de verbindingsinstellingen).
+12074=LAN Pair: geen peer geconfigureerd. Open de verbindingsinstellingen en koppel eerst.
+12075=LAN Pair: peer niet gevonden in het netwerk. Zorg ervoor dat de andere computer is ingeschakeld.
+12076=Ongeldig proxyserveradres.
+12077=Functie nog niet ondersteund!
+12078=Kan de plug-in map niet vinden.
+12079=ProxyJump: initialisatie van libssh2-sessie mislukt
+12080=Kan wachtwoord niet laden!
+12081=Kan proxywachtwoord niet laden!
+12082=Ongeldig serveradres.
+12083=Onvoldoende geheugen bij het maken van verbindingsinstellingen.
+12084=Geen sessies geïmporteerd (niet-ondersteund protocoltype).
+12085=putty.reg niet gevonden in de geselecteerde map of de submappen ervan.
+12086=Kan putty.reg niet lezen of parseren.
+12087=Map Sessions niet gevonden in de geselecteerde KiTTY Portable-map.
+

@@ -343,3 +343,20 @@
 414=PHP Agent: actualizare locală sftp.php omisă (fișier lipsă sau doar citire).
 415=Trimitere TAR:
 416=Trimitere TAR eșuată
+12072=Eroare protocol SCP
+12073=Nu se poate executa SCP pentru a începe transferul. Asigurați-vă că SCP este instalat pe server și calea către acesta este inclusă în PATH.\n\nDe asemenea, puteți încerca SFTP în loc de SCP (debifați 'Folosiți SCP pentru tot' din setările conexiunii).
+12074=LAN Pair: niciun partener configurat. Deschideți setările conexiunii și asociați mai întâi.
+12075=LAN Pair: partenerul nu a fost găsit în rețea. Asigurați-vă că celălalt computer este pornit.
+12076=Adresă server proxy nevalidă.
+12077=Funcția nu este încă acceptată!
+12078=Nu se poate localiza directorul pluginului.
+12079=ProxyJump: inițializarea sesiunii libssh2 a eșuat
+12080=Eșec la încărcarea parolei!
+12081=Eșec la încărcarea parolei proxy!
+12082=Adresă server nevalidă.
+12083=Memorie insuficientă la crearea setărilor conexiunii.
+12084=Nu au fost importate sesiuni (tip de protocol neacceptat).
+12085=putty.reg nu a fost găsit în folderul selectat sau în subfolderele sale.
+12086=Eșec la citirea sau analizarea putty.reg.
+12087=Folderul Sessions nu a fost găsit în directorul KiTTY Portable selectat.
+

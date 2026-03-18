@@ -48,6 +48,14 @@ template<size_t N>
 inline int LoadStr(char (&arr)[N], UINT id) {
     return detail::LoadStrInto(arr, static_cast<int>(N) - 1, id);
 }
+
+inline std::string LngStrU8(UINT id, const char* fallback) {
+    const char* s = LngGetString(id);
+    if (s) return s;
+    std::array<char, 512> buf{};
+    const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+    return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fallback ? fallback : "");
+}
 // For raw char* cases where only a runtime size is available
 inline int LoadStr(char* p, size_t n, UINT id) {
     return detail::LoadStrInto(p, static_cast<int>(n) - 1, id);

@@ -96,9 +96,9 @@ int WINAPI FsExecuteFileW(HWND MainWin, LPWSTR RemoteName, LPCWSTR Verb)
                 if (_stricmp(remoteserver.data(), s_f7newconnection) != 0 && _stricmp(remoteserver.data(), s_quickconnect) != 0) {
                     if (SftpConfigureServer(remoteserver.data(), inifilename)) {
                         LoadServersFromIniW(inifilenameW, s_quickconnect);
-                    
-                        // ZERWANIE "ZATRUTEJ SESJI": 
-                        // Total Commander nie rozłącza aktywnej sesji przy edycji jej właściwości (Alt+Enter).
+                        if (MainWin) PostMessage(MainWin, WM_USER + 51, 540, 0);
+
+                        // ZERWANIE "ZATRUTEJ SESJI":                        // Total Commander nie rozłącza aktywnej sesji przy edycji jej właściwości (Alt+Enter).
                         // Wymuszamy rozłączenie, aby wtyczka natychmiast zbudowała nowe połączenie
                         // z nowymi ustawieniami (np. przełączając między SFTP a PHP Agentem).
                         std::array<char, wdirtypemax> disconnPath{};

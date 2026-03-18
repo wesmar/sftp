@@ -343,3 +343,20 @@
 414=PHP Agent: aktualizácia lokálneho sftp.php preskočená (súbor chýba alebo je len na čítanie).
 415=Nahrávanie TAR:
 416=Nahrávanie TAR zlyhalo
+12072=Chyba protokolu SCP
+12073=Nie je možné spustiť SCP na začatie prenosu. Uistite sa, že je na serveri nainštalované SCP a cesta k nemu je zahrnutá v premennej PATH.\n\nMôžete tiež skúsiť SFTP namiesto SCP (zrušte začiarknutie políčka „Použiť SCP na všetko“ v nastaveniach pripojenia).
+12074=LAN Pair: nie je nakonfigurovaný žiadny partner. Otvorte nastavenia pripojenia a najskôr vykonajte párovanie.
+12075=LAN Pair: partner nebol v sieti nájdený. Uistite sa, že druhý počítač je zapnutý.
+12076=Neplatná adresa proxy servera.
+12077=Funkcia zatiaľ nie je podporovaná!
+12078=Nemožno nájsť adresár doplnku.
+12079=ProxyJump: inicializácia relácie libssh2 zlyhala
+12080=Nepodarilo sa načítať heslo!
+12081=Nepodarilo sa načítať heslo servera proxy!
+12082=Neplatná adresa servera.
+12083=Nedostatok pamäte pri vytváraní nastavení pripojenia.
+12084=Žiadne relácie sa neimportovali (nepodporovaný typ protokolu).
+12085=Súbor putty.reg sa nenašiel vo vybratom priečinku ani v jeho podpriečinkoch.
+12086=Nepodarilo sa prečítať alebo analyzovať súbor putty.reg.
+12087=Priečinok Sessions sa nenašiel vo vybratom adresári KiTTY Portable.
+

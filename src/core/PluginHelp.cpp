@@ -8,6 +8,7 @@
 #include "PluginEntryPoints.h"
 #include "WindowsUserFeedback.h"
 #include "res/resource.h"
+#include "CoreUtils.h"
 
 #pragma comment(lib, "version.lib")
 
@@ -62,7 +63,7 @@ void OpenPluginHelp(HWND hWnd)
     std::string pluginDir;
     WindowsUserFeedback feedback(hWnd);
     if (!GetPluginDirectoryA(pluginDir)) {
-        feedback.ShowError("Cannot locate plugin directory.", "Help");
+        feedback.ShowError(LngStrU8(IDS_ERR_NO_PLUGIN_DIR, "Cannot locate plugin directory."), "Help");
         return;
     }
 

@@ -405,10 +405,9 @@ std::unique_ptr<ITransportStream> ConnectViaJumpHost(
 
     auto jmpSession = backend->createSession(jmp_alloc, jmp_free, jmp_realloc, &kbdCtx);
     if (!jmpSession) {
-        closesocket(jmpSock);
         ShowStatusId(IDS_LOG_JUMP_SSH_FAIL, nullptr, true);
         if (cs->feedback)
-            cs->feedback->ShowError("ProxyJump: libssh2 session init failed");
+            cs->feedback->ShowError(LngStrU8(IDS_ERR_JUMP_SESSION, "ProxyJump: libssh2 session init failed").c_str());
         return nullptr;
     }
     jmpSession->setBlocking(0);
