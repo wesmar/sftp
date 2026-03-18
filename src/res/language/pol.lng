@@ -360,3 +360,5 @@
 12087=Nie znaleziono folderu Sessions w wybranym katalogu KiTTY Portable.
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
 12089=SFTP
+450=Windows (CR/LF)
+451=Unix (LF)

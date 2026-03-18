@@ -1,5 +1,8 @@
 #include "DialogLayout.h"
 #include <algorithm>
+#include <string>
+#include <array>
+#include "../res/resource.h"
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -57,14 +60,16 @@ void ArrangeInlineRow(HWND hDlg, int labelId, int checkId, int btnId)
     RECT rDlg{};
     GetClientRect(hDlg, &rDlg);
 
+    const int scaledBoxW = rCheck.bottom - rCheck.top;
+
     const int labelX    = rLabel.left;
     const int labelW    = szLabel + DlgLayout::kGap;
     const int checkX    = labelX + labelW + DlgLayout::kGap;
     const int btnW      = rBtn.right  - rBtn.left;
     const int btnH      = rBtn.bottom - rBtn.top;
-    const int rawBtnX   = checkX + DlgLayout::kBoxW + szCheck + DlgLayout::kGap * 2;
+    const int rawBtnX   = checkX + scaledBoxW + szCheck + DlgLayout::kGap * 2;
     const int finalBtnX = (std::min)(rawBtnX, (int)rDlg.right - btnW - DlgLayout::kGap);
-    const int checkW    = (std::max)(finalBtnX - DlgLayout::kGap - checkX, DlgLayout::kBoxW + 4);
+    const int checkW    = (std::max)(finalBtnX - DlgLayout::kGap - checkX, scaledBoxW + 4);
 
     DlgLayout::Move(hDlg, labelId, labelX,    rLabel.top, labelW, rLabel.bottom - rLabel.top);
     DlgLayout::Move(hDlg, checkId, checkX,    rCheck.top, checkW, rCheck.bottom - rCheck.top);
@@ -143,12 +148,37 @@ void ArrangePermissionsRow(HWND hDlg,
 
 void ArrangeExpandLabel(HWND hDlg, int labelId, int fixedNextId)
 {
+    HWND hLabel = GetDlgItem(hDlg, labelId);
+    if (!hLabel) return;
+
     const RECT rLabel = DlgLayout::GetRect(hDlg, labelId);
     const RECT rNext  = DlgLayout::GetRect(hDlg, fixedNextId);
     const int  newW   = rNext.left - rLabel.left - DlgLayout::kGap;
-    if (newW > 0)
+    
+    if (newW > 0) {
         DlgLayout::Move(hDlg, labelId,
             rLabel.left, rLabel.top, newW, rLabel.bottom - rLabel.top);
+
+        int textW = DlgLayout::MeasureText(hDlg, hLabel);
+        if (textW > newW) {
+            if (labelId == IDC_LABEL_CONNECTTO) {
+                std::array<wchar_t, 256> buf{};
+                GetWindowTextW(hLabel, buf.data(), static_cast<int>(buf.size()) - 1);
+                std::wstring s(buf.data());
+                size_t pos = s.find(L" (");
+                if (pos != std::wstring::npos) {
+                    s = s.substr(0, pos);
+                    SetWindowTextW(hLabel, s.c_str());
+                }
+            }
+            
+            // Add SS_ENDELLIPSIS so any remaining overflow is gracefully dotted
+            LONG_PTR style = GetWindowLongPtr(hLabel, GWL_STYLE);
+            if (!(style & SS_ENDELLIPSIS)) {
+                SetWindowLongPtr(hLabel, GWL_STYLE, style | SS_ENDELLIPSIS);
+            }
+        }
+    }
 }
 
 void ArrangeLabelFillButton(HWND hDlg, int labelId, int fillId, int btnId)

@@ -396,6 +396,8 @@
 #define IDS_DLG_PHP_METHOD              328
 #define IDS_DLG_PHP_CHUNKS              329
 #define IDS_BTN_OK                      330
+#define IDS_DLG_WIN_LINEBREAKS          450
+#define IDS_DLG_UNIX_LINEBREAKS         451
 #define IDS_TRANSFERMODE_SSH            331
 #define IDS_TRANSFERMODE_PHP_AGENT      332
 #define IDS_TRANSFERMODE_PHP_SHELL      333
