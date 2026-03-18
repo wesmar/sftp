@@ -85,10 +85,10 @@ BEGIN
     COMBOBOX        IDC_PROXYCOMBO,5,283,282,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      ">>",IDC_PROXYBUTTON,290,282,20,14
     PUSHBUTTON      "Delete last proxy",IDC_DELETELAST,5,301,105,14
-    PUSHBUTTON      "Import...",IDC_IMPORTSESSIONS,117,301,68,14
-    PUSHBUTTON      "Help",IDC_PLUGINHELP,192,301,32,14
-    DEFPUSHBUTTON   "OK",IDOK,230,301,24,14
-    PUSHBUTTON      "Cancel",IDCANCEL,260,301,50,14
+    PUSHBUTTON      "Import...",IDC_IMPORTSESSIONS,113,301,70,14
+    PUSHBUTTON      "Help",IDC_PLUGINHELP,186,301,40,14
+    DEFPUSHBUTTON   "OK",IDOK,229,301,26,14
+    PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
 
 IDD_PROPERTIES DIALOGEX 0, 0, 249, 214
@@ -115,28 +115,28 @@ BEGIN
     EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
 END
 
-IDD_PROXY DIALOGEX 0, 0, 280, 119
+IDD_PROXY DIALOGEX 0, 0, 316, 120
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Proxy Settings"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    CONTROL         "&No proxy",IDC_NOPROXY,"Button",BS_AUTORADIOBUTTON,12,19,45,10
-    CONTROL         "HTTP CONNECT",IDC_OTHERPROXY,"Button",BS_AUTORADIOBUTTON,67,19,67,10
-    CONTROL         "SOCKS 4/4a",IDC_SOCKS4APROXY,"Button",BS_AUTORADIOBUTTON,144,19,53,10
-    CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,200,19,44,10
+    CONTROL         "&No proxy",IDC_NOPROXY,"Button",BS_AUTORADIOBUTTON,12,19,58,10
+    CONTROL         "HTTP CONNECT",IDC_OTHERPROXY,"Button",BS_AUTORADIOBUTTON,73,19,76,10
+    CONTROL         "SOCKS 4/4a",IDC_SOCKS4APROXY,"Button",BS_AUTORADIOBUTTON,152,19,63,10
+    CONTROL         "SOCKS 5",IDC_SOCKS5PROXY,"Button",BS_AUTORADIOBUTTON,218,19,56,10
     CONTROL         "Proxy host:",IDC_PROXY_LABEL_HOST,"Static",SS_SIMPLE | WS_GROUP,12,36,90,8
-    EDITTEXT        IDC_PROXYSERVER,106,34,161,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_PROXYSERVER,106,34,196,12,ES_AUTOHSCROLL
     CONTROL         "Proxy user name:",IDC_PROXY_LABEL_USER,"Static",SS_SIMPLE | WS_GROUP,12,52,90,8
-    EDITTEXT        IDC_PROXYUSERNAME,106,50,161,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_PROXYUSERNAME,106,50,196,12,ES_AUTOHSCROLL
     CONTROL         "Proxy password:",IDC_PROXY_LABEL_PASS,"Static",SS_SIMPLE | WS_GROUP,12,67,90,8
-    EDITTEXT        IDC_PROXYPASSWORD,108,66,159,12,ES_PASSWORD | ES_AUTOHSCROLL
-    PUSHBUTTON      "?",IDC_PROXYHELP,256,19,12,10
-    GROUPBOX        "Proxy settings",IDC_PROXY_GROUP,7,7,266,88
-    PUSHBUTTON      "Change password...",IDC_EDITPASS,104,66,163,14,NOT WS_VISIBLE
+    EDITTEXT        IDC_PROXYPASSWORD,108,66,194,12,ES_PASSWORD | ES_AUTOHSCROLL
+    PUSHBUTTON      "?",IDC_PROXYHELP,286,19,12,10
+    GROUPBOX        "Proxy settings",IDC_PROXY_GROUP,7,7,302,88
+    PUSHBUTTON      "Change password...",IDC_EDITPASS,104,65,198,14,NOT WS_VISIBLE
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,81,258,10
-    DEFPUSHBUTTON   "OK",IDOK,167,98,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,223,98,50,14
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,81,290,10
+    DEFPUSHBUTTON   "OK",IDOK,200,99,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,259,99,50,14
 END
 
 IDD_JUMPHOST DIALOGEX 0, 0, 300, 185
@@ -169,17 +169,17 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,242,163,50,14
 END
 
-IDD_SESSION_PICKER DIALOGEX 0, 0, 278, 201
+IDD_SESSION_PICKER DIALOGEX 0, 0, 306, 202
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Import Sessions"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    LTEXT           "",IDC_SESSION_SOURCE_LABEL,7,7,246,8
-    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,18,265,152
-    PUSHBUTTON      "Select &All",IDC_SELECTALL,7,178,62,14
-    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,78,178,66,14
-    DEFPUSHBUTTON   "&Import",IDOK,153,178,60,14
-    PUSHBUTTON      "Cancel",IDCANCEL,221,178,50,14
+    LTEXT           "",IDC_SESSION_SOURCE_LABEL,7,7,271,8
+    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,18,274,152
+    PUSHBUTTON      "Select &All",IDC_SELECTALL,7,178,70,14
+    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,78,178,76,14
+    DEFPUSHBUTTON   "&Import",IDOK,155,178,66,14
+    PUSHBUTTON      "Cancel",IDCANCEL,222,178,57,14
 END
 
 
@@ -209,9 +209,9 @@ BEGIN
     IDD_PROXY, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 273
+        RIGHTMARGIN, 309
         TOPMARGIN, 7
-        BOTTOMMARGIN, 112
+        BOTTOMMARGIN, 113
     END
 
     IDD_JUMPHOST, DIALOG
@@ -220,8 +220,8 @@ BEGIN
 
     IDD_SESSION_PICKER, DIALOG
     BEGIN
-        RIGHTMARGIN, 260
-        BOTTOMMARGIN, 200
+        RIGHTMARGIN, 288
+        BOTTOMMARGIN, 201
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -426,20 +426,29 @@ BEGIN
     IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
     IDS_SCP_PROTOCOL_ERROR  "SCP Protocol Error"
     IDS_SCP_EXEC_FAILED     "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings)."
-    IDS_LAN_ERR_NO_PEER             "LAN Pair: no peer configured. Open connection settings and pair first."
-    IDS_LAN_ERR_PEER_NOT_FOUND      "LAN Pair: peer not found on the network. Make sure the other computer is running."
-    IDS_ERR_INVALID_PROXY           "Invalid proxy server address."
-    IDS_ERR_NOT_SUPPORTED           "Function not supported yet!"
-    IDS_ERR_NO_PLUGIN_DIR           "Cannot locate plugin directory."
-    IDS_ERR_JUMP_SESSION            "ProxyJump: libssh2 session init failed"
-    IDS_ERR_LOAD_PASS               "Failed to load password!"
-    IDS_ERR_LOAD_PROXY_PASS         "Failed to load proxy password!"
-    IDS_ERR_INVALID_SERVER          "Invalid server address."
-    IDS_ERR_OOM_CONN_SETTINGS       "Out of memory while creating connection settings."
-    IDS_IMP_MSG_UNSUPPORTED_PROTO   "No sessions imported (unsupported protocol type)."
-    IDS_IMP_ERR_NO_PUTTY_REG        "putty.reg not found in the selected folder or its subfolders."
-    IDS_IMP_ERR_PARSE_PUTTY_REG     "Failed to read or parse putty.reg."
-    IDS_IMP_ERR_NO_KITTY_SESSIONS   "Sessions folder not found in the selected KiTTY Portable directory."
+    IDS_LAN_ERR_NO_PEER     "LAN Pair: no peer configured. Open connection settings and pair first."
+    IDS_LAN_ERR_PEER_NOT_FOUND 
+                            "LAN Pair: peer not found on the network. Make sure the other computer is running."
+    IDS_ERR_INVALID_PROXY   "Invalid proxy server address."
+    IDS_ERR_NOT_SUPPORTED   "Function not supported yet!"
+    IDS_ERR_NO_PLUGIN_DIR   "Cannot locate plugin directory."
+    IDS_ERR_JUMP_SESSION    "ProxyJump: libssh2 session init failed"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_ERR_LOAD_PASS       "Failed to load password!"
+    IDS_ERR_LOAD_PROXY_PASS "Failed to load proxy password!"
+    IDS_ERR_INVALID_SERVER  "Invalid server address."
+    IDS_ERR_OOM_CONN_SETTINGS 
+                            "Out of memory while creating connection settings."
+    IDS_IMP_MSG_UNSUPPORTED_PROTO 
+                            "No sessions imported (unsupported protocol type)."
+    IDS_IMP_ERR_NO_PUTTY_REG 
+                            "putty.reg not found in the selected folder or its subfolders."
+    IDS_IMP_ERR_PARSE_PUTTY_REG "Failed to read or parse putty.reg."
+    IDS_IMP_ERR_NO_KITTY_SESSIONS 
+                            "Sessions folder not found in the selected KiTTY Portable directory."
 END
 
 STRINGTABLE
@@ -460,93 +469,115 @@ BEGIN
     IDS_TRANSFERMODE_PHP_SHELL "PHP Shell (HTTP)"
     IDS_PHP_ERR_UNREACHABLE "Cannot reach PHP agent endpoint."
     IDS_PHP_ERR_NOT_FOUND   "PHP agent endpoint not found (HTTP 404).\nCheck URL path/filename and upload sftp.php to that location."
-    IDS_PHP_ERR_UNCONFIGURED "PHP agent is not configured on server (HTTP 503).\nSet AGENT_PSK / AGENT_PSK_SHA256 in sftp.php and upload again."
-    IDS_PHP_ERR_WRONG_CREDS_HTTP "Wrong credentials for PHP Agent (HTTP {})."
-    IDS_PHP_ERR_REQUEST_FAILED "PHP Agent request failed for {} (HTTP {})."
-    IDS_PHP_ERR_REJECTED        "PHP Agent rejected request: {}"
-    IDS_PHP_ERR_VALIDATION      "PHP Agent validation failed (HTTP {})."
-    IDS_PHP_ERR_WRONG_CREDS     "Wrong credentials for PHP Agent."
-    IDS_PHP_SHELL_SELECT        "Select Transfer = PHP Shell (HTTP)."
-    IDS_PHP_SHELL_TITLE         "PHP Shell"
-    IDS_PHP_AGENT_TITLE         "PHP Agent"
-    IDS_PHP_COPY_FROM           "\n\nPlease copy your plugin script from:\n"
-    IDS_PHP_UPLOAD_TO           "\nand upload it to your server URL path."
-    IDS_PHP_CHECK_URL           "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server."
-    IDS_PHP_PROBE_FAILED        "PHP Agent probe failed. Check URL and key."
 END
 
 STRINGTABLE
 BEGIN
-    IDS_LOG_SCP_SKIP_PROBE      "SCP-only: skipping auth-methods probe."
-    IDS_LOG_AUTH_METHODS_TIMEOUT "Getting auth methods timed out, using fallback."
-    IDS_LOG_AUTH_METHODS_NONE   "Auth methods list empty, using fallback."
-    IDS_LOG_AUTH_NO_PASSWORD    "User authenticated without password."
-    IDS_LOG_KBD_AUTH_TIMEOUT    "Keyboard-interactive auth timed out."
-    IDS_LOG_PASS_AUTH_TIMEOUT   "Password authentication timed out."
-    IDS_LOG_LOADING_SSH_LIB     "Loading SSH Library..."
-    IDS_LOG_LAN_DISCOVER        "LAN Pair: locating peer via discovery..."
-    IDS_LOG_LAN_CONNECTED       "LAN Pair: connected."
-    IDS_LOG_PHP_AGENT_MODE      "PHP Agent mode"
-    IDS_LOG_POST_AUTH_INIT      "Starting post-auth initialization..."
-    IDS_LOG_SCP_RECONNECT       "SCP: connection lost, trying to reconnect!"
-    IDS_LOG_RECONNECT           "Connection lost, trying to reconnect."
-    IDS_LOG_SFTP_INIT           "Initializing SFTP subsystem..."
-    IDS_LOG_SEND_STORED_PASS    "Sending stored password..."
-    IDS_LOG_REQUEST_PASS        "Requesting password from user..."
-    IDS_LOG_SEND_USER_PASS      "Sending password entered by user..."
-    IDS_LOG_PPK_ERR_VERSION     "Failed to convert .ppk: unsupported PPK version."
-    IDS_LOG_PPK_ERR_ALGO        "Failed to convert .ppk: unsupported key algorithm."
-    IDS_LOG_PPK_ERR_ENC         "Failed to convert .ppk: unsupported encryption/KDF."
-    IDS_LOG_PPK_ERR_ARGON2      "Failed to convert .ppk: Argon2 runtime not available."
-    IDS_LOG_PPK_ERR_PASSPHRASE  "Failed to convert .ppk: wrong passphrase or corrupted key."
-    IDS_LOG_PPK_ERR_GENERIC     "Failed to convert .ppk."
-    IDS_LOG_PPK_CONVERTING      "Converting PPK file..."
-    IDS_LOG_PAGEANT_TIMEOUT     "Pageant authentication timed out."
-    IDS_LOG_PUBKEY_TIMEOUT      "Public key authentication timed out."
-    IDS_LOG_JUMP_NO_FP          "Jump host: failed to get fingerprint"
-    IDS_LOG_JUMP_AUTH_NONE      "Jump host: already authenticated (no auth needed)"
-    IDS_LOG_JUMP_AGENT_TRY      "Jump host: trying agent auth..."
-    IDS_LOG_JUMP_AGENT_OK       "Jump host: agent auth OK"
-    IDS_LOG_JUMP_AGENT_FAIL     "Jump host: agent auth failed, trying other methods"
-    IDS_LOG_JUMP_PUBKEY_TRY     "Jump host: trying public key auth..."
-    IDS_LOG_JUMP_PUBKEY_OK      "Jump host: public key auth OK"
-    IDS_LOG_JUMP_PUBKEY_FAIL    "Jump host: public key auth failed"
-    IDS_LOG_JUMP_PASS_TRY       "Jump host: trying password auth..."
-    IDS_LOG_JUMP_PASS_OK        "Jump host: password auth OK"
-    IDS_LOG_JUMP_PASS_FAIL      "Jump host: password auth failed"
-    IDS_LOG_JUMP_KBD_TRY        "Jump host: trying keyboard-interactive auth..."
-    IDS_LOG_JUMP_KBD_OK         "Jump host: keyboard-interactive auth OK"
-    IDS_LOG_JUMP_KBD_FAIL       "Jump host: keyboard-interactive auth failed"
-    IDS_LOG_JUMP_AUTH_FAIL      "Jump host: all auth methods failed"
-    IDS_LOG_PROXYJUMP           " -- ProxyJump -- "
-    IDS_LOG_JUMP_SSH_FAIL       "Jump host: failed to create SSH session"
-    IDS_LOG_JUMP_HANDSHAKE      "Jump host: SSH handshake..."
-    IDS_LOG_JUMP_HANDSHAKE_OK   "Jump host: SSH handshake OK"
-    IDS_LOG_JUMP_FP_REJECTED    "Jump host: fingerprint rejected"
-    IDS_LOG_JUMP_TCP_FAIL       "Jump host: TCP connect failed to "
-    IDS_LOG_JUMP_TCP_OK         "Jump host: TCP connected to "
-    IDS_LOG_JUMP_HANDSHAKE_FAIL "Jump host: SSH handshake failed: "
-    IDS_LOG_DETECT_UTF8         "Auto-detecting UTF-8 support..."
-    IDS_LOG_DETECT_LINEBREAK    "Auto-detecting line break mode..."
-    IDS_LOG_USER_COMMAND        "Sending user-defined command:"
-    IDS_LOG_SCP64               "64-bit SCP detected!"
-    IDS_LOG_SCP_OPEN_TIMEOUT    "SCP download: open channel timeout."
-    IDS_LOG_SCP_DROPPED         "SCP: connection dropped, reconnecting..."
-    IDS_LOG_SCP_SESSION_LOST    "SCP: session lost, reconnecting..."
-    IDS_LOG_SCP_NO_SHELL        "SCP listing: no shell"
-    IDS_LOG_SCP_LIST_FAIL       "SCP listing failed: no output or timeout."
-    IDS_LOG_SCP_MKDIR_FAIL      "SCP Mkdir: channel creation failed"
-    IDS_LOG_SFTP_OPEN_TIMEOUT   "SFTP open timeout/aborted."
-    IDS_LOG_SCP_DL_TIMEOUT      "SCP download timed out."
-    IDS_LOG_SCP_UL_TIMEOUT      "SCP upload timed out."
-    IDS_LOG_SHELL_DL_START      "Shell transfer: starting download..."
-    IDS_LOG_SHELL_BASE64        "Shell transfer: using base64 (compat mode)..."
-    IDS_LOG_SHELL_UL_START      "Shell transfer: starting upload..."
-    IDS_LOG_PHP_SKIP_UPDATE     "PHP Agent: local sftp.php update skipped (missing or read-only file)."
-    IDS_LOG_TAR_UPLOAD          "TAR upload:"
-    IDS_LOG_TAR_UPLOAD_FAIL     "TAR upload failed"
+    IDS_PHP_ERR_UNCONFIGURED 
+                            "PHP agent is not configured on server (HTTP 503).\nSet AGENT_PSK / AGENT_PSK_SHA256 in sftp.php and upload again."
+    IDS_PHP_ERR_WRONG_CREDS_HTTP "Wrong credentials for PHP Agent (HTTP {})."
+    IDS_PHP_ERR_REQUEST_FAILED "PHP Agent request failed for {} (HTTP {})."
+    IDS_PHP_ERR_REJECTED    "PHP Agent rejected request: {}"
+    IDS_PHP_ERR_VALIDATION  "PHP Agent validation failed (HTTP {})."
+    IDS_PHP_ERR_WRONG_CREDS "Wrong credentials for PHP Agent."
+    IDS_PHP_SHELL_SELECT    "Select Transfer = PHP Shell (HTTP)."
+    IDS_PHP_SHELL_TITLE     "PHP Shell"
+    IDS_PHP_AGENT_TITLE     "PHP Agent"
+    IDS_PHP_COPY_FROM       "\n\nPlease copy your plugin script from:\n"
+    IDS_PHP_UPLOAD_TO       "\nand upload it to your server URL path."
+    IDS_PHP_CHECK_URL       "\n\nPlease check URL syntax, file name, and sftp.php deployment path on server."
+    IDS_PHP_PROBE_FAILED    "PHP Agent probe failed. Check URL and key."
+    IDS_LOG_SCP_SKIP_PROBE  "SCP-only: skipping auth-methods probe."
+    IDS_LOG_AUTH_METHODS_TIMEOUT 
+                            "Getting auth methods timed out, using fallback."
+    IDS_LOG_AUTH_METHODS_NONE "Auth methods list empty, using fallback."
 END
 
+STRINGTABLE
+BEGIN
+    IDS_LOG_AUTH_NO_PASSWORD "User authenticated without password."
+    IDS_LOG_KBD_AUTH_TIMEOUT "Keyboard-interactive auth timed out."
+    IDS_LOG_PASS_AUTH_TIMEOUT "Password authentication timed out."
+    IDS_LOG_LOADING_SSH_LIB "Loading SSH Library..."
+    IDS_LOG_LAN_DISCOVER    "LAN Pair: locating peer via discovery..."
+    IDS_LOG_LAN_CONNECTED   "LAN Pair: connected."
+    IDS_LOG_PHP_AGENT_MODE  "PHP Agent mode"
+    IDS_LOG_POST_AUTH_INIT  "Starting post-auth initialization..."
+    IDS_LOG_SCP_RECONNECT   "SCP: connection lost, trying to reconnect!"
+    IDS_LOG_RECONNECT       "Connection lost, trying to reconnect."
+    IDS_LOG_SFTP_INIT       "Initializing SFTP subsystem..."
+    IDS_LOG_SEND_STORED_PASS "Sending stored password..."
+    IDS_LOG_REQUEST_PASS    "Requesting password from user..."
+    IDS_LOG_SEND_USER_PASS  "Sending password entered by user..."
+    IDS_LOG_PPK_ERR_VERSION "Failed to convert .ppk: unsupported PPK version."
+    IDS_LOG_PPK_ERR_ALGO    "Failed to convert .ppk: unsupported key algorithm."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_LOG_PPK_ERR_ENC     "Failed to convert .ppk: unsupported encryption/KDF."
+    IDS_LOG_PPK_ERR_ARGON2  "Failed to convert .ppk: Argon2 runtime not available."
+    IDS_LOG_PPK_ERR_PASSPHRASE 
+                            "Failed to convert .ppk: wrong passphrase or corrupted key."
+    IDS_LOG_PPK_ERR_GENERIC "Failed to convert .ppk."
+    IDS_LOG_PPK_CONVERTING  "Converting PPK file..."
+    IDS_LOG_PAGEANT_TIMEOUT "Pageant authentication timed out."
+    IDS_LOG_PUBKEY_TIMEOUT  "Public key authentication timed out."
+    IDS_LOG_JUMP_NO_FP      "Jump host: failed to get fingerprint"
+    IDS_LOG_JUMP_AUTH_NONE  "Jump host: already authenticated (no auth needed)"
+    IDS_LOG_JUMP_AGENT_TRY  "Jump host: trying agent auth..."
+    IDS_LOG_JUMP_AGENT_OK   "Jump host: agent auth OK"
+    IDS_LOG_JUMP_AGENT_FAIL "Jump host: agent auth failed, trying other methods"
+    IDS_LOG_JUMP_PUBKEY_TRY "Jump host: trying public key auth..."
+    IDS_LOG_JUMP_PUBKEY_OK  "Jump host: public key auth OK"
+    IDS_LOG_JUMP_PUBKEY_FAIL "Jump host: public key auth failed"
+    IDS_LOG_JUMP_PASS_TRY   "Jump host: trying password auth..."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_LOG_JUMP_PASS_OK    "Jump host: password auth OK"
+    IDS_LOG_JUMP_PASS_FAIL  "Jump host: password auth failed"
+    IDS_LOG_JUMP_KBD_TRY    "Jump host: trying keyboard-interactive auth..."
+    IDS_LOG_JUMP_KBD_OK     "Jump host: keyboard-interactive auth OK"
+    IDS_LOG_JUMP_KBD_FAIL   "Jump host: keyboard-interactive auth failed"
+    IDS_LOG_JUMP_AUTH_FAIL  "Jump host: all auth methods failed"
+    IDS_LOG_PROXYJUMP       " -- ProxyJump -- "
+    IDS_LOG_JUMP_SSH_FAIL   "Jump host: failed to create SSH session"
+    IDS_LOG_JUMP_HANDSHAKE  "Jump host: SSH handshake..."
+    IDS_LOG_JUMP_HANDSHAKE_OK "Jump host: SSH handshake OK"
+    IDS_LOG_JUMP_FP_REJECTED "Jump host: fingerprint rejected"
+    IDS_LOG_JUMP_TCP_FAIL   "Jump host: TCP connect failed to "
+    IDS_LOG_JUMP_TCP_OK     "Jump host: TCP connected to "
+    IDS_LOG_JUMP_HANDSHAKE_FAIL "Jump host: SSH handshake failed: "
+    IDS_LOG_DETECT_UTF8     "Auto-detecting UTF-8 support..."
+    IDS_LOG_DETECT_LINEBREAK "Auto-detecting line break mode..."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_LOG_USER_COMMAND    "Sending user-defined command:"
+    IDS_LOG_SCP64           "64-bit SCP detected!"
+    IDS_LOG_SCP_OPEN_TIMEOUT "SCP download: open channel timeout."
+    IDS_LOG_SCP_DROPPED     "SCP: connection dropped, reconnecting..."
+    IDS_LOG_SCP_SESSION_LOST "SCP: session lost, reconnecting..."
+    IDS_LOG_SCP_NO_SHELL    "SCP listing: no shell"
+    IDS_LOG_SCP_LIST_FAIL   "SCP listing failed: no output or timeout."
+    IDS_LOG_SCP_MKDIR_FAIL  "SCP Mkdir: channel creation failed"
+    IDS_LOG_SFTP_OPEN_TIMEOUT "SFTP open timeout/aborted."
+    IDS_LOG_SCP_DL_TIMEOUT  "SCP download timed out."
+    IDS_LOG_SCP_UL_TIMEOUT  "SCP upload timed out."
+    IDS_LOG_SHELL_DL_START  "Shell transfer: starting download..."
+    IDS_LOG_SHELL_BASE64    "Shell transfer: using base64 (compat mode)..."
+    IDS_LOG_SHELL_UL_START  "Shell transfer: starting upload..."
+    IDS_LOG_PHP_SKIP_UPDATE "PHP Agent: local sftp.php update skipped (missing or read-only file)."
+    IDS_LOG_TAR_UPLOAD      "TAR upload:"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_LOG_TAR_UPLOAD_FAIL "TAR upload failed"
+END
 
 STRINGTABLE
 BEGIN
@@ -791,5 +822,4 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
-
 
