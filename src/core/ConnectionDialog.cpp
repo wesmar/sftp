@@ -1031,20 +1031,21 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
     const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
     SetDlgItemTextW(hWnd, IDC_PHPSHELL, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
 
-    std::array<char, MAX_PATH> strbuf{};
-    LoadString(hinst, IDS_AUTO, strbuf.data(), static_cast<int>(strbuf.size()));
-    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
-    strlcpy(strbuf.data(), "Windows (CR/LF)", strbuf.size() - 1);
-    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
-    strlcpy(strbuf.data(), "Unix (LF)", strbuf.size() - 1);
-    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
+    const std::wstring autoShortStr = LoadResStringW(IDS_LAN_ROLE_AUTO);
+    SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(autoShortStr.empty() ? L"Auto" : autoShortStr.c_str()));
+    const std::wstring winLB = LoadResStringW(IDS_DLG_WIN_LINEBREAKS);
+    SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(winLB.empty() ? L"Windows (CR/LF)" : winLB.c_str()));
+    const std::wstring unixLB = LoadResStringW(IDS_DLG_UNIX_LINEBREAKS);
+    SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(unixLB.empty() ? L"Unix (LF)" : unixLB.c_str()));
     SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, max(0, min(2, s->unixlinebreaks + 1)), 0);
 
-    LoadString(hinst, IDS_AUTO, strbuf.data(), static_cast<int>(strbuf.size()));
-    SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
+    const std::wstring autoStr = LoadResStringW(IDS_AUTO);
+    SendDlgItemMessageW(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)(autoStr.empty() ? L"Auto-detect" : autoStr.c_str()));
+    std::array<char, MAX_PATH> strbuf{};
     for (int i = IDS_UTF8; i <= IDS_OTHER; i++) {
-        LoadString(hinst, i, strbuf.data(), static_cast<int>(strbuf.size()));
-        SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
+        std::wstring itemStr = LoadResStringW(i);
+        if (itemStr.empty()) itemStr = L"Encoding"; // Fallback just in case
+        SendDlgItemMessageW(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)itemStr.c_str());
     }
 
     int cbline = 0;
@@ -1061,8 +1062,9 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
             }
         }
         if (cp > 0 && cbline == 0) {
-            _itoa_s(cp, strbuf.data(), strbuf.size(), 10);
-            SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)strbuf.data());
+            std::array<char, 32> cpbuf{};
+            _itoa_s(cp, cpbuf.data(), cpbuf.size(), 10);
+            SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)cpbuf.data());
             cbline = kCodepageListCount - 1;
         }
         break;
@@ -1072,7 +1074,7 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         RECT rRef{};
         GetWindowRect(GetDlgItem(hWnd, IDC_TRANSFERMODE), &rRef);
         const int refW = rRef.right - rRef.left;
-        SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, (WPARAM)(refW > 0 ? refW * 11 / 10 : 220), 0);
+        SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, (WPARAM)(refW > 0 ? refW * 13 / 10 : 240), 0);
     }
 }
 
@@ -1740,10 +1742,12 @@ static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResul
         ? (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0)
         : 0;
     if (proxynr >= 2) {
-        std::string errorstr(1024, '\0');
-        LoadStringA(hinst, IDS_ERROR_INUSE, errorstr.data(), static_cast<int>(errorstr.size()));
-        errorstr.resize(strlen(errorstr.data()));
-        errorstr += "\n";
+        std::wstring msgW = LoadResStringW(IDS_ERROR_INUSE);
+        std::string errorstr = WideToUtf8(msgW.empty() ? L"Proxy is in use by connection:" : msgW);
+        errorstr.resize(1024, '\0');
+        size_t actualLen = strlen(errorstr.c_str());
+        errorstr[actualLen] = '\n';
+        errorstr[actualLen + 1] = '\0';
 
         if (DeleteLastProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
             int proxynrSel = GetProxyNrFromCombo(hWnd);
@@ -2674,10 +2678,11 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
             // A proxy user name was given,  but no proxy password -> ask for proxy password
             if (!ConnectSettings->proxyuser.empty() &&       // no proxy auth is required
                 ConnectSettings->proxypassword.empty()) {
-                LoadString(hinst, IDS_PROXY_PASS_TITLE, title.data(), title.size());
-                strlcat(title.data(), ConnectSettings->proxyuser, title.size()-1);
+                std::wstring titleW = LoadResStringW(IDS_PROXY_PASS_TITLE);
+                std::string titleStr = WideToUtf8(titleW.empty() ? L"Proxy password for " : titleW);
+                titleStr += ConnectSettings->proxyuser;
                 std::array<char, MAX_PATH> proxyPassword{};
-                if (!RequestProc(PluginNumber, RT_PasswordFirewall, title.data(), title.data(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
+                if (!RequestProc(PluginNumber, RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
                     return false;
                 ConnectSettings->proxypassword = proxyPassword.data();
             }
