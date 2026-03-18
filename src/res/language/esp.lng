@@ -264,6 +264,12 @@
 328=Método:
 329=Fragmentos:
 330=Aceptar
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=No se puede acceder al endpoint del Agente PHP.
+335=Endpoint del Agente PHP no encontrado (HTTP 404).\nVerifique la URL, el nombre del archivo y suba sftp.php al servidor.
+336=PHP Agent no está configurado en el servidor (HTTP 503).\nEstablezca AGENT_PSK / AGENT_PSK_SHA256 en sftp.php y vuelva a subir.
 337=Credenciales incorrectas para PHP Agent (HTTP {}).
 338=Error de solicitud HTTP {} para PHP Agent.
 339=PHP Agent rechazó la conexión: {}
@@ -344,6 +350,8 @@
 414=PHP Agent: actualización local de sftp.php omitida (archivo ausente o de solo lectura).
 415=Subida TAR:
 416=Subida TAR fallida
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=Error del protocolo SCP
 12073=No se puede ejecutar SCP para iniciar la transferencia. Asegúrese de que SCP esté instalado en el servidor y que la ruta esté incluida en PATH.\n\nTambién puede probar SFTP en lugar de SCP (desmarque 'Usar SCP para todo' en la configuración de la conexión).
 12074=LAN Pair: no hay ningún par configurado. Abra la configuración de conexión y empareje primero.
@@ -360,4 +368,6 @@
 12085=No se encontró putty.reg en la carpeta seleccionada ni en sus subcarpetas.
 12086=Error al leer o analizar putty.reg.
 12087=No se encontró la carpeta Sessions en el directorio seleccionado de KiTTY Portable.
+12088=Ya existe una sesión con este nombre.\nElija un nombre de sesión diferente.
+12089=SFTP
 

@@ -264,6 +264,12 @@
 328=Méthode:
 329=Fragments:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=Impossible d'atteindre le point de terminaison de l'agent PHP.
+335=Point de terminaison de l'agent PHP introuvable (HTTP 404).\nVérifiez l'URL, le nom du fichier et téléversez sftp.php sur le serveur.
+336=L'agent PHP n'est pas configuré sur le serveur (HTTP 503).\nDéfinissez AGENT_PSK / AGENT_PSK_SHA256 dans sftp.php et téléversez à nouveau.
 337=Identifiants incorrects pour PHP Agent (HTTP {}).
 338=Erreur de requête HTTP {} pour PHP Agent.
 339=PHP Agent a rejeté la connexion : {}
@@ -344,6 +350,8 @@
 414=PHP Agent : mise à jour locale de sftp.php ignorée (fichier manquant ou en lecture seule).
 415=Envoi TAR :
 416=Envoi TAR échoué
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=Erreur de protocole SCP
 12073=Impossible d'exécuter SCP pour démarrer le transfert. Assurez-vous que SCP est installé sur le serveur et que son chemin d'accès est inclus dans PATH.\n\nVous pouvez également essayer SFTP au lieu de SCP (décochez « Utiliser SCP pour tout » dans les paramètres de connexion).
 12074=LAN Pair : aucun pair configuré. Ouvrez les paramètres de connexion et effectuez d'abord l'appariement.
@@ -360,4 +368,6 @@
 12085=putty.reg introuvable dans le dossier sélectionné ou ses sous-dossiers.
 12086=Échec de la lecture ou de l'analyse de putty.reg.
 12087=Dossier Sessions introuvable dans le répertoire KiTTY Portable sélectionné.
+12088=Une session avec ce nom existe déjà.\nChoisissez un nom de session différent.
+12089=SFTP
 

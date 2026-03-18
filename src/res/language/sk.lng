@@ -263,6 +263,12 @@
 328=Metóda:
 329=Bloky:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=Nie je možné dosiahnuť endpoint PHP agenta.
+335=Endpoint PHP agenta nebol nájdený (HTTP 404).\nSkontrolujte URL, názov súboru a nahrajte sftp.php na server.
+336=PHP agent nie je nakonfigurovaný na serveri (HTTP 503).\nNastavte AGENT_PSK / AGENT_PSK_SHA256 v sftp.php a nahrajte znova.
 337=Nesprávne prihlasovacie údaje pre PHP Agent (HTTP {}).
 338=Chyba HTTP požiadavky {} pre PHP Agent.
 339=PHP Agent odmietol pripojenie: {}
@@ -343,6 +349,8 @@
 414=PHP Agent: aktualizácia lokálneho sftp.php preskočená (súbor chýba alebo je len na čítanie).
 415=Nahrávanie TAR:
 416=Nahrávanie TAR zlyhalo
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=Chyba protokolu SCP
 12073=Nie je možné spustiť SCP na začatie prenosu. Uistite sa, že je na serveri nainštalované SCP a cesta k nemu je zahrnutá v premennej PATH.\n\nMôžete tiež skúsiť SFTP namiesto SCP (zrušte začiarknutie políčka „Použiť SCP na všetko“ v nastaveniach pripojenia).
 12074=LAN Pair: nie je nakonfigurovaný žiadny partner. Otvorte nastavenia pripojenia a najskôr vykonajte párovanie.
@@ -359,4 +367,6 @@
 12085=Súbor putty.reg sa nenašiel vo vybratom priečinku ani v jeho podpriečinkoch.
 12086=Nepodarilo sa prečítať alebo analyzovať súbor putty.reg.
 12087=Priečinok Sessions sa nenašiel vo vybratom adresári KiTTY Portable.
+12088=Spojenie s týmto názvom už existuje.\nZvoľte iný názov spojenia.
+12089=SFTP
 
