@@ -584,6 +584,23 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_DLG_SELECT_PUBKEY           "Select public key file"
+    IDS_DLG_SELECT_PRIVKEY          "Select private key file"
+    IDS_IMP_BROWSE_PUTTY_FOLDER     "Select PuTTY Portable folder"
+    IDS_IMP_MENU_PUTTY              "PuTTY ({})..."
+    IDS_IMP_MENU_WINSCP             "WinSCP ({})..."
+    IDS_IMP_MSG_IMPORTED            "Imported {} session(s)."
+    IDS_IMP_MSG_IMPORTED_SKIPPED    "Imported {} session(s).\nSkipped {} {}."
+    IDS_IMP_MSG_SKIP_UNSUPPORTED    "unsupported session(s)"
+    IDS_IMP_MSG_SKIP_WINSCP         "unsupported WinSCP session(s)"
+    IDS_PROXY_LABEL_SOCKS4A         "SOCKS4a: "
+    IDS_PROXY_LABEL_SOCKS5          "SOCKS5: "
+    IDS_DLG_CODEPAGE_TITLE          "Code page"
+    IDS_DLG_CODEPAGE_PROMPT         "Code page (e.g. 28591):"
+END
+
+STRINGTABLE
+BEGIN
     IDS_F7NEW               "F7 - help.txt"
     IDS_HELPTEXT            "Plugin help:\r\nF7:\tCreate new connection (TC shows New Folder - enter connection name)\r\nF8/Del:\tDelete connection\r\nEnter:\tConnect\r\nAlt+Enter:\tChange options\r\n\r\nTransfer modes:\r\nSSH (SFTP/SCP):\tDefault, fastest when SSH access is available\r\nUse SCP for data:\tUse when SFTP is blocked/unstable\r\nUse SCP only:\tDisable SFTP completely (legacy hosts)\r\nShell transfer force:\tForce shell-based transfer (dd/base64)\r\nPHP Agent (HTTP):\tNo SSH account needed; use uploaded sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal over HTTP via sftp.php"
     IDS_QUICKCONNECT        "Quick Connection"

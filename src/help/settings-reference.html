@@ -61,6 +61,9 @@
       <li><code>LAN Pair (SMB-like)</code> - direct Windows-to-Windows pairing</li>
     </ul>
   </li>
+  <li><b>TAR stream</b> (checkbox, PHP Agent / PHP Shell modes only): when checked, directory downloads use a single <code>TAR_STREAM</code> GET request and batch uploads use a single <code>TAR_EXTRACT</code> POST instead of per-file requests. Greatly reduces round-trip overhead for many small files.</li>
+  <li><b>Method</b> (PHP Agent / PHP Shell modes only): HTTP verb for single-file uploads — Auto (POST→PUT fallback), POST, or PUT.</li>
+  <li><b>Chunks</b> (PHP Agent / PHP Shell modes only): upload chunk size — Auto (from server PROBE, 1–64 MiB), or fixed 2 / 4 / 8 / 16 / 32 / 64 MiB.</li>
   <li><b>Compress data with ZLIB:</b> Enable SSH compression (may help on slow links)</li>
   <li><b>Use shell transfer (for blocked hosts):</b> 
     <ul>
@@ -170,7 +173,7 @@
 </ul>
 
 <div class="note">
-  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions are imported with <code>scponly=1</code> and <code>scpfordata=1</code>. For KiTTY Portable, point the browser at the KiTTYPortable root folder; the plugin locates the <code>Sessions</code> subfolder automatically. Passwords are never imported from any source — you will be prompted on first connection.
+  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions are imported with <code>scponly=1</code> and <code>scpfordata=1</code>. For KiTTY Portable, point the browser at the KiTTYPortable root folder; the plugin locates the <code>Sessions</code> subfolder automatically. KiTTY passwords are decrypted and imported automatically when possible; PuTTY and WinSCP passwords are never imported — you will be prompted on first connection.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

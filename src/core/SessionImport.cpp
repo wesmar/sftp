@@ -1409,12 +1409,18 @@ int ShowExternalSessionImportMenu(HWND owner,
     constexpr UINT kCmdImportFromKittyFolder  = 50006;
 
     HMENU menu = CreatePopupMenu();
-    if (hasPutty)
-        AppendMenuA(menu, MF_STRING, kCmdPickPutty,
-                    std::format("PuTTY ({})...", puttySessions.size()).c_str());
-    if (hasWinScp)
-        AppendMenuA(menu, MF_STRING, kCmdPickWinScp,
-                    std::format("WinSCP ({})...", winScpSessions.size()).c_str());
+    if (hasPutty) {
+        std::wstring puttyTempl = LngStrW(IDS_IMP_MENU_PUTTY);
+        if (puttyTempl.empty()) puttyTempl = L"PuTTY ({})...";
+        AppendMenuW(menu, MF_STRING, kCmdPickPutty,
+                    FormatW(puttyTempl, {std::to_wstring(puttySessions.size())}).c_str());
+    }
+    if (hasWinScp) {
+        std::wstring winscpTempl = LngStrW(IDS_IMP_MENU_WINSCP);
+        if (winscpTempl.empty()) winscpTempl = L"WinSCP ({})...";
+        AppendMenuW(menu, MF_STRING, kCmdPickWinScp,
+                    FormatW(winscpTempl, {std::to_wstring(winScpSessions.size())}).c_str());
+    }
     if (hasPutty && hasWinScp) {
         std::wstring allTempl = LngStrW(IDS_IMP_MENU_ALL);
         if (allTempl.empty()) allTempl = L"Import all ({})";
@@ -1464,13 +1470,20 @@ int ShowExternalSessionImportMenu(HWND owner,
             strlcpy(importedSessionName, selectedData.sectionName.c_str(), importedSessionNameSize - 1);
     };
 
-    auto showFeedback = [&](const char* skippedMsg) {
+    auto showFeedback = [&](UINT skippedId, const char* skippedFb) {
         WindowsUserFeedback fb(owner);
-        if (imported > 0 && skippedUnsupported > 0)
-            fb.ShowMessage(std::format("Imported {} session(s).\nSkipped {} {}.",
-                                       imported, skippedUnsupported, skippedMsg), "SFTP");
-        else if (imported > 0)
-            fb.ShowMessage(std::format("Imported {} session(s).", imported), "SFTP");
+        const std::string skippedMsg = LngStrU8(skippedId, skippedFb);
+        if (imported > 0 && skippedUnsupported > 0) {
+            std::wstring templ = LngStrW(IDS_IMP_MSG_IMPORTED_SKIPPED);
+            if (templ.empty()) templ = L"Imported {} session(s).\nSkipped {} {}.";
+            fb.ShowMessage(WideToUtf8(FormatW(templ, {std::to_wstring(imported),
+                std::to_wstring(skippedUnsupported),
+                std::wstring(skippedMsg.begin(), skippedMsg.end())})), "SFTP");
+        } else if (imported > 0) {
+            std::wstring templ = LngStrW(IDS_IMP_MSG_IMPORTED);
+            if (templ.empty()) templ = L"Imported {} session(s).";
+            fb.ShowMessage(WideToUtf8(FormatW(templ, {std::to_wstring(imported)})), "SFTP");
+        }
         else if (skippedUnsupported > 0) {
             auto s = LngStrW(IDS_IMP_MSG_UNSUPPORTED_PROTO);
             fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"No sessions imported (unsupported protocol type).") : s), "SFTP");
@@ -1482,7 +1495,7 @@ int ShowExternalSessionImportMenu(HWND owner,
     if (cmd == kCmdImportAll) {
         imported += ImportAll(puttySessions, iniFileName, skippedUnsupported);
         imported += ImportAll(winScpSessions, iniFileName, skippedUnsupported);
-        showFeedback("unsupported session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_UNSUPPORTED, "unsupported session(s)");
         return imported;
     }
 
@@ -1513,13 +1526,13 @@ int ShowExternalSessionImportMenu(HWND owner,
     if (cmd == kCmdPickPutty) {
         imported = pickRegistrySessions(puttySessions, "PuTTY", IDS_IMP_TITLE_PUTTY);
         maybeApply();
-        showFeedback("unsupported session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_UNSUPPORTED, "unsupported session(s)");
         return imported;
     }
     if (cmd == kCmdPickWinScp) {
         imported = pickRegistrySessions(winScpSessions, "WinSCP", IDS_IMP_TITLE_WINSCP);
         maybeApply();
-        showFeedback("unsupported WinSCP session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_WINSCP, "unsupported WinSCP session(s)");
         return imported;
     }
 
@@ -1569,14 +1582,15 @@ int ShowExternalSessionImportMenu(HWND owner,
         EnumeratePortableSessions(iniPath.c_str(), SessionSource::winscp, portableSessions);
         imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_WINSCP, "WinSCP.ini");
         maybeApply();
-        showFeedback("unsupported WinSCP session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_WINSCP, "unsupported WinSCP session(s)");
         return imported;
     }
 
     if (cmd == kCmdImportFromPuttyReg) {
         const std::string lastFolder = LoadRecentImportPath(iniFileName, "PuttyFolder");
         std::string folderPath;
-        if (!BrowseForFolder(owner, "Select PuTTY Portable folder", lastFolder.c_str(), folderPath))
+        const std::string puttyFolderTitle = LngStrU8(IDS_IMP_BROWSE_PUTTY_FOLDER, "Select PuTTY Portable folder");
+        if (!BrowseForFolder(owner, puttyFolderTitle.c_str(), lastFolder.c_str(), folderPath))
             return 0;
         SaveRecentImportPaths(iniFileName, "PuttyFolder", folderPath);
 
@@ -1599,7 +1613,7 @@ int ShowExternalSessionImportMenu(HWND owner,
         imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_PUTTY_PORT, "putty.reg");
         DeleteFileA(tempIni.c_str());
         maybeApply();
-        showFeedback("unsupported session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_UNSUPPORTED, "unsupported session(s)");
         return imported;
     }
 
@@ -1647,7 +1661,7 @@ int ShowExternalSessionImportMenu(HWND owner,
                 ++imported;
         }
         maybeApply();
-        showFeedback("unsupported session(s)");
+        showFeedback(IDS_IMP_MSG_SKIP_UNSUPPORTED, "unsupported session(s)");
         return imported;
     }
 

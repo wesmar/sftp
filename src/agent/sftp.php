@@ -444,14 +444,14 @@ function op_tar_extract(): void
     ok(['extracted' => $count]);
 }
 
-function tar_read_exact($in, int $n): string|false
+function tar_read_exact($in, int $n)
 {
     if ($n <= 0) return '';
     $buf = '';
     $remaining = $n;
     while ($remaining > 0) {
         $chunk = @fread($in, $remaining);
-        if ($chunk === false || $chunk === '') return false;
+        if ($chunk === false || $chunk === '') return null;
         $buf .= $chunk;
         $remaining -= strlen($chunk);
     }
@@ -477,7 +477,7 @@ function tar_extract_stream(string $rootAbs, $in): int
     $count = 0;
     for (;;) {
         $hdr = tar_read_exact($in, 512);
-        if ($hdr === false || strlen($hdr) < 512) break;
+        if ($hdr === null || strlen($hdr) < 512) break;
         if ($hdr === str_repeat("\0", 512)) break;
         $typeflag   = $hdr[156];
         $sizeStr    = trim(substr($hdr, 124, 12), "\0 ");
@@ -488,7 +488,7 @@ function tar_extract_stream(string $rootAbs, $in): int
         $paddedSize = (int)(($fileSize + 511) / 512) * 512;
         if ($typeflag === 'L') {
             $longData = ($paddedSize > 0) ? tar_read_exact($in, $paddedSize) : '';
-            if ($longData === false) break;
+            if ($longData === null) break;
             $pendingLongName = rtrim(substr((string)$longData, 0, $fileSize), "\0");
             continue;
         }

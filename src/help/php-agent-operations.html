@@ -257,6 +257,27 @@ Response:
 { "ok": true, "path": "file.txt", "algo": "sha256", "hash": "abc123..." }
 </pre>
 
+<h3>TAR_STREAM - Download Directory as TAR</h3>
+<pre>
+GET https://example.com/sftp.php?op=TAR_STREAM&amp;path=/subdir
+
+Response: raw ustar TAR stream (application/x-tar)
+</pre>
+<p>The server streams the entire directory tree as a ustar TAR archive. The plugin parses the stream on the fly: directories are created immediately, files are written as their data arrives. GNU long-name extension records (<code>././@LongLink</code>, typeflag <code>L</code>) are handled for paths longer than 99 characters. The stream ends with two consecutive 512-byte zero blocks (standard TAR end-of-archive marker).</p>
+<p>Enabled when the <b>TAR stream</b> checkbox is checked and a directory is being downloaded.</p>
+
+<h3>TAR_EXTRACT - Upload Files as TAR</h3>
+<pre>
+POST https://example.com/sftp.php?op=TAR_EXTRACT&amp;path=/subdir
+Content-Type: application/x-tar
+[ustar TAR body]
+
+Response:
+{ "ok": true, "extracted": N }
+</pre>
+<p>The plugin packs all queued files into a single ustar TAR stream (with GNU long-name entries where needed) and sends it in one POST. The server extracts it under <code>path</code>. Files are queued during the TC copy operation and sent all at once when TC signals end-of-batch via <code>FsStatusInfo</code>.</p>
+<p>Enabled when the <b>TAR stream</b> checkbox is checked and files are being uploaded.</p>
+
 <h3>SHELL_EXEC - Execute Command</h3>
 <pre>
 POST https://example.com/sftp.php?op=SHELL_EXEC&cmd=ls+-la&cwd=/var/www

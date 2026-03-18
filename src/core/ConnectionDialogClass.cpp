@@ -187,7 +187,7 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM wParam, LPARAM lParam)
                 const std::wstring msgW = LoadResStringW(IDS_LAN_ROLE_PROMPT);
                 const int choice = MessageBoxW(
                     m_hWnd,
-                    msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
+                    msgW.empty() ? L"LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change" : msgW.c_str(),
                     titleW.empty() ? L"LAN Pair" : titleW.c_str(),
                     MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
                 
@@ -354,14 +354,17 @@ void ConnectionDialog::OnBrowseKeyFile(bool isPublicKey)
     ofn.lpstrFile = szFileName.data();
     ofn.nMaxFile = szFileName.size();
     
+    const std::wstring pubkeyTitleW  = LoadResStringW(IDS_DLG_SELECT_PUBKEY);
+    const std::wstring privkeyTitleW = LoadResStringW(IDS_DLG_SELECT_PRIVKEY);
+
     if (isPublicKey) {
         lstrcpy(szFileName.data(), TEXT("*.pub"));
         ofn.lpstrFilter = TEXT("Public key files (*.pub)\0*.pub\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select public key file");
+        ofn.lpstrTitle = pubkeyTitleW.empty() ? TEXT("Select public key file") : pubkeyTitleW.c_str();
     } else {
         lstrcpy(szFileName.data(), TEXT("*.pem"));
         ofn.lpstrFilter = TEXT("Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select private key file");
+        ofn.lpstrTitle = privkeyTitleW.empty() ? TEXT("Select private key file") : privkeyTitleW.c_str();
     }
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
     

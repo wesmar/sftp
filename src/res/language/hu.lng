@@ -349,6 +349,20 @@
 414=PHP Agent: helyi sftp.php frissítés kihagyva (hiányzó vagy írásvédett fájl).
 415=TAR feltöltés:
 416=TAR feltöltés sikertelen
+417=Nyilvános kulcsfájl kiválasztása
+418=Privát kulcsfájl kiválasztása
+419=PuTTY Portable mappa kiválasztása
+420=PuTTY ({})...
+421=WinSCP ({})...
+422={} munkamenet importálva.
+423={} munkamenet importálva.
+{} {} kihagyva.
+424=nem támogatott munkamenet(ek)
+425=nem támogatott WinSCP munkamenet(ek)
+426=SOCKS4a: 
+427=SOCKS5: 
+428=Kódlap
+429=Kódlap (pl. 28591):
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP protokoll hiba

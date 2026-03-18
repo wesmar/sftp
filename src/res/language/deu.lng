@@ -350,6 +350,20 @@
 414=PHP Agent: lokales sftp.php-Update übersprungen (Datei fehlt oder schreibgeschützt).
 415=TAR-Upload:
 416=TAR-Upload fehlgeschlagen
+417=Öffentliche Schlüsseldatei auswählen
+418=Private Schlüsseldatei auswählen
+419=PuTTY-Portable-Ordner auswählen
+420=PuTTY ({})...
+421=WinSCP ({})...
+422={} Sitzung(en) importiert.
+423={} Sitzung(en) importiert.
+{} {} übersprungen.
+424=nicht unterstützte Sitzung(en)
+425=nicht unterstützte WinSCP-Sitzung(en)
+426=SOCKS4a: 
+427=SOCKS5: 
+428=Zeichensatz
+429=Zeichensatz (z. B. 28591):
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-Protokollfehler

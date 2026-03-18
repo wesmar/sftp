@@ -349,6 +349,20 @@
 414=PHP Agent: actualizare locală sftp.php omisă (fișier lipsă sau doar citire).
 415=Trimitere TAR:
 416=Trimitere TAR eșuată
+417=Selectați fișierul cheii publice
+418=Selectați fișierul cheii private
+419=Selectați folderul PuTTY Portable
+420=PuTTY ({})...
+421=WinSCP ({})...
+422={} sesiune/sesiuni importată/importate.
+423={} sesiune/sesiuni importată/importate.
+{} {} omisă/omise.
+424=sesiune/sesiuni neacceptată/neacceptate
+425=sesiune/sesiuni WinSCP neacceptată/neacceptate
+426=SOCKS4a: 
+427=SOCKS5: 
+428=Pagină de cod
+429=Pagină de cod (ex. 28591):
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Eroare protocol SCP

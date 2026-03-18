@@ -50,7 +50,8 @@
 </div>
 
 <h2>PHP Agent — no resume</h2>
-<p>PHP Agent transfers (GET/PUT operations) do not support partial resume. If a transfer is interrupted, it must restart from the beginning. This is a limitation of the HTTP chunked transfer model used by the agent.</p>
+<p>PHP Agent single-file transfers (GET/PUT operations) do not support partial resume. If interrupted, the transfer must restart from the beginning — this is a limitation of the HTTP chunked transfer model used by the agent.</p>
+<p>PHP Agent <b>TAR stream</b> transfers (directory download via <code>TAR_STREAM</code>, batch upload via <code>TAR_EXTRACT</code>) also do not support resume. The entire TAR stream must complete in one HTTP request. If a TAR transfer is interrupted, re-copy the whole directory.</p>
 
 <h2>LAN Pair — full resume support</h2>
 <p>LAN Pair file transfers support resume at the session protocol level. If the session times out or the connection drops mid-transfer, you can reconnect and resume using TC's standard resume prompt.</p>
