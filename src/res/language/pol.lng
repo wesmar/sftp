@@ -262,6 +262,12 @@
 328=Metoda:
 329=Fragmenty:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=Nie można osiągnąć punktu końcowego PHP Agent.
+335=Punkt końcowy PHP Agent nie został znaleziony (HTTP 404).\nSprawdź URL, nazwę pliku i wgraj sftp.php na serwer.
+336=PHP Agent nie jest skonfigurowany na serwerze (HTTP 503).\nUstaw AGENT_PSK / AGENT_PSK_SHA256 w sftp.php i wgraj ponownie.
 337=Błędne dane logowania dla PHP Agent (HTTP {}).
 338=Błąd żądania HTTP {} dla PHP Agent.
 339=PHP Agent odrzucił połączenie: {}

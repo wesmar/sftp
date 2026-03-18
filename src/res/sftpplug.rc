@@ -57,9 +57,9 @@ BEGIN
     CONTROL         "Use SCP for data transfers (faster!)",IDC_SCP_DATA,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,182,191,10
     CONTROL         "Use SCP for everything (no SFTP)",IDC_SCP_ALL,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,192,167,10
-    LTEXT           "Transfer:",IDC_LABEL_TRANSFER,204,176,40,8
+    LTEXT           "Transfer:",IDC_LABEL_TRANSFER,200,176,40,8
     COMBOBOX        IDC_TRANSFERMODE,234,173,76,46,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "System:",IDC_SYSTEMLABEL,204,187,40,8
+    LTEXT           "System:",IDC_SYSTEMLABEL,200,187,40,8
     COMBOBOX        IDC_SYSTEM,234,185,76,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Encoding (codepage) of file names:",IDC_CODEPAGELABEL,
                     "Static",SS_SIMPLE | WS_GROUP,5,202,169,8

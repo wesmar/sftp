@@ -263,6 +263,12 @@
 328=Methode:
 329=Blokken:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=PHP Agent-eindpunt is niet bereikbaar.
+335=PHP Agent-eindpunt niet gevonden (HTTP 404).\nControleer URL, bestandsnaam en upload sftp.php naar de server.
+336=PHP Agent is niet geconfigureerd op de server (HTTP 503).\nStel AGENT_PSK / AGENT_PSK_SHA256 in sftp.php in en upload opnieuw.
 337=Onjuiste inloggegevens voor PHP Agent (HTTP {}).
 338=HTTP-verzoekfout {} voor PHP Agent.
 339=PHP Agent heeft de verbinding geweigerd: {}
@@ -343,6 +349,8 @@
 414=PHP Agent: lokale sftp.php-update overgeslagen (bestand ontbreekt of is alleen-lezen).
 415=TAR-upload:
 416=TAR-upload mislukt
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=SCP-protocolfout
 12073=Kan SCP niet uitvoeren om de overdracht te starten. Zorg ervoor dat SCP op de server is geïnstalleerd en dat het pad ernaar is opgenomen in PATH.\n\nU kunt ook SFTP proberen in plaats van SCP (vink 'Gebruik SCP voor alles' uit in de verbindingsinstellingen).
 12074=LAN Pair: geen peer geconfigureerd. Open de verbindingsinstellingen en koppel eerst.
@@ -359,4 +367,6 @@
 12085=putty.reg niet gevonden in de geselecteerde map of de submappen ervan.
 12086=Kan putty.reg niet lezen of parseren.
 12087=Map Sessions niet gevonden in de geselecteerde KiTTY Portable-map.
+12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
+12089=SFTP
 

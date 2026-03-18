@@ -263,6 +263,12 @@
 328=方法:
 329=块:
 330=确定
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=无法到达 PHP Agent 端点。
+335=未找到 PHP Agent 端点 (HTTP 404)。\n请检查 URL、文件名并将 sftp.php 上传到服务器。
+336=PHP Agent 在服务器上未配置 (HTTP 503)。\n请在 sftp.php 中设置 AGENT_PSK / AGENT_PSK_SHA256 并重新上传。
 337=PHP Agent 凭据错误 (HTTP {})。
 338=PHP Agent HTTP {} 请求错误。
 339=PHP Agent 拒绝了连接: {}
@@ -343,6 +349,8 @@
 414=PHP Agent：跳过本地sftp.php更新（文件缺失或为只读）。
 415=TAR 上传:
 416=TAR 上传失败
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=SCP 协议错误
 12073=无法执行 SCP 以开始传输。请确保服务器上安装了 SCP，并且其路径包含在 PATH 中。\n\n您也可以尝试使用 SFTP 代替 SCP（在连接设置中取消选中“全部使用 SCP”）。
 12074=LAN Pair：未配置对等端。请打开连接设置并首先配对。
@@ -359,4 +367,6 @@
 12085=在选定的文件夹或其子文件夹中找不到 putty.reg。
 12086=无法读取或解析 putty.reg。
 12087=在选定的 KiTTY Portable 目录中找不到 Sessions 文件夹。
+12088=已存在同名会话。\n请选择其他会话名称。
+12089=SFTP
 

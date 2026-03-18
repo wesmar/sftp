@@ -263,6 +263,12 @@
 328=Metodă:
 329=Blocuri:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=Nu se poate ajunge la punctul de acces al agentului PHP.
+335=Punctul de acces al agentului PHP nu a fost găsit (HTTP 404).\nVerificați URL-ul, numele fișierului și încărcați sftp.php pe server.
+336=Agentul PHP nu este configurat pe server (HTTP 503).\nSetați AGENT_PSK / AGENT_PSK_SHA256 în sftp.php și reîncărcați.
 337=Date de autentificare incorecte pentru PHP Agent (HTTP {}).
 338=Eroare de cerere HTTP {} pentru PHP Agent.
 339=PHP Agent a respins conexiunea: {}
@@ -343,6 +349,8 @@
 414=PHP Agent: actualizare locală sftp.php omisă (fișier lipsă sau doar citire).
 415=Trimitere TAR:
 416=Trimitere TAR eșuată
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=Eroare protocol SCP
 12073=Nu se poate executa SCP pentru a începe transferul. Asigurați-vă că SCP este instalat pe server și calea către acesta este inclusă în PATH.\n\nDe asemenea, puteți încerca SFTP în loc de SCP (debifați 'Folosiți SCP pentru tot' din setările conexiunii).
 12074=LAN Pair: niciun partener configurat. Deschideți setările conexiunii și asociați mai întâi.
@@ -359,4 +367,6 @@
 12085=putty.reg nu a fost găsit în folderul selectat sau în subfolderele sale.
 12086=Eșec la citirea sau analizarea putty.reg.
 12087=Folderul Sessions nu a fost găsit în directorul KiTTY Portable selectat.
+12088=Există deja o sesiune cu acest nume.\nAlegeți un alt nume de sesiune.
+12089=SFTP
 

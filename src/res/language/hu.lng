@@ -263,6 +263,12 @@
 328=Módszer:
 329=Töredékek:
 330=OK
+331=SSH (SFTP/SCP)
+332=PHP Agent (HTTP)
+333=PHP Shell (HTTP)
+334=A PHP Agent végpont nem érhető el.
+335=A PHP Agent végpont nem található (HTTP 404).\nEllenőrizze az URL-t, a fájlnevet és töltse fel a sftp.php-t a szerverre.
+336=A PHP Agent nincs konfigurálva a szerveren (HTTP 503).\nÁllítsa be az AGENT_PSK / AGENT_PSK_SHA256 értékeket a sftp.php-ban és töltse fel újra.
 337=Helytelen hitelesítő adatok a PHP Agentnek (HTTP {}).
 338=HTTP {} kérési hiba a PHP Agentnél.
 339=A PHP Agent elutasította a kapcsolatot: {}
@@ -343,6 +349,8 @@
 414=PHP Agent: helyi sftp.php frissítés kihagyva (hiányzó vagy írásvédett fájl).
 415=TAR feltöltés:
 416=TAR feltöltés sikertelen
+450=Windows (CR/LF)
+451=Unix (LF)
 12072=SCP protokoll hiba
 12073=Nem lehet végrehajtani az SCP-t az átvitel indításához. Győződjön meg arról, hogy az SCP telepítve van a szerveren, és az elérési útja szerepel a PATH-ban.\n\nMegpróbálhatja az SFTP-t is az SCP helyett (törölje az 'SCP használata mindenhez' jelölést a kapcsolat beállításaiban).
 12074=LAN Pair: nincs partner konfigurálva. Nyissa meg a kapcsolat beállításait, és először párosítsa.
@@ -359,4 +367,6 @@
 12085=A putty.reg nem található a kiválasztott mappában vagy almappáiban.
 12086=A putty.reg beolvasása vagy feldolgozása sikertelen.
 12087=A Sessions mappa nem található a kiválasztott KiTTY Portable könyvtárban.
+12088=Már létezik ilyen nevű munkamenet.\nKérjük, válasszon másik nevet.
+12089=SFTP
 
