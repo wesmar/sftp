@@ -344,3 +344,20 @@
 414=PHP Agent: lokales sftp.php-Update übersprungen (Datei fehlt oder schreibgeschützt).
 415=TAR-Upload:
 416=TAR-Upload fehlgeschlagen
+12072=SCP-Protokollfehler
+12073=SCP konnte nicht ausgeführt werden, um die Übertragung zu starten. Stellen Sie sicher, dass SCP auf dem Server installiert ist und der Pfad dazu in der PATH-Variablen enthalten ist.\n\nSie können auch SFTP anstelle von SCP versuchen (deaktivieren Sie 'SCP für alles verwenden' in den Verbindungseinstellungen).
+12074=LAN Pair: Kein Partner konfiguriert. Öffnen Sie die Verbindungseinstellungen und führen Sie zuerst das Pairing durch.
+12075=LAN Pair: Partner im Netzwerk nicht gefunden. Stellen Sie sicher, dass der andere Computer eingeschaltet ist.
+12076=Ungültige Proxy-Server-Adresse.
+12077=Funktion wird noch nicht unterstützt!
+12078=Plugin-Verzeichnis konnte nicht gefunden werden.
+12079=ProxyJump: libssh2 Sitzungsinitialisierung fehlgeschlagen
+12080=Passwort konnte nicht geladen werden!
+12081=Proxy-Passwort konnte nicht geladen werden!
+12082=Ungültige Serveradresse.
+12083=Nicht genügend Arbeitsspeicher beim Erstellen der Verbindungseinstellungen.
+12084=Keine Sitzungen importiert (nicht unterstützter Protokolltyp).
+12085=putty.reg wurde im ausgewählten Ordner oder dessen Unterordnern nicht gefunden.
+12086=putty.reg konnte nicht gelesen oder verarbeitet werden.
+12087=Der Ordner Sessions wurde im ausgewählten KiTTY Portable-Verzeichnis nicht gefunden.
+

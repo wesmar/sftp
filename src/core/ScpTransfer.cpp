@@ -15,8 +15,20 @@
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
 #include "res/resource.h"
+#include "LngLoader.h"
+
+extern HINSTANCE hinst;
 
 namespace {
+
+static std::string LngStrA(UINT id, const char* fallback)
+{
+    const char* s = LngGetString(id);
+    if (s) return s;
+    std::array<char, 512> buf{};
+    const int n = LoadStringA(hinst, id, buf.data(), static_cast<int>(buf.size()) - 1);
+    return n > 0 ? std::string(buf.data(), static_cast<size_t>(n)) : (fallback ? fallback : "");
+}
 
 // SFTP_MAX_READ_SIZE, SFTP_MAX_WRITE_SIZE, SFTP_SCP_BLOCK_SIZE,
 // SFTP_SCP_READ_IDLE_TIMEOUT_MS, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS
@@ -132,10 +144,10 @@ public:
             if (ReadLine(line, timeoutMs))
                 err = line;
             else
-                err = "SCP protocol error.";
+                err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
             return false;
         }
-        err = "SCP protocol error.";
+        err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
         return false;
     }
 
@@ -282,11 +294,11 @@ bool ScpReadAck(ISshChannel* channel, pConnectSettings cs, std::string& err)
 
     if (code == 1 || code == 2) {
         if (!ScpReadLine(channel, cs, err, SFTP_SCP_READ_IDLE_TIMEOUT_MS))
-            err = "SCP protocol error.";
+            err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
         return false;
     }
 
-    err = "SCP protocol error.";
+    err = LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP protocol error.");
     return false;
 }
 
@@ -361,8 +373,8 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
             } else if (err == LIBSSH2_ERROR_SCP_PROTOCOL) {
                 if (cs->feedback) {
                     cs->feedback->ShowError(
-                        "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings).",
-                        "SCP Protocol Error");
+                        LngStrA(IDS_SCP_EXEC_FAILED, "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings).").c_str(),
+                        LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP Protocol Error").c_str());
                 }
                 break;
             } else {

@@ -491,7 +491,22 @@
 #define IDS_IMP_MENU_FROM_WINSCP        12069
 #define IDS_IMP_TITLE_KITTY_PORT        12070
 #define IDS_IMP_MENU_FROM_KITTY_PORT    12071
-#define IDR_KITTY_DECRYPT_CAB           200
+#define IDS_SCP_PROTOCOL_ERROR          12072
+#define IDS_SCP_EXEC_FAILED             12073
+#define IDS_LAN_ERR_NO_PEER             12074
+#define IDS_LAN_ERR_PEER_NOT_FOUND      12075
+#define IDS_ERR_INVALID_PROXY           12076
+#define IDS_ERR_NOT_SUPPORTED           12077
+#define IDS_ERR_NO_PLUGIN_DIR           12078
+#define IDS_ERR_JUMP_SESSION            12079
+#define IDS_ERR_LOAD_PASS               12080
+#define IDS_ERR_LOAD_PROXY_PASS         12081
+#define IDS_ERR_INVALID_SERVER          12082
+#define IDS_ERR_OOM_CONN_SETTINGS       12083
+#define IDS_IMP_MSG_UNSUPPORTED_PROTO   12084
+#define IDS_IMP_ERR_NO_PUTTY_REG        12085
+#define IDS_IMP_ERR_PARSE_PUTTY_REG     12086
+#define IDS_IMP_ERR_NO_KITTY_SESSIONS   12087
 
 // Next default values for new objects
 //
@@ -503,3 +518,4 @@
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
+

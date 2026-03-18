@@ -315,12 +315,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "kvc.pl"
             VALUE "FileDescription", "SFTP Plugin for Total Commander"
-            VALUE "FileVersion", "1.0.0.12"
+            VALUE "FileVersion", "1.0.0.13"
             VALUE "InternalName", "sftpplug"
             VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName", "SFTPplug"
-            VALUE "ProductVersion", "1.0.0.12"
+            VALUE "ProductVersion", "1.0.0.13"
         END
     END
     BLOCK "VarFileInfo"
@@ -424,6 +424,22 @@ BEGIN
     IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP.ini file..."
     IDS_IMP_TITLE_KITTY_PORT "Import KiTTY Portable Sessions"
     IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
+    IDS_SCP_PROTOCOL_ERROR  "SCP Protocol Error"
+    IDS_SCP_EXEC_FAILED     "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings)."
+    IDS_LAN_ERR_NO_PEER             "LAN Pair: no peer configured. Open connection settings and pair first."
+    IDS_LAN_ERR_PEER_NOT_FOUND      "LAN Pair: peer not found on the network. Make sure the other computer is running."
+    IDS_ERR_INVALID_PROXY           "Invalid proxy server address."
+    IDS_ERR_NOT_SUPPORTED           "Function not supported yet!"
+    IDS_ERR_NO_PLUGIN_DIR           "Cannot locate plugin directory."
+    IDS_ERR_JUMP_SESSION            "ProxyJump: libssh2 session init failed"
+    IDS_ERR_LOAD_PASS               "Failed to load password!"
+    IDS_ERR_LOAD_PROXY_PASS         "Failed to load proxy password!"
+    IDS_ERR_INVALID_SERVER          "Invalid server address."
+    IDS_ERR_OOM_CONN_SETTINGS       "Out of memory while creating connection settings."
+    IDS_IMP_MSG_UNSUPPORTED_PROTO   "No sessions imported (unsupported protocol type)."
+    IDS_IMP_ERR_NO_PUTTY_REG        "putty.reg not found in the selected folder or its subfolders."
+    IDS_IMP_ERR_PARSE_PUTTY_REG     "Failed to read or parse putty.reg."
+    IDS_IMP_ERR_NO_KITTY_SESSIONS   "Sessions folder not found in the selected KiTTY Portable directory."
 END
 
 STRINGTABLE
@@ -531,7 +547,6 @@ BEGIN
     IDS_LOG_TAR_UPLOAD_FAIL     "TAR upload failed"
 END
 
-IDR_KITTY_DECRYPT_CAB   RCDATA  "kitty-decrypt.cab"
 
 STRINGTABLE
 BEGIN
@@ -776,4 +791,5 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+
 

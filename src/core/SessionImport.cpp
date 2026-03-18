@@ -1,6 +1,6 @@
 #include "global.h"
 #include "SessionImport.h"
-#include "KittyDecryptDeploy.h"
+#include "KittyDecrypt.h"
 #include "WindowsUserFeedback.h"
 #include "SftpInternal.h"
 
@@ -1103,90 +1103,6 @@ static std::string FindKittySessionsFolder(const std::string& dir, int maxDepth 
     return {};
 }
 
-// Locates kitty-decryptpassword.exe relative to a KiTTY session file.
-// Searches: KiTTY portable root, App/KiTTY subfolder, Data folder, Sessions folder.
-static std::string FindKittyDecryptExe(const std::string& sessionFilePath)
-{
-    // Build candidate folders by walking up from session file
-    auto parentOf = [](const std::string& p) -> std::string {
-        const size_t s = p.rfind('\\');
-        return s != std::string::npos ? p.substr(0, s) : p;
-    };
-    const std::string sessionsFolder = parentOf(sessionFilePath);
-    const std::string dataFolder     = parentOf(sessionsFolder);
-    const std::string kittyRoot      = parentOf(dataFolder);
-
-    const char* exe = "\\kitty-decryptpassword.exe";
-    for (const std::string& base : { kittyRoot, kittyRoot + "\\App\\KiTTY", dataFolder, sessionsFolder }) {
-        const std::string full = base + exe;
-        if (GetFileAttributesA(full.c_str()) != INVALID_FILE_ATTRIBUTES)
-            return full;
-    }
-    return {};
-}
-
-// Runs kitty-decryptpassword.exe and returns the decrypted password (stdout).
-// Usage: PASSWORD=<enc> kitty-decryptpassword.exe 0 <host> <termtype>
-static std::string RunKittyDecrypt(const std::string& decryptExe,
-                                    const std::string& encryptedPwd,
-                                    const std::string& host,
-                                    const std::string& termtype)
-{
-    if (decryptExe.empty() || encryptedPwd.empty())
-        return {};
-
-    SECURITY_ATTRIBUTES sa = {};
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = TRUE;
-
-    HANDLE hRead = nullptr, hWrite = nullptr;
-    if (!CreatePipe(&hRead, &hWrite, &sa, 0))
-        return {};
-    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
-
-    std::string cmdLine = "\"" + decryptExe + "\" 0 \"" + host + "\" \"" + termtype + "\"";
-
-    STARTUPINFOA si = {};
-    si.cb        = sizeof(si);
-    si.dwFlags   = STARTF_USESTDHANDLES;
-    si.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput = hWrite;
-    si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
-
-    SetEnvironmentVariableA("PASSWORD", encryptedPwd.c_str());
-    PROCESS_INFORMATION pi = {};
-    const BOOL ok = CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr,
-                                   TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    SetEnvironmentVariableA("PASSWORD", nullptr);
-    CloseHandle(hWrite);
-
-    if (!ok) {
-        CloseHandle(hRead);
-        return {};
-    }
-
-    std::string result;
-    char buf[256];
-    DWORD got = 0;
-    while (ReadFile(hRead, buf, sizeof(buf), &got, nullptr) && got > 0)
-        result.append(buf, got);
-
-    WaitForSingleObject(pi.hProcess, 5000);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    CloseHandle(hRead);
-
-    while (!result.empty() && (result.back() == '\r' || result.back() == '\n'))
-        result.pop_back();
-
-    // Sanity check: accept only printable ASCII (typical SSH passwords)
-    for (unsigned char c : result) {
-        if (c < 0x20 || c > 0x7E)
-            return {};
-    }
-    return result;
-}
-
 // Enumerates session files in the KiTTY Sessions folder.
 // A valid session file must contain "Protocol\ssh\" line.
 static void EnumerateKittyFolder(const std::string& sessionsFolder,
@@ -1301,20 +1217,17 @@ static bool ImportKittySessionToIni(const KittySessionDescriptor& session,
         }
     }
 
-    // Try to import stored password via kitty-decryptpassword.exe
+    // Try to import stored password natively
     std::string encryptedPassword;
     if (ReadKittyString(session.filePath, "Password", encryptedPassword) && !encryptedPassword.empty()) {
-        const std::string decryptExe = EnsureKittyDecryptExe(session.filePath);
-        if (!decryptExe.empty()) {
-            std::string termtype;
-            if (!ReadKittyString(session.filePath, "TerminalType", termtype) || termtype.empty())
-                termtype = "xterm";
-            const std::string plainPassword = RunKittyDecrypt(decryptExe, encryptedPassword, host, termtype);
-            if (!plainPassword.empty()) {
-                std::array<char, 1024> encBuf{};
-                EncryptString(plainPassword.c_str(), encBuf.data(), static_cast<UINT>(encBuf.size()));
-                WritePrivateProfileStringA(sectionName.c_str(), "password", encBuf.data(), iniFileName);
-            }
+        std::string termtype;
+        if (!ReadKittyString(session.filePath, "TerminalType", termtype) || termtype.empty())
+            termtype = "xterm";
+        std::string plainPassword;
+        if (DecryptKittyPassword(encryptedPassword, host, termtype, plainPassword) && !plainPassword.empty()) {
+            std::array<char, 1024> encBuf{};
+            EncryptString(plainPassword.c_str(), encBuf.data(), static_cast<UINT>(encBuf.size()));
+            WritePrivateProfileStringA(sectionName.c_str(), "password", encBuf.data(), iniFileName);
         }
     }
 
@@ -1558,8 +1471,10 @@ int ShowExternalSessionImportMenu(HWND owner,
                                        imported, skippedUnsupported, skippedMsg), "SFTP");
         else if (imported > 0)
             fb.ShowMessage(std::format("Imported {} session(s).", imported), "SFTP");
-        else if (skippedUnsupported > 0)
-            fb.ShowMessage("No sessions imported (unsupported protocol type).", "SFTP");
+        else if (skippedUnsupported > 0) {
+            auto s = LngStrW(IDS_IMP_MSG_UNSUPPORTED_PROTO);
+            fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"No sessions imported (unsupported protocol type).") : s), "SFTP");
+        }
         else
             fb.ShowMessage(WideToUtf8([&]{ auto s = LngStrW(IDS_IMP_MSG_NONE); return s.empty() ? std::wstring(L"No sessions imported.") : s; }()), "SFTP");
     };
@@ -1668,13 +1583,15 @@ int ShowExternalSessionImportMenu(HWND owner,
         const std::string regFile = FindPuttyRegInFolder(folderPath);
         if (regFile.empty()) {
             WindowsUserFeedback fb(owner);
-            fb.ShowMessage("putty.reg not found in the selected folder or its subfolders.", "SFTP");
+            auto s = LngStrW(IDS_IMP_ERR_NO_PUTTY_REG);
+            fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"putty.reg not found in the selected folder or its subfolders.") : s), "SFTP");
             return 0;
         }
         const std::string tempIni = ConvertRegFileToTempIni(regFile);
         if (tempIni.empty()) {
             WindowsUserFeedback fb(owner);
-            fb.ShowMessage("Failed to read or parse putty.reg.", "SFTP");
+            auto s = LngStrW(IDS_IMP_ERR_PARSE_PUTTY_REG);
+            fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"Failed to read or parse putty.reg.") : s), "SFTP");
             return 0;
         }
         std::vector<PortableSessionDescriptor> portableSessions;
@@ -1696,7 +1613,8 @@ int ShowExternalSessionImportMenu(HWND owner,
         const std::string sessionsFolder = FindKittySessionsFolder(folderPath);
         if (sessionsFolder.empty()) {
             WindowsUserFeedback fb(owner);
-            fb.ShowMessage("Sessions folder not found in the selected KiTTY Portable directory.", "SFTP");
+            auto s = LngStrW(IDS_IMP_ERR_NO_KITTY_SESSIONS);
+            fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"Sessions folder not found in the selected KiTTY Portable directory.") : s), "SFTP");
             return 0;
         }
 

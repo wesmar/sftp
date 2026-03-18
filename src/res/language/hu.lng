@@ -343,3 +343,20 @@
 414=PHP Agent: helyi sftp.php frissítés kihagyva (hiányzó vagy írásvédett fájl).
 415=TAR feltöltés:
 416=TAR feltöltés sikertelen
+12072=SCP protokoll hiba
+12073=Nem lehet végrehajtani az SCP-t az átvitel indításához. Győződjön meg arról, hogy az SCP telepítve van a szerveren, és az elérési útja szerepel a PATH-ban.\n\nMegpróbálhatja az SFTP-t is az SCP helyett (törölje az 'SCP használata mindenhez' jelölést a kapcsolat beállításaiban).
+12074=LAN Pair: nincs partner konfigurálva. Nyissa meg a kapcsolat beállításait, és először párosítsa.
+12075=LAN Pair: a partner nem található a hálózaton. Ellenőrizze, hogy a másik számítógép be van-e kapcsolva.
+12076=Érvénytelen proxy szerver cím.
+12077=A funkció még nem támogatott!
+12078=A bővítmény könyvtára nem található.
+12079=ProxyJump: a libssh2 munkamenet inicializálása sikertelen
+12080=A jelszó betöltése sikertelen!
+12081=A proxy jelszó betöltése sikertelen!
+12082=Érvénytelen szerver cím.
+12083=Nincs elég memória a kapcsolat beállításainak létrehozásakor.
+12084=Nem importáltak munkameneteket (nem támogatott protokoll).
+12085=A putty.reg nem található a kiválasztott mappában vagy almappáiban.
+12086=A putty.reg beolvasása vagy feldolgozása sikertelen.
+12087=A Sessions mappa nem található a kiválasztott KiTTY Portable könyvtárban.
+

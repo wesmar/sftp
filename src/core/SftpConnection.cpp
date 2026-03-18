@@ -375,7 +375,7 @@ static int LanPairConnect(pConnectSettings cs)
     const std::string targetPeerId = cs->lan_pair_peer;
     if (targetPeerId.empty()) {
         if (cs->feedback)
-            cs->feedback->ShowError("LAN Pair: no peer configured. Open connection settings and pair first.");
+            cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_NO_PEER, "LAN Pair: no peer configured. Open connection settings and pair first.").c_str());
         return SFTP_FAILED;
     }
 
@@ -411,7 +411,7 @@ static int LanPairConnect(pConnectSettings cs)
 
     if (!found) {
         if (cs->feedback)
-            cs->feedback->ShowError("LAN Pair: peer not found on the network. Make sure the other computer is running.");
+            cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_PEER_NOT_FOUND, "LAN Pair: peer not found on the network. Make sure the other computer is running.").c_str());
         return SFTP_FAILED;
     }
 
@@ -507,11 +507,11 @@ int SftpConnect(pConnectSettings ConnectSettings)
             ConnectSettings->proxytype == sftp::Proxy::socks4 ||
             ConnectSettings->proxytype == sftp::Proxy::socks5) {
             if (ConnectSettings->feedback)
-                ConnectSettings->feedback->ShowError("Invalid proxy server address.");
+                ConnectSettings->feedback->ShowError(LngStrU8(IDS_ERR_INVALID_PROXY, "Invalid proxy server address.").c_str());
             return fail(ConnectSettings->proxytype == sftp::Proxy::http ? -11 : -12);
         }
         if (ConnectSettings->feedback) {
-            ConnectSettings->feedback->ShowError("Function not supported yet!");
+            ConnectSettings->feedback->ShowError(LngStrU8(IDS_ERR_NOT_SUPPORTED, "Function not supported yet!").c_str());
         }
         return fail(-13);
     }
