@@ -358,3 +358,5 @@
 12085=Nie znaleziono pliku putty.reg w wybranym folderze lub jego podfolderach.
 12086=Nie udało się odczytać lub przetworzyć pliku putty.reg.
 12087=Nie znaleziono folderu Sessions w wybranym katalogu KiTTY Portable.
+12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
+12089=SFTP
