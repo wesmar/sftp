@@ -507,6 +507,8 @@
 #define IDS_IMP_ERR_NO_PUTTY_REG        12085
 #define IDS_IMP_ERR_PARSE_PUTTY_REG     12086
 #define IDS_IMP_ERR_NO_KITTY_SESSIONS   12087
+#define IDS_ERR_SESSION_EXISTS          12088
+#define IDS_TITLE_SFTP                  12089
 
 // Next default values for new objects
 //

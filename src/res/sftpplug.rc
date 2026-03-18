@@ -297,8 +297,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,12
- PRODUCTVERSION 1,0,0,12
+ FILEVERSION 1,0,0,13
+ PRODUCTVERSION 1,0,0,13
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -447,10 +447,11 @@ BEGIN
     IDS_IMP_ERR_NO_PUTTY_REG 
                             "putty.reg not found in the selected folder or its subfolders."
     IDS_IMP_ERR_PARSE_PUTTY_REG "Failed to read or parse putty.reg."
-    IDS_IMP_ERR_NO_KITTY_SESSIONS 
+    IDS_IMP_ERR_NO_KITTY_SESSIONS
                             "Sessions folder not found in the selected KiTTY Portable directory."
-END
-
+    IDS_ERR_SESSION_EXISTS  "Session with this name already exists.\nChoose a different session name."
+    IDS_TITLE_SFTP          "SFTP"
+    END
 STRINGTABLE
 BEGIN
     IDS_JUMP_DLG_PASS       "&Password:"

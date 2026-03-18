@@ -190,6 +190,11 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM wParam, LPARAM lParam)
                     msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
                     titleW.empty() ? L"LAN Pair" : titleW.c_str(),
                     MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
+                
+                if (!IsWindow(m_hWnd)) {
+                    return 1;
+                }
+
                 if (choice == IDYES || choice == IDNO) {
                     const int newRole = (choice == IDYES) ? 2 : 1;
                     SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_SETCURSEL, newRole, 0);

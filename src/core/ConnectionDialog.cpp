@@ -101,16 +101,25 @@ static void ArrangeProtocolButtons(HWND hDlg)
     RECT rDlg{};
     GetClientRect(hDlg, &rDlg);
 
-    // Slightly smaller gap than the default to reclaim a few extra pixels.
-    const int gap = 2;
-    int right = rDlg.right - DlgLayout::kGap - 4;
+    RECT rBase = { 0, 0, 4, 4 };
+    MapDialogRect(hDlg, &rBase);
+    const int gap = rBase.right / 2;
+
+    int right = rDlg.right - gap;
 
     for (int i = 2; i >= 0; --i) {
-        const RECT r = DlgLayout::GetRect(hDlg, ids[i]);
-        const int textW = DlgLayout::MeasureText(hDlg, GetDlgItem(hDlg, ids[i]));
-        const int w = (std::max)(DlgLayout::kBoxW + textW + gap * 2, 10);
+        HWND hw = GetDlgItem(hDlg, ids[i]);
+        if (!hw) continue;
+        RECT r;
+        GetWindowRect(hw, &r);
+        MapWindowPoints(NULL, hDlg, (LPPOINT)&r, 2);
+        
+        const int textW = DlgLayout::MeasureText(hDlg, hw);
+        const int actualBoxW = r.bottom - r.top; 
+        const int w = textW + actualBoxW + gap;
+        
         right -= w;
-        DlgLayout::Move(hDlg, ids[i], right, r.top, w, r.bottom - r.top);
+        SetWindowPos(hw, NULL, right, r.top, w, r.bottom - r.top, SWP_NOZORDER);
         right -= gap;
     }
 }
@@ -481,8 +490,7 @@ static void SetDialogLabelTextAndRedraw(HWND hWnd, int ctrlId, const wchar_t* te
     }
 
     SetWindowTextW(hCtrl, textW ? textW : L"");
-    RedrawWindow(hCtrl, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_FRAME);
-    RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    InvalidateRect(hCtrl, nullptr, TRUE);
 }
 
 static void SetDialogLabelTextAndRedrawA(HWND hWnd, int ctrlId, const char* textA)
@@ -994,12 +1002,13 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
         SetDlgItemTextW(hWnd, IDC_PHPSHELL, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
 
-        SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)"Auto");
+        const std::wstring roleAuto = LoadResStringW(IDS_AUTO);
+        SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(roleAuto.empty() ? L"Auto" : roleAuto.c_str()));
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)"POST");
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)"PUT");
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, max(0, min(2, s->php_http_mode)), 0);
 
-        SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)"Auto");
+        SendDlgItemMessageW(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)(roleAuto.empty() ? L"Auto" : roleAuto.c_str()));
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)"2 MB");
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)"4 MB");
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)"8 MB");
@@ -1939,7 +1948,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDCANCEL,               IDS_BTN_CANCEL            },
     });
 
-    // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.10"
+    // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.x"
     {
         const std::wstring ver = GetPluginVersionW();
         if (!ver.empty()) {
@@ -2230,6 +2239,11 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
                     msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
                     titleW.empty() ? L"LAN Pair" : titleW.c_str(),
                     MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
+                
+                if (!IsWindow(m_hWnd)) {
+                    return 1;
+                }
+
                 if (choice == IDYES || choice == IDNO) {
                     const int newRole = (choice == IDYES) ? 2 : 1;
                     SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_SETCURSEL, newRole, 0);
@@ -2369,9 +2383,12 @@ void ConnectionDialog::OnOk()
             _stricmp(targetProfile.data(), dlgDisplayName) != 0) {
             int moveRc = CopyMoveServerInIni(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
             if (moveRc == FS_FILE_EXISTS) {
-                MessageBoxA(m_hWnd,
-                            "Session with this name already exists.\nChoose a different session name.",
-                            "SFTP", MB_OK | MB_ICONWARNING);
+                const std::wstring sessionExists = LoadResStringW(IDS_ERR_SESSION_EXISTS);
+                const std::wstring sftpTitle     = LoadResStringW(IDS_TITLE_SFTP);
+                MessageBoxW(m_hWnd, 
+                            sessionExists.empty() ? L"Session with this name already exists.\nChoose a different session name." : sessionExists.c_str(),
+                            sftpTitle.empty() ? L"SFTP" : sftpTitle.c_str(), 
+                            MB_OK | MB_ICONWARNING);
                 return;
             }
         }
