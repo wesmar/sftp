@@ -108,6 +108,37 @@ https://example.com:8443/sftp.php
 http://192.168.1.10/sftp.php         (local testing only — no encryption)
 </pre>
 
+<h2>TAR Stream mode</h2>
+<p>When the <b>TAR stream</b> checkbox is enabled in the connection dialog (visible only in PHP Agent / PHP Shell modes), all directory downloads and batch uploads are transferred as a single TAR archive stream instead of individual per-file HTTP requests. This dramatically reduces overhead when copying many small files.</p>
+
+<h3>Download (TAR_STREAM)</h3>
+<p>When you copy a remote directory to local, the plugin sends one <code>GET ?op=TAR_STREAM&amp;path=...</code> request. The server-side <code>sftp.php</code> streams a ustar TAR archive of the entire directory tree. The plugin parses the TAR on the fly, creates local directories and files as each entry arrives, and shows a progress bar. GNU long-name entries (<code>././@LongLink</code>) are fully supported for paths over 99 characters.</p>
+
+<h3>Upload (TAR_EXTRACT)</h3>
+<p>When you copy multiple local files/directories to a remote location, the plugin batches all of them into a single TAR stream and sends one <code>POST ?op=TAR_EXTRACT&amp;path=...</code> request. The server-side script extracts the archive. Batching is transparent to Total Commander — files are queued during the copy operation and sent all at once at the end.</p>
+
+<div class="note">
+  <b>Note:</b> TAR mode requires that <code>sftp.php</code> on the server supports the <code>TAR_STREAM</code> and <code>TAR_EXTRACT</code> operations. Use a current version of the file from the plugin directory. Resume is not supported for TAR transfers — if interrupted, re-copy the whole directory.
+</div>
+
+<h2>Upload method and chunk size</h2>
+<p>When PHP Agent or PHP Shell mode is active, the connection dialog shows two extra controls (replacing the encoding codepage and system dropdowns):</p>
+<ul>
+  <li><b>Method</b> (Auto / POST / PUT) — HTTP verb used for single-file uploads.
+    <ul>
+      <li><b>Auto</b> (default): tries POST first, falls back to PUT if the server rejects it.</li>
+      <li><b>POST</b>: always uses multipart POST.</li>
+      <li><b>PUT</b>: always uses raw PUT body.</li>
+    </ul>
+  </li>
+  <li><b>Chunks</b> (Auto / 2 / 4 / 8 / 16 / 32 / 64 MiB) — upload chunk size per request.
+    <ul>
+      <li><b>Auto</b> (default): uses the <code>recommended_chunk_size</code> from the server's PROBE response, clamped to 1–64 MiB. Falls back to 1 MiB if the server does not advertise a recommendation.</li>
+      <li>Fixed sizes: override server recommendation when PHP limits or network conditions require it.</li>
+    </ul>
+  </li>
+</ul>
+
 <h2>Capabilities</h2>
 <ul>
   <li><b>LIST</b> — directory listing with name, size, modification time, permissions</li>

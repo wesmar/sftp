@@ -486,6 +486,19 @@
 #define IDS_LOG_PHP_SKIP_UPDATE         414
 #define IDS_LOG_TAR_UPLOAD              415
 #define IDS_LOG_TAR_UPLOAD_FAIL         416
+#define IDS_DLG_SELECT_PUBKEY           417
+#define IDS_DLG_SELECT_PRIVKEY          418
+#define IDS_IMP_BROWSE_PUTTY_FOLDER     419
+#define IDS_IMP_MENU_PUTTY              420
+#define IDS_IMP_MENU_WINSCP             421
+#define IDS_IMP_MSG_IMPORTED            422
+#define IDS_IMP_MSG_IMPORTED_SKIPPED    423
+#define IDS_IMP_MSG_SKIP_UNSUPPORTED    424
+#define IDS_IMP_MSG_SKIP_WINSCP         425
+#define IDS_PROXY_LABEL_SOCKS4A         426
+#define IDS_PROXY_LABEL_SOCKS5          427
+#define IDS_DLG_CODEPAGE_TITLE          428
+#define IDS_DLG_CODEPAGE_PROMPT         429
 
 #define IDC_PHP_TAR                     1105
 #define IDS_IMP_MENU_ALL                12067

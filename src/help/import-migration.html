@@ -44,9 +44,10 @@ Protocol\ssh\</pre>
   <tr><td>Username</td><td>✔</td><td>✔</td></tr>
   <tr><td>Key file path</td><td>✔</td><td>✔</td></tr>
   <tr><td>SSH agent flag</td><td>✔</td><td>—</td></tr>
-  <tr><td>Password</td><td>—</td><td>—</td></tr>
+  <tr><td>Password</td><td>—</td><td>✔ (if stored and decryptable)</td></tr>
 </table>
-<p>Passwords are <b>never</b> imported regardless of source — you will be prompted on the first connection.</p>
+<p>PuTTY and WinSCP passwords are <b>never</b> imported — you will be prompted on the first connection.</p>
+<p>KiTTY Portable <b>does</b> store passwords in session files in an obfuscated form. The plugin attempts to decrypt and import them automatically. The decryption uses a custom KiTTY algorithm driven by the session's hostname and terminal type as the key material. If decryption succeeds, the password is re-encrypted with Windows DPAPI and stored in <code>sftpplug.ini</code> — no plaintext is ever written to disk. If the stored value cannot be decrypted (e.g. it uses an unrecognised format or the key material doesn't match), the field is silently skipped and you will be prompted on the first connection.</p>
 
 <h2>Protocol mapping</h2>
 <ul>
@@ -72,7 +73,7 @@ Protocol\ssh\</pre>
 </ol>
 
 <div class="note">
-  <b>Tip:</b> For PuTTY Portable, navigate to the root of the portable installation. The plugin recurses up to 4 directory levels looking for <code>putty.reg</code>. For KiTTY Portable, similarly point to the KiTTYPortable root — the plugin will locate the <code>Data\Sessions\</code> folder automatically.
+  <b>Tip:</b> For PuTTY Portable, navigate to the root of the portable installation. The plugin recurses up to 4 directory levels looking for <code>putty.reg</code>. For KiTTY Portable, similarly point to the KiTTYPortable root — the plugin will locate the <code>Data\Sessions\</code> folder automatically. KiTTY passwords are imported automatically when decryptable; PuTTY and WinSCP passwords are never imported — you will be prompted on first connection.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

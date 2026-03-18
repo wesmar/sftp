@@ -349,6 +349,20 @@
 414=PHP Agent: lokale sftp.php-update overgeslagen (bestand ontbreekt of is alleen-lezen).
 415=TAR-upload:
 416=TAR-upload mislukt
+417=Selecteer bestand met publieke sleutel
+418=Selecteer bestand met privésleutel
+419=Selecteer PuTTY Portable-map
+420=PuTTY ({})...
+421=WinSCP ({})...
+422={} sessie(s) geïmporteerd.
+423={} sessie(s) geïmporteerd.
+{} {} overgeslagen.
+424=niet-ondersteunde sessie(s)
+425=niet-ondersteunde WinSCP-sessie(s)
+426=SOCKS4a: 
+427=SOCKS5: 
+428=Codepagina
+429=Codepagina (bijv. 28591):
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-protocolfout

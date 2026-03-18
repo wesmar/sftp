@@ -349,6 +349,20 @@
 414=PHP Agent: aktualizace lokálního sftp.php přeskočena (soubor chybí nebo je pouze pro čtení).
 415=Nahrávání TAR:
 416=Nahrávání TAR selhalo
+417=Vybrat soubor veřejného klíče
+418=Vybrat soubor privátního klíče
+419=Vyberte složku PuTTY Portable
+420=PuTTY ({})...
+421=WinSCP ({})...
+422=Importováno {} relací.
+423=Importováno {} relací.
+Přeskočeno {} {}.
+424=nepodporovaná relace(e)
+425=nepodporovaná relace(e) WinSCP
+426=SOCKS4a: 
+427=SOCKS5: 
+428=Znaková stránka
+429=Znaková stránka (např. 28591):
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Chyba protokolu SCP
