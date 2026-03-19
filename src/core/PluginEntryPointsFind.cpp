@@ -396,8 +396,14 @@ BOOL WINAPI FsMkDirW(LPCWSTR Path)
                 return serverid->lanSession->mkdir(LanRemotePathToUtf8(remotedir.data()));
             }
             // PHP Agent TAR mode: skip remote mkdir; directories are created by TAR extraction.
-            if (IsPhpAgentTransport(serverid) && serverid->php_tar && TarUploadSessionIsActive(serverid))
+            // Also start TAR session here if not already active (e.g. single-directory copy).
+            if (IsPhpAgentTransport(serverid) && serverid->php_tar) {
+                SFTP_LOG("TAR", "FsMkDirW TAR: dir='%S' tarWasActive=%d",
+                         remotedir.data(), TarUploadSessionIsActive(serverid) ? 1 : 0);
+                if (!TarUploadSessionIsActive(serverid))
+                    TarUploadSessionBegin(serverid);
                 return true;
+            }
             int rc = SftpCreateDirectoryW(serverid, remotedir.data());
             return (rc == SFTP_OK) ? true : false;
         }

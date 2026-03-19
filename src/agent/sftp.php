@@ -431,9 +431,9 @@ function op_tar_extract(): void
 {
     @set_time_limit(0);
     $relPath = normalize_rel((string)get_param('path', '.'));
-    $absPath = resolve_path($relPath, true);
-    if (!is_dir($absPath) && !@mkdir($absPath, 0755, true)) {
-        fail(404, 'NOT_A_DIRECTORY', 'Target path is not a directory');
+    $absPath = resolve_path_for_create($relPath);
+    if (!is_dir($absPath) && !@mkdir($absPath, 0775, true)) {
+        fail(500, 'MKDIR_FAILED', 'Cannot create target directory');
     }
     $in = @fopen('php://input', 'rb');
     if ($in === false) {

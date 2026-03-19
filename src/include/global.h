@@ -70,44 +70,22 @@ using ServerHandle = void*;
 constexpr size_t wdirtypemax = 1024;
 
 // ============================================================================
-// Debug Configuration
+// Logging Configuration
 // ============================================================================
-// Main compile-time switch:
-// Debug logging configuration
-//   0 = no debug logs in binary (production)
-//   1 = enable debug logs
-// Default: OFF in Release (NDEBUG defined), ON in Debug
-#ifndef SFTP_DEBUG_ENABLED
-    #ifdef NDEBUG
-        #define SFTP_DEBUG_ENABLED 0  // Production build - logging OFF
-    #else
-        #define SFTP_DEBUG_ENABLED 1  // Debug build - logging ON
-    #endif
-#endif
+// Set LOG_TO_FILE to 1 to enable file logging, 0 to disable.
+// When enabled, output goes to LOG_FILE_PATH (created automatically).
+// OutputDebugString is always used when logging is active.
+// WARNING: File logging is slow — enable only during active investigation.
 
-// Optional file logging to C:\temp\sftpplug_debug.log
-//   0 = OutputDebugString only
-//   1 = OutputDebugString + file append (SLOW - use only for debugging!)
-#ifndef SFTP_DEBUG_TO_FILE
-    #ifdef NDEBUG
-        #define SFTP_DEBUG_TO_FILE 0  // Production - file logging OFF
-    #else
-        #define SFTP_DEBUG_TO_FILE 0  // Debug - still OFF by default, enable manually if needed
-    #endif
-#endif
+#define LOG_ENABLED  0                              // Master switch: 0 = off, 1 = on
+#define LOG_TO_FILE  0                              // 0 = OutputDebugString only, 1 = + file
+#define LOG_FILE_PATH "C:\\temp\\sftpplug.log"     // Log file path (directory created automatically)
 
-#ifndef SFTP_DEBUG_FILE_PATH
-    #define SFTP_DEBUG_FILE_PATH "C:\\temp\\sftpplug_debug.log"
-#endif
-
-// Backward compatibility for existing code paths.
-#ifndef SFTP_DEBUG_LEVEL
-    #if SFTP_DEBUG_ENABLED
-        #define SFTP_DEBUG_LEVEL 2
-    #else
-        #define SFTP_DEBUG_LEVEL 0
-    #endif
-#endif
+// Internal aliases — do not edit below this line.
+#define SFTP_DEBUG_ENABLED  LOG_ENABLED
+#define SFTP_DEBUG_TO_FILE  LOG_TO_FILE
+#define SFTP_DEBUG_FILE_PATH LOG_FILE_PATH
+#define SFTP_DEBUG_LEVEL    (LOG_ENABLED ? 2 : 0)
 
 #if SFTP_DEBUG_ENABLED
 inline void sftp_debug_emit_line(const char* line) noexcept

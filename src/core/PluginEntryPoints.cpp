@@ -526,19 +526,31 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
 {
     sftp::DllExceptionBarrier _barrier;
     sftp::dll_invoke_void(_barrier, [&] {
+        SFTP_LOG("STATUS", "FsStatusInfo op=%d %s dir='%s'",
+                 InfoOperation,
+                 InfoStartEnd == FS_STATUS_START ? "START" : "END",
+                 RemoteDir ? RemoteDir : "");
+
         if (strlen(RemoteDir) < 2)
             if (InfoOperation == FS_STATUS_OP_DELETE || InfoOperation == FS_STATUS_OP_RENMOV_MULTI)
                 disablereading = (InfoStartEnd == FS_STATUS_START) ? true : false;
 
-        if (InfoOperation == FS_STATUS_OP_PUT_MULTI) {
+        if (InfoOperation == FS_STATUS_OP_PUT_MULTI ||
+            InfoOperation == FS_STATUS_OP_PUT_SINGLE) {
             std::array<char, wdirtypemax> remotedir{};
             pConnectSettings cs = GetServerIdAndRelativePathFromPath(RemoteDir, remotedir.data(), remotedir.size() - 1);
             if (InfoStartEnd == FS_STATUS_START) {
+                SFTP_LOG("STATUS", "PUT START: php_tar=%d isPhpAgent=%d tarActive=%d",
+                         cs ? cs->php_tar : -1,
+                         cs ? IsPhpAgentTransport(cs) : -1,
+                         TarUploadSessionIsActive() ? 1 : 0);
                 if (cs && IsPhpAgentTransport(cs) && cs->php_tar)
                     TarUploadSessionBegin(cs);
             } else {
+                SFTP_LOG("STATUS", "PUT END: tarActive=%d", TarUploadSessionIsActive() ? 1 : 0);
                 if (TarUploadSessionIsActive()) {
                     const int rc = TarUploadSessionExecuteAndClear();
+                    SFTP_LOG("STATUS", "PUT END: TarExecute rc=%d", rc);
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }

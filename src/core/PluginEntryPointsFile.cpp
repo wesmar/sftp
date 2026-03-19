@@ -472,9 +472,14 @@ int WINAPI FsPutFileW(LPCWSTR LocalName, LPCWSTR RemoteName, int CopyFlags)
             if (!TarUploadSessionIsActive(serverid))
                 TarUploadSessionBegin(serverid);
             const std::string remoteRelA = unicode_util::wide_to_narrow(remotedir.data());
+            SFTP_LOG("TAR", "FsPutFileW queued '%S' -> '%s'", LocalName, remoteRelA.c_str());
             TarUploadSessionQueue(serverid, LocalName, remoteRelA.c_str());
             return FS_FILE_OK;
         }
+        SFTP_LOG("TAR", "FsPutFileW TAR skip: isPhpAgent=%d php_tar=%d tarActive=%d",
+                 IsPhpAgentTransport(serverid) ? 1 : 0,
+                 serverid->php_tar ? 1 : 0,
+                 TarUploadSessionIsActive() ? 1 : 0);
 
         const bool setattr = !!(CopyFlags & FS_COPYFLAGS_EXISTS_SAMECASE);
         int rc = SftpUploadFileW(serverid, LocalName, remotedir.data(), Resume, setattr);
