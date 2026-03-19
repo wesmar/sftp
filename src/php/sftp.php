@@ -298,7 +298,7 @@ function op_tar_stream(): void
         fail(500, 'OUTPUT_OPEN_FAILED', 'Failed to open output stream');
     }
 
-    if (!tar_stream_dir($absPath, $absPath, $out)) {
+    if (!tar_stream_dir($absPath, $absPath, $out, '')) {
         fclose($out);
         exit;
     }
@@ -309,65 +309,65 @@ function op_tar_stream(): void
     exit;
 }
 
-function tar_stream_dir(string $rootAbs, string $dirAbs, $out): bool
+function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath): bool
 {
-    $it = new DirectoryIterator($dirAbs);
-    foreach ($it as $entry) {
-        if ($entry->isDot()) {
+    $dh = @opendir($dirAbs);
+    if ($dh === false) {
+        return true; // Skip unreadable directories
+    }
+    while (($name = readdir($dh)) !== false) {
+        if ($name === '.' || $name === '..') {
             continue;
         }
-        $childAbs = $entry->getPathname();
-        // Build relative path from root
-        $relPart = ltrim(str_replace(
-            str_replace('\\', '/', $rootAbs),
-            '',
-            str_replace('\\', '/', $childAbs)
-        ), '/');
+        $childAbs = $dirAbs . DIRECTORY_SEPARATOR . $name;
+        $childRel = ($relPath === '') ? $name : $relPath . '/' . $name;
 
-        if ($entry->isDir() && !$entry->isLink()) {
-            if (!tar_write_header($relPart . '/', 0, $entry->getMTime(), '5', $out)) {
+        if (is_dir($childAbs) && !is_link($childAbs)) {
+            $mtime = (int)@filemtime($childAbs);
+            if (!tar_write_header($childRel . '/', 0, $mtime, '5', $out)) {
+                closedir($dh);
                 return false;
             }
-            if (!tar_stream_dir($rootAbs, $childAbs, $out)) {
+            if (!tar_stream_dir($rootAbs, $childAbs, $out, $childRel)) {
+                closedir($dh);
                 return false;
             }
-        } elseif ($entry->isFile()) {
+        } elseif (is_file($childAbs)) {
             $fp = @fopen($childAbs, 'rb');
             if ($fp === false) {
-                return false;
+                continue; // Skip unreadable files
             }
-            $size = $entry->getSize();
-            $mtime = $entry->getMTime();
-            if (!tar_write_header($relPart, $size, $mtime, '0', $out)) {
+            $size = (int)@filesize($childAbs);
+            $mtime = (int)@filemtime($childAbs);
+            if (!tar_write_header($childRel, $size, $mtime, '0', $out)) {
                 fclose($fp);
+                closedir($dh);
                 return false;
             }
-            $written = 0;
-            while ($written < $size) {
-                $chunk = @fread($fp, 65536);
-                if ($chunk === false || $chunk === '') {
+            
+            if ($size > 0) {
+                $copied = @stream_copy_to_stream($fp, $out);
+                if ($copied === false || $copied < $size) {
                     fclose($fp);
+                    closedir($dh);
                     return false;
                 }
-                $fw = fwrite($out, $chunk);
-                if ($fw === false || $fw < strlen($chunk)) {
-                    fclose($fp);
-                    return false;
-                }
-                $written += strlen($chunk);
             }
             fclose($fp);
+            
             // Pad to 512-byte boundary
             $rem = $size % 512;
             if ($rem > 0) {
                 $pad = str_repeat("\0", 512 - $rem);
                 $fw = fwrite($out, $pad);
                 if ($fw === false || $fw < strlen($pad)) {
+                    closedir($dh);
                     return false;
                 }
             }
         }
     }
+    closedir($dh);
     return true;
 }
 
@@ -419,10 +419,7 @@ function tar_build_header(string $name, int $size, int $mtime, string $type): st
     $h = substr_replace($h, 'ustar',                   257,  5);
     $h = substr_replace($h, '00',                      263,  2);
     // Calculate checksum (sum of all bytes with placeholder space = 0x20)
-    $sum = 0;
-    for ($i = 0; $i < 512; $i++) {
-        $sum += ord($h[$i]);
-    }
+    $sum = array_sum(unpack('C*', $h));
     $h = substr_replace($h, sprintf('%06o', $sum) . "\0 ", 148, 8);
     return $h;
 }
@@ -514,20 +511,21 @@ function tar_extract_stream(string $rootAbs, $in): int
             if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
             continue;
         }
-        $written     = 0;
-        $padConsumed = 0;
-        $ok          = true;
-        while ($padConsumed < $paddedSize) {
-            $want  = (int)min(65536, $paddedSize - $padConsumed);
-            $chunk = @fread($in, $want);
-            if ($chunk === false || $chunk === '') { $ok = false; break; }
-            $got = strlen($chunk);
-            if ($written < $fileSize) {
-                $toWrite = (int)min($fileSize - $written, $got);
-                fwrite($fp, substr($chunk, 0, $toWrite));
-                $written += $toWrite;
+        $ok = true;
+        if ($fileSize > 0) {
+            $copied = @stream_copy_to_stream($in, $fp, $fileSize);
+            if ($copied === false || $copied < $fileSize) {
+                $ok = false;
             }
-            $padConsumed += $got;
+        }
+        $pad = $paddedSize - $fileSize;
+        if ($ok && $pad > 0) {
+            if (!tar_skip_exact($in, $pad)) {
+                $ok = false;
+            }
+        } elseif (!$ok && $paddedSize > 0) {
+            // Best effort skip if copy failed
+            tar_skip_exact($in, $paddedSize - (int)($copied ?? 0));
         }
         fclose($fp);
         if (!$ok) break;
