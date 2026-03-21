@@ -786,10 +786,62 @@ bool SftpLinkFolderTargetW(pConnectSettings cs, LPWSTR RemoteName, size_t maxlen
     if (!cs || !RemoteName || maxlen < 2)
         return false;
 
-    // Only handle the virtual ~ home-directory symlink injected by FsFindFirstW.
-    // Real SFTP symlinks would need lstat + readlink, which is a separate feature.
     const std::wstring_view remoteView(RemoteName);
-    const bool isTildeHome = (remoteView == L"\\~" || remoteView == L"/~" || remoteView == L"~");
+    // Match both root-level tilde (\~) and tilde anywhere in path (\home\~).
+    const bool isTildeHome = (remoteView == L"\\~" || remoteView == L"/~" || remoteView == L"~")
+        || remoteView.ends_with(L"\\~") || remoteView.ends_with(L"/~");
+
+    // Real SFTP symlink: resolve via readlink + realpath.
+    if (!isTildeHome && cs->sftpsession) {
+        std::array<char, wdirtypemax> pathA{};
+        CopyStringW2A(cs, RemoteName, pathA.data(), pathA.size() - 1);
+        // Normalize separators to forward slashes.
+        for (char* p = pathA.data(); *p; ++p)
+            if (*p == '\\') *p = '/';
+
+        std::string targetBuf(wdirtypemax, '\0');
+        int rc = 0;
+        const SYSTICKS start = get_sys_ticks();
+        do {
+            rc = cs->sftpsession->symlink(pathA.data(), targetBuf.data(),
+                                          static_cast<unsigned>(targetBuf.size()) - 1,
+                                          LIBSSH2_SFTP_READLINK);
+            if (rc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (rc == LIBSSH2_ERROR_EAGAIN && get_ticks_between(start) < 5000);
+
+        if (rc <= 0)
+            return false;
+        targetBuf.resize(static_cast<size_t>(rc));
+
+        // Resolve relative symlink against parent directory.
+        if (targetBuf[0] != '/') {
+            std::string parent(pathA.data());
+            const size_t slash = parent.rfind('/');
+            parent = (slash != std::string::npos) ? parent.substr(0, slash + 1) : "/";
+            targetBuf = parent + targetBuf;
+        }
+
+        // Canonicalize via realpath.
+        std::string realBuf(wdirtypemax, '\0');
+        const SYSTICKS start2 = get_sys_ticks();
+        do {
+            rc = cs->sftpsession->realpath(targetBuf.c_str(), realBuf.data(),
+                                           static_cast<int>(realBuf.size()) - 1);
+            if (rc == LIBSSH2_ERROR_EAGAIN)
+                IsSocketReadable(cs->sock);
+        } while (rc == LIBSSH2_ERROR_EAGAIN && get_ticks_between(start2) < 5000);
+
+        if (rc > 0) {
+            realBuf[static_cast<size_t>(rc)] = '\0';
+            CopyStringA2W(cs, realBuf.data(), RemoteName, maxlen);
+        } else {
+            CopyStringA2W(cs, targetBuf.c_str(), RemoteName, maxlen);
+        }
+        ReplaceSlashByBackslashW(RemoteName);
+        return true;
+    }
+
     if (!isTildeHome)
         return false;
 

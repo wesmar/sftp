@@ -105,6 +105,9 @@ try {
         case 'TAR_EXTRACT':
             op_tar_extract();
             break;
+        case 'TAR_PACK':
+            op_tar_pack();
+            break;
         default:
             fail(400, 'UNKNOWN_OPERATION', 'Unsupported operation');
     }
@@ -373,6 +376,9 @@ function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath):
 
 function tar_write_header(string $name, int $size, int $mtime, string $type, $out): bool
 {
+    if ($size > 8589934591) {
+        return false; // POSIX ustar limit: 11 octal digits = max ~8 GiB
+    }
     // GNU long name extension for names > 99 chars
     if (strlen($name) > 99) {
         $longData = $name . "\0";
@@ -532,6 +538,80 @@ function tar_extract_stream(string $rootAbs, $in): int
         ++$count;
     }
     return $count;
+}
+
+// Receives POST body with newline-separated list of relative paths,
+// returns them as a TAR archive (buffered for hosting compatibility).
+function op_tar_pack(): void
+{
+    $body = (string)file_get_contents('php://input');
+    $lines = preg_split('/\r?\n/', $body);
+    if ($lines === false) {
+        fail(400, 'EMPTY_LIST', 'No paths provided');
+    }
+
+    $root = root_realpath();
+    set_time_limit(0);
+
+    while (ob_get_level() > 0) @ob_end_clean();
+    @ini_set('zlib.output_compression', '0');
+    header('Content-Type: application/x-tar');
+    header('X-Accel-Buffering: no');
+
+    $mem = @fopen('php://output', 'wb');
+    if ($mem === false) {
+        fail(500, 'MEMORY_FAILED', 'Cannot open output stream');
+    }
+
+    foreach ($lines as $relPath) {
+        $relPath = trim((string)$relPath);
+        if ($relPath === '') {
+            continue;
+        }
+        // Validate: path must resolve inside root
+        $abs = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath);
+        $real = realpath($abs);
+        if ($real === false) {
+            continue;
+        }
+        $real = normalize_abs($real);
+        if (!str_starts_with($real, $root)) {
+            continue;
+        }
+        if (is_dir($real)) {
+            tar_write_header($relPath . '/', 0, (int)filemtime($real), '5', $mem);
+        } elseif (is_file($real)) {
+            $size  = (int)filesize($real);
+            $mtime = (int)filemtime($real);
+            if (!tar_write_header($relPath, $size, $mtime, '0', $mem)) {
+                continue;
+            }
+            $fh = fopen($real, 'rb');
+            if ($fh === false) {
+                fwrite($mem, str_repeat("\0", (($size + 511) & ~511)));
+                continue;
+            }
+            $written = 0;
+            while (!feof($fh)) {
+                $chunk = fread($fh, 65536);
+                if ($chunk === false) {
+                    break;
+                }
+                fwrite($mem, $chunk);
+                $written += strlen($chunk);
+            }
+            fclose($fh);
+            $pad = (($written + 511) & ~511) - $written;
+            if ($pad > 0) {
+                fwrite($mem, str_repeat("\0", $pad));
+            }
+        }
+    }
+
+    // End-of-archive: two zero blocks
+    fwrite($mem, str_repeat("\0", 1024));
+    fclose($mem);
+    exit;
 }
 
 function op_put(): void
@@ -1334,6 +1414,7 @@ function collect_capabilities(array $ini): array
         $ops[] = 'SHELL_EXEC';
     }
     $ops[] = 'TAR_STREAM';
+    $ops[] = 'TAR_PACK';
 
     return [
         'recommended_chunk_size' => recommended_chunk_size(),

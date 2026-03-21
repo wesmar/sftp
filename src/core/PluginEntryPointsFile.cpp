@@ -207,6 +207,9 @@ int WINAPI FsRenMovFileW(LPCWSTR OldName, LPCWSTR NewName, BOOL Move, BOOL OverW
             int rc = CopyMoveServerInIniW(oldNameA.data(), newNameA.data(), !!Move, !!OverWrite, inifilenameW);
             if (rc == FS_FILE_OK) {
                 CopyMoveEncryptedPassword(oldNameA.data(), newNameA.data(), !!Move);
+                LoadServersFromIniW(inifilenameW, s_quickconnect);
+                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
                 return FS_FILE_OK;
             }
             if (rc == FS_FILE_EXISTS)
@@ -365,6 +368,15 @@ int WINAPI FsGetFileW(LPCWSTR RemoteName, LPWSTR LocalName, int CopyFlags, Remot
         }
         if (OverWrite) {
             DeleteFileT(LocalName);
+        }
+
+        // PHP Agent TAR batch download: queue single file instead of downloading individually.
+        if (ri && !(ri->Attr & FILE_ATTRIBUTE_DIRECTORY) &&
+            IsPhpAgentTransport(serverid) && serverid->php_tar &&
+            TarDownloadSessionIsActive(serverid))
+        {
+            if (TarDownloadSessionQueue(serverid, LocalName, remotedir.data()))
+                return FS_FILE_OK;
         }
 
         // PHP Agent TAR directory download.
@@ -544,6 +556,9 @@ BOOL WINAPI FsDeleteFileW(LPCWSTR RemoteName)
             if (DeleteServerFromIniW(remotedirA.data(), inifilenameW)) {
                 if (CryptProc)
                     CryptProc(PluginNumber, CryptoNumber, FS_CRYPT_DELETE_PASSWORD, remotedirA.data(), nullptr, 0);
+                LoadServersFromIniW(inifilenameW, s_quickconnect);
+                HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+                if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
                 return true;
             }
         }

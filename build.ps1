@@ -2,7 +2,8 @@ param(
     [switch]$chm,
     [switch]$nochm,
     [switch]$nodeploy,
-    [switch]$nozip
+    [switch]$nozip,
+    [switch]$x64only
 )
 
 # ============================================================================
@@ -19,7 +20,7 @@ $helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
 $helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
 
 # Read plugin version from version.h (single source of truth)
-$pluginVersion = "1.0.0.13"
+$pluginVersion = "1.0.0.15"
 $verHPath = Join-Path $projectRoot "src\include\version.h"
 if (Test-Path $verHPath) {
     $verHContent = Get-Content $verHPath -Raw
@@ -322,18 +323,22 @@ if ($msbuildExitCode -ne 0) {
 Write-Host "  x64 build completed" -ForegroundColor Green
 
 # --- x86 ---
-Write-Host ""
-Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
+if (-not $x64only) {
+    Write-Host ""
+    Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
 
-$msbuildExitCode = 0
-Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
-&$msbuild ($msBuildBase + @("/p:Platform=Win32"))
-$msbuildExitCode = $LASTEXITCODE
-if ($msbuildExitCode -ne 0) {
-    Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
-    exit $msbuildExitCode
+    $msbuildExitCode = 0
+    Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
+    &$msbuild ($msBuildBase + @("/p:Platform=Win32"))
+    $msbuildExitCode = $LASTEXITCODE
+    if ($msbuildExitCode -ne 0) {
+        Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
+        exit $msbuildExitCode
+    }
+    Write-Host "  x86 build completed" -ForegroundColor Green
+} else {
+    Write-Host "  Skipping x86 build (-x64only)" -ForegroundColor Gray
 }
-Write-Host "  x86 build completed" -ForegroundColor Green
 
 # Clean intermediate files
 Clean-BuildOutput
@@ -360,7 +365,7 @@ type=wfx
 file=$projectName.wfx
 file64=$projectName.wfx64
 defaultdir=$projectName
-version=1.0.0.13
+version=1.0.0.15
 "@
 
     Add-Type -AssemblyName System.IO.Compression

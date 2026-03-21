@@ -127,6 +127,7 @@ public:
     int lastError(char** msg, int* len, int wantBuf) override;
     int lastErrno() override;
     int sessionFlag(int flag, int value) override;
+    int blockDirections() override;
 
     std::unique_ptr<ISftpSession> sftpInit() override;
     std::unique_ptr<ISshChannel> openChannel() override;

@@ -297,8 +297,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,14
- PRODUCTVERSION 1,0,0,14
+ FILEVERSION 1,0,0,15
+ PRODUCTVERSION 1,0,0,15
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -315,12 +315,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "kvc.pl"
             VALUE "FileDescription", "SFTP Plugin for Total Commander"
-            VALUE "FileVersion", "1.0.0.14"
+            VALUE "FileVersion", "1.0.0.15"
             VALUE "InternalName", "sftpplug"
             VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName", "SFTPplug"
-            VALUE "ProductVersion", "1.0.0.14"
+            VALUE "ProductVersion", "1.0.0.15"
         END
     END
     BLOCK "VarFileInfo"

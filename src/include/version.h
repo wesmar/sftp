@@ -13,8 +13,8 @@
 #define VER_FILEVERSION         VER_MAJOR, VER_MINOR, VER_PATCH, VER_BUILD
 
 // Dot-separated strings for StringFileInfo VALUE fields
-#define VER_FILEVERSION_STR     "1.0.0.14"
-#define VER_PRODUCTVERSION_STR  "1.0.0.14"
+#define VER_FILEVERSION_STR     "1.0.0.15"
+#define VER_PRODUCTVERSION_STR  "1.0.0.15"
 
 // Wide-string variant for C++ runtime use (optional)
-#define VER_FILEVERSION_WSTR    L"1.0.0.14"
+#define VER_FILEVERSION_WSTR    L"1.0.0.15"

@@ -39,6 +39,21 @@ bool TarUploadSessionIsActive(pConnectSettings cs = nullptr);
 bool TarUploadSessionQueue(pConnectSettings cs, LPCWSTR localPath, const char* remotePath);
 int  TarUploadSessionExecuteAndClear();
 
+struct TarDownloadEntry {
+    std::string  remotePath;   // UTF-8, relative to agent root (e.g. "dir/file.txt")
+    std::wstring localPath;    // local destination full path
+};
+
+int  PhpAgentDownloadFilesAsTar(pConnectSettings cs,
+                                 const std::vector<TarDownloadEntry>& entries);
+
+// TAR download session — batches FsGetFileW calls into a single TAR_PACK request.
+void TarDownloadSessionBegin(pConnectSettings cs);
+void TarDownloadSessionClear();
+bool TarDownloadSessionIsActive(pConnectSettings cs = nullptr);
+bool TarDownloadSessionQueue(pConnectSettings cs, LPCWSTR localPath, LPCWSTR remotePath);
+int  TarDownloadSessionExecuteAndClear();
+
 int PhpShellExecuteCommand(pConnectSettings cs,
                            const char* command,
                            std::string& outText,

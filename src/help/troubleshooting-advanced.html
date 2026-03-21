@@ -415,6 +415,21 @@ XFER: Complete
 
 <h2>Recent Bug Fixes (March 2026)</h2>
 
+<h3>PHP Agent TAR batch download — 0 files received</h3>
+<p><b>Symptom:</b> Downloading multiple files with TAR stream enabled completes without error but writes 0 local files.</p>
+<p><b>Cause:</b> Remote path passed to <code>TarDownloadSessionQueue</code> included the host prefix and script path (e.g. <code>host.example.com/sftp.php/dir/file.txt</code>), so the lookup key never matched the TAR entry names returned by the server.</p>
+<p><b>Fix:</b> <code>NormalizePhpRemotePath</code> is now applied inside <code>TarDownloadSessionQueue</code> before building the lookup map. Update to the latest plugin build.</p>
+
+<h3>PHP Agent TAR batch download — HTTP 504 Gateway Timeout (OVH / home.pl)</h3>
+<p><b>Symptom:</b> TAR download of large file sets times out with HTTP 504 on shared hosting servers.</p>
+<p><b>Cause:</b> The server-side <code>op_tar_pack</code> buffered the entire TAR archive in <code>php://temp</code> before sending any response bytes. Servers like OVH and home.pl abort PHP scripts that produce no output for several seconds.</p>
+<p><b>Fix:</b> <code>op_tar_pack</code> now streams directly to <code>php://output</code> with output buffering disabled (<code>ob_end_clean</code>, <code>zlib.output_compression=0</code>, <code>X-Accel-Buffering: no</code>). <b>Upload the updated <code>sftp.php</code></b> from the plugin directory to your server.</p>
+
+<h3>PHP Agent TAR upload — silent failure for archives exceeding 4 GB</h3>
+<p><b>Symptom:</b> Uploading a large directory whose TAR archive exceeds 4 GB fails silently — no error shown, but files are not transferred.</p>
+<p><b>Cause:</b> <code>WinHttpSendRequest</code> was called with <code>(DWORD)totalTarSize</code> as the <code>dwTotalLength</code> parameter. <code>DWORD</code> is 32-bit; values above 4 294 967 295 bytes wrap around, causing WinHTTP to send a false <code>Content-Length</code> and the server to close the connection mid-stream.</p>
+<p><b>Fix:</b> <code>Content-Length</code> is now added as a 64-bit string to the custom headers and <code>WINHTTP_IGNORE_REQUEST_TOTAL_LENGTH</code> is passed as <code>dwTotalLength</code>. Update to the latest plugin build.</p>
+
 <h3>SFTP Resume Not Working</h3>
 <p><b>Symptom:</b> Resume upload always starts from beginning instead of last position.</p>
 <p><b>Cause:</b> Missing LIBSSH2_SFTP_ATTR_SIZE flag in fstat request.</p>
@@ -432,8 +447,8 @@ XFER: Complete
 
 <h3>Debug Logging Performance</h3>
 <p><b>Symptom:</b> Slow file transfers in Release build.</p>
-<p><b>Cause:</b> Debug logging was enabled by default, creating C:\temp\sftpplug_debug.log on every operation.</p>
-<p><b>Fix:</b> Debug logging now disabled in Release builds (NDEBUG defined). No action needed.</p>
+<p><b>Cause:</b> Debug logging was enabled by default, creating C:\temp\sftpplug.log on every operation.</p>
+<p><b>Fix:</b> Debug logging now disabled in Release builds (LOG_ENABLED=0 in global.h). No action needed.</p>
 
 <h2>Getting Help</h2>
 

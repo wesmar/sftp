@@ -109,16 +109,19 @@ http://192.168.1.10/sftp.php         (local testing only — no encryption)
 </pre>
 
 <h2>TAR Stream mode</h2>
-<p>When the <b>TAR stream</b> checkbox is enabled in the connection dialog (visible only in PHP Agent / PHP Shell modes), all directory downloads and batch uploads are transferred as a single TAR archive stream instead of individual per-file HTTP requests. This dramatically reduces overhead when copying many small files.</p>
+<p>When the <b>TAR stream</b> checkbox is enabled in the connection dialog, all directory downloads and batch file transfers are handled as a single TAR archive exchange instead of individual HTTP requests. This eliminates per-request overhead and is critical on shared hosting (OVH, home.pl) where thousands of individual GET/PUT requests would be extremely slow.</p>
 
-<h3>Download (TAR_STREAM)</h3>
-<p>When you copy a remote directory to local, the plugin sends one <code>GET ?op=TAR_STREAM&amp;path=...</code> request. The server-side <code>sftp.php</code> streams a ustar TAR archive of the entire directory tree. The plugin parses the TAR on the fly, creates local directories and files as each entry arrives, and shows a progress bar. GNU long-name entries (<code>././@LongLink</code>) are fully supported for paths over 99 characters.</p>
+<h3>Batch Download (TAR_PACK)</h3>
+<p>When you copy multiple remote files or a remote directory to local, the plugin collects all file paths during the TC copy operation and sends a single <code>POST ?op=TAR_PACK</code> request with all paths listed in the body (one per line). The server-side <code>sftp.php</code> streams a ustar TAR archive of exactly those files directly to the response — without any temporary file or memory buffer. The plugin parses the TAR on the fly, creates local directories and files as each entry arrives, and shows a progress bar based on file count. GNU long-name entries (<code>././@LongLink</code>) are fully supported for paths over 99 characters.</p>
+
+<h3>Directory Download (TAR_STREAM)</h3>
+<p>When you copy an entire remote directory to local, the plugin sends one <code>GET ?op=TAR_STREAM&amp;path=...</code> request. The server streams a ustar TAR of the entire directory tree. The plugin parses and extracts on the fly.</p>
 
 <h3>Upload (TAR_EXTRACT)</h3>
-<p>When you copy multiple local files/directories to a remote location, the plugin batches all of them into a single TAR stream and sends one <code>POST ?op=TAR_EXTRACT&amp;path=...</code> request. The server-side script extracts the archive. Batching is transparent to Total Commander — files are queued during the copy operation and sent all at once at the end.</p>
+<p>When you copy multiple local files or directories to a remote location, the plugin batches all of them into a single ustar TAR stream and sends one <code>POST ?op=TAR_EXTRACT&amp;path=...</code> request. The server extracts the archive. Batching is transparent to Total Commander — files are queued during the copy operation and sent all at once when TC signals end-of-batch. The total archive size is sent as a proper 64-bit <code>Content-Length</code> header, so uploads of directories exceeding 4 GB work correctly.</p>
 
 <div class="note">
-  <b>Note:</b> TAR mode requires that <code>sftp.php</code> on the server supports the <code>TAR_STREAM</code> and <code>TAR_EXTRACT</code> operations. Use a current version of the file from the plugin directory. Resume is not supported for TAR transfers — if interrupted, re-copy the whole directory.
+  <b>Note:</b> TAR mode requires a current version of <code>sftp.php</code> on the server (one that supports <code>TAR_STREAM</code>, <code>TAR_EXTRACT</code>, and <code>TAR_PACK</code>). Always upload the <code>sftp.php</code> from the plugin directory — not an older copy. Resume is not supported for TAR transfers; if interrupted, re-copy the whole set.
 </div>
 
 <h2>Upload method and chunk size</h2>
@@ -149,6 +152,9 @@ http://192.168.1.10/sftp.php         (local testing only — no encryption)
   <li><b>RENAME</b> — rename or move files</li>
   <li><b>STAT</b> — file/directory info</li>
   <li><b>HASH</b> — compute file hashes on server</li>
+  <li><b>TAR_STREAM</b> — stream entire directory tree as ustar TAR (download)</li>
+  <li><b>TAR_EXTRACT</b> — upload files/directories as ustar TAR (batch upload)</li>
+  <li><b>TAR_PACK</b> — pack selected remote files into ustar TAR (batch download)</li>
   <li><b>SHELL_EXEC</b> — execute shell commands (PHP Shell mode; requires <code>shell_exec</code> enabled)</li>
 </ul>
 
@@ -186,6 +192,9 @@ http://192.168.1.10/sftp.php         (local testing only — no encryption)
   <tr><td>HTTP 404</td><td>sftp.php not at the URL you entered</td><td>Verify the URL and that the file was uploaded to the correct path</td></tr>
   <tr><td>HTTP 500</td><td>PHP error on server</td><td>Check server PHP error log; verify PHP version ≥ 7.4 and required functions not disabled</td></tr>
   <tr><td>Connection refused / timeout</td><td>Server unreachable or HTTPS certificate error</td><td>Test URL in browser; check SSL certificate validity</td></tr>
+  <tr><td>TAR batch download — 0 files received</td><td>Old <code>sftp.php</code> without <code>TAR_PACK</code> support, or path mismatch</td><td>Upload the current <code>sftp.php</code> from the plugin directory to the server</td></tr>
+  <tr><td>HTTP 504 on TAR download (OVH/home.pl)</td><td>Old <code>sftp.php</code> that buffers TAR in <code>php://temp</code> before sending</td><td>Upload the current <code>sftp.php</code> — streaming version eliminates the timeout</td></tr>
+  <tr><td>TAR upload fails for large directories (&gt;4 GB)</td><td>Old plugin build — 32-bit integer overflow in <code>Content-Length</code></td><td>Update the plugin to the current build</td></tr>
 </table>
 
 <h2>See also</h2>
