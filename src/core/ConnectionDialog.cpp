@@ -2481,6 +2481,15 @@ void ConnectionDialog::OnOk()
                 WritePrivateProfileString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
             }
         }
+
+        // Refresh TC panel when a new session is created or an existing one is renamed
+        const bool isNewSession = (strcmp(dlgDisplayName, s_quickconnect) == 0);
+        const bool wasRenamed   = !isNewSession &&
+                                  (_stricmp(targetProfile.data(), dlgDisplayName) != 0);
+        if (isNewSession || wasRenamed) {
+            HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+            if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+        }
     }
 
     const int transferMode = max(0, min(3, m_settings->transfermode));
