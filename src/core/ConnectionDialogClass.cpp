@@ -469,14 +469,16 @@ void ConnectionDialog::OnImportSessions()
     std::array<char, wdirtypemax> currentSession{};
     GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, currentSession.data(), currentSession.size() - 1);
     
+    if (importedCount > 0) {
+        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+    }
+
     if (importedCount > 0 && importedSession[0]) {
         FillSessionCombo(m_hWnd, importedSession.data());
         tConnectSettings loaded{};
         if (LoadServerSettings(importedSession.data(), &loaded, m_ctx->iniFileName))
             ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
-
-        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
     } else {
         FillSessionCombo(m_hWnd, currentSession.data());
     }

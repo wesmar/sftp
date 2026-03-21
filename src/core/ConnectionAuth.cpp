@@ -100,10 +100,13 @@ int PerformAuthentication(
     std::array<char, 1024> buf{};
     char* userauthlist = nullptr;
     int auth_pw = 0;
-    if (ConnectSettings->scponly) {
+    const bool skipProbe = ConnectSettings->scponly
+        || !ConnectSettings->password.empty()
+        || !ConnectSettings->privkeyfile.empty();
+    if (skipProbe) {
         ShowStatusId(IDS_LOG_SCP_SKIP_PROBE, nullptr, true);
-        // SCP-only servers often reject method probing while still accepting auth.
-        // Start with a broad method mask and let runtime attempts narrow it.
+        // Skip userauthList probe when credentials are known: avoids hanging on
+        // servers (e.g. OVH) that respond slowly to the "none" auth request.
         auth_pw = SSH_AUTH_PASSWORD | SSH_AUTH_KEYBOARD | SSH_AUTH_PUBKEY;
     } else {
         SYSTICKS authListStart = get_sys_ticks();
@@ -170,9 +173,12 @@ int PerformAuthentication(
         if (LogProc) LogProc(PluginNumber, MSGTYPE_DETAILS, "Trying password/keyboard auth fallback");
         const bool canKeyboardAuth = (auth_pw & SSH_AUTH_KEYBOARD) != 0;
         const bool canPasswordAuth = (auth_pw & SSH_AUTH_PASSWORD) != 0;
-        // If we already have a password, try password auth first to avoid consuming
-        // keyboard-interactive attempts on OTP/MFA prompts.
-        const bool preferPasswordFirst = canPasswordAuth && ConnectSettings->password[0] != 0;
+        // If the probe was done and confirmed password auth, try it first to avoid
+        // consuming keyboard-interactive attempts on OTP/MFA prompts.
+        // When probe was skipped we don't know the server's supported methods,
+        // so keyboard-interactive goes first; kbd_callback will auto-send the
+        // stored password for password-like prompts (e.g. OVH).
+        const bool preferPasswordFirst = !skipProbe && canPasswordAuth && ConnectSettings->password[0] != 0;
         bool skippedKeyboardFirst = false;
 
         if (canKeyboardAuth && !preferPasswordFirst) {
@@ -181,15 +187,23 @@ int PerformAuthentication(
             pConnectSettings cs = ConnectSettings;
             cs->InteractivePasswordSent = false;
             const SYSTICKS authStart = get_sys_ticks();
+            int kbdIter = 0;
             while ((auth = cs->session->userauthKeyboardInteractive(cs->user.c_str(), (unsigned)cs->user.size(), &kbd_callback)) == LIBSSH2_ERROR_EAGAIN) {
+                const int dirs = cs->session->blockDirections();
+                const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                SFTP_LOG("AUTH", "kbd EAGAIN #%d dirs=0x%x elapsed=%u cbSent=%d", ++kbdIter, dirs, elapsed, cs->InteractivePasswordSent ? 1 : 0);
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
-                if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
+                if (elapsed > SSH_AUTH_STAGE_TIMEOUT_MS) {
                     ShowStatusId(IDS_LOG_KBD_AUTH_TIMEOUT, nullptr, true);
                     break;
                 }
-                WaitForTransportReadable(ConnectSettings);
+                if (dirs & LIBSSH2_SESSION_BLOCK_OUTBOUND)
+                    IsSocketWritable(cs->sock);
+                else
+                    WaitForTransportReadable(cs);
             }
+            SFTP_LOG("AUTH", "kbd done auth=%d iters=%d cbSent=%d", auth, kbdIter, ConnectSettings->InteractivePasswordSent ? 1 : 0);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_keyboard_interactive: ", auth);
                 if ((auth_pw & SSH_AUTH_PASSWORD) == 0)
@@ -223,21 +237,34 @@ int PerformAuthentication(
             ShowStatusId(IDS_AUTH_PASSWORD_FOR, ConnectSettings->user.c_str(), true);
             LoadStr(buf, IDS_AUTH_PASSWORD);
             const SYSTICKS authStart = get_sys_ticks();
+            int passIter = 0;
             while (1) {
                 auth = ConnectSettings->session->userauthPassword(ConnectSettings->user.c_str(), (unsigned)ConnectSettings->user.size(), passphrase.c_str(), (unsigned)passphrase.length(), &newpassfunc);
                 if (auth != LIBSSH2_ERROR_EAGAIN && auth != LIBSSH2_ERROR_PASSWORD_EXPIRED)
                     break;
-                if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
-                    break;
-                if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
-                    ShowStatusId(IDS_LOG_PASS_AUTH_TIMEOUT, nullptr, true);
-                    break;
+                if (auth == LIBSSH2_ERROR_EAGAIN) {
+                    const int dirs = ConnectSettings->session->blockDirections();
+                    const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                    SFTP_LOG("AUTH", "pass EAGAIN #%d dirs=0x%x elapsed=%u", ++passIter, dirs, elapsed);
+                    if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
+                        break;
+                    if (elapsed > SSH_AUTH_STAGE_TIMEOUT_MS) {
+                        ShowStatusId(IDS_LOG_PASS_AUTH_TIMEOUT, nullptr, true);
+                        break;
+                    }
+                    if (dirs & LIBSSH2_SESSION_BLOCK_OUTBOUND)
+                        IsSocketWritable(ConnectSettings->sock);
+                    else
+                        WaitForTransportReadable(ConnectSettings);
                 }
-                WaitForTransportReadable(ConnectSettings);
             }
+            SFTP_LOG("AUTH", "pass done auth=%d iters=%d", auth, passIter);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_password_ex: ", auth);
-                ShowErrorId(IDS_ERR_AUTH_PASSWORD);
+                if (!skippedKeyboardFirst)
+                    ShowErrorId(IDS_ERR_AUTH_PASSWORD);
+                else
+                    ShowStatusId(IDS_ERR_AUTH_PASSWORD, nullptr, true);
             } else if (ConnectSettings->password.empty()) {
                 ConnectSettings->password = passphrase;
             }
@@ -251,15 +278,23 @@ int PerformAuthentication(
             pConnectSettings cs = ConnectSettings;
             cs->InteractivePasswordSent = false;
             const SYSTICKS authStart = get_sys_ticks();
+            int kbdIter2 = 0;
             while ((auth = cs->session->userauthKeyboardInteractive(cs->user.c_str(), (unsigned)cs->user.size(), &kbd_callback)) == LIBSSH2_ERROR_EAGAIN) {
+                const int dirs = cs->session->blockDirections();
+                const DWORD elapsed = (DWORD)get_ticks_between(authStart);
+                SFTP_LOG("AUTH", "kbd2 EAGAIN #%d dirs=0x%x elapsed=%u cbSent=%d", ++kbdIter2, dirs, elapsed, cs->InteractivePasswordSent ? 1 : 0);
                 if (ProgressLoop(buf.data(), progress, progress + 10, &loop, &lasttime))
                     break;
-                if (get_ticks_between(authStart) > SSH_AUTH_STAGE_TIMEOUT_MS) {
+                if (elapsed > SSH_AUTH_STAGE_TIMEOUT_MS) {
                     ShowStatusId(IDS_LOG_KBD_AUTH_TIMEOUT, nullptr, true);
                     break;
                 }
-                WaitForTransportReadable(ConnectSettings);
+                if (dirs & LIBSSH2_SESSION_BLOCK_OUTBOUND)
+                    IsSocketWritable(cs->sock);
+                else
+                    WaitForTransportReadable(cs);
             }
+            SFTP_LOG("AUTH", "kbd2 done auth=%d iters=%d cbSent=%d", auth, kbdIter2, ConnectSettings->InteractivePasswordSent ? 1 : 0);
             if (auth) {
                 SftpLogLastError("libssh2_userauth_keyboard_interactive: ", auth);
                 ShowErrorId(IDS_ERR_AUTH_KEYBDINT);

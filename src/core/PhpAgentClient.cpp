@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <regex>
+#include <unordered_map>
 #include "CoreUtils.h"
 #include "UtfConversion.h"
 #include "UnicodeHelpers.h"
@@ -1290,6 +1291,7 @@ namespace {
 static std::array<uint8_t, 512> BuildTarUploadHeader(const std::string& name, int64_t size, time_t mtime, char type)
 {
     std::array<uint8_t, 512> blk{};
+    if (size > INT64_C(8589934591)) size = 0; // POSIX ustar limit: 11 octal digits = max ~8 GiB
     const size_t nameLen = std::min<size_t>(name.size(), 99);
     memcpy(blk.data() + 0, name.c_str(), nameLen);
     const char* mode = (type == '5') ? "0000755" : "0000644";
@@ -1413,6 +1415,241 @@ int TarUploadSessionExecuteAndClear()
     return rc;
 }
 
+// ---------------------------------------------------------------------------
+// TAR batch download (PHP Agent php_tar mode)
+// ---------------------------------------------------------------------------
+
+struct TarDownloadSession {
+    pConnectSettings             cs     = nullptr;
+    std::vector<TarDownloadEntry> entries;
+    bool                         active = false;
+};
+
+static TarDownloadSession s_tarDlSession;
+
+void TarDownloadSessionBegin(pConnectSettings cs)
+{
+    s_tarDlSession.cs = cs;
+    s_tarDlSession.entries.clear();
+    s_tarDlSession.active = true;
+}
+
+void TarDownloadSessionClear()
+{
+    s_tarDlSession.active = false;
+    s_tarDlSession.cs = nullptr;
+    s_tarDlSession.entries.clear();
+}
+
+bool TarDownloadSessionIsActive(pConnectSettings cs)
+{
+    return s_tarDlSession.active && (cs == nullptr || s_tarDlSession.cs == cs);
+}
+
+bool TarDownloadSessionQueue(pConnectSettings cs, LPCWSTR localPath, LPCWSTR remotePath)
+{
+    if (!s_tarDlSession.active || s_tarDlSession.cs != cs || !localPath || !remotePath)
+        return false;
+
+    TarDownloadEntry e;
+    e.remotePath = NormalizePhpRemotePath(cs, remotePath);
+    if (e.remotePath.empty() || e.remotePath == ".") return false;
+    e.localPath = localPath;
+    s_tarDlSession.entries.push_back(std::move(e));
+    return true;
+}
+
+int TarDownloadSessionExecuteAndClear()
+{
+    if (!s_tarDlSession.active) return SFTP_OK;
+    if (s_tarDlSession.entries.empty()) {
+        TarDownloadSessionClear();
+        return SFTP_OK;
+    }
+    pConnectSettings cs = s_tarDlSession.cs;
+    std::vector<TarDownloadEntry> entries = std::move(s_tarDlSession.entries);
+    TarDownloadSessionClear();
+    return PhpAgentDownloadFilesAsTar(cs, entries);
+}
+
+int PhpAgentDownloadFilesAsTar(pConnectSettings cs, const std::vector<TarDownloadEntry>& entries)
+{
+    if (!cs || entries.empty())
+        return SFTP_OK;
+
+    // Build lookup map: remotePath -> localPath, and POST body (one path per line)
+    std::unordered_map<std::string, std::wstring> pathMap;
+    std::string postBody;
+    pathMap.reserve(entries.size());
+    for (const auto& e : entries) {
+        pathMap[e.remotePath] = e.localPath;
+        postBody += e.remotePath;
+        postBody += '\n';
+    }
+
+    PHP_LOG("TAR_PACK download start entries=%u bodyLen=%u", (unsigned)entries.size(), (unsigned)postBody.size());
+    ShowStatusId(IDS_LOG_TAR_UPLOAD, (" " + std::to_string(entries.size())).c_str(), true);
+
+    AgentUrl url;
+    if (!ParseAgentUrl(cs, &url)) {
+        PHP_LOG("TAR_PACK ParseAgentUrl failed");
+        return SFTP_FAILED;
+    }
+    PHP_LOG("TAR_PACK url host=%ls port=%u obj=%ls secure=%d",
+            url.host.c_str(), url.port, url.object.c_str(), url.secure ? 1 : 0);
+
+    HttpHandles h;
+    h.session = WinHttpOpen(L"TC-SFTP-PHP-Agent/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!h.session) { PHP_LOG("TAR_PACK WinHttpOpen failed gle=%lu", GetLastError()); return SFTP_FAILED; }
+    WinHttpSetTimeouts(h.session, 15000, 15000, 300000, 300000);
+    h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
+    if (!h.connect) { PHP_LOG("TAR_PACK WinHttpConnect failed gle=%lu", GetLastError()); return SFTP_FAILED; }
+
+    const std::wstring object = BuildObjectPath(url.object, L"op=TAR_PACK");
+    h.request = WinHttpOpenRequest(h.connect, L"POST", object.c_str(), nullptr,
+                                   WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                   url.secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!h.request) { PHP_LOG("TAR_PACK WinHttpOpenRequest failed gle=%lu", GetLastError()); return SFTP_FAILED; }
+
+    std::wstring headers = L"Content-Type: text/plain\r\nX-SFTP-OP: TAR_PACK\r\nX-SFTP-AUTH: ";
+    headers += unicode_util::utf8_to_wstring(cs->password);
+    headers += L"\r\n";
+    if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
+                            WINHTTP_NO_REQUEST_DATA, 0, (DWORD)postBody.size(), 0)) {
+        PHP_LOG("TAR_PACK WinHttpSendRequest failed gle=%lu", GetLastError());
+        return SFTP_FAILED;
+    }
+    DWORD wr = 0;
+    if (!WinHttpWriteData(h.request, postBody.c_str(), (DWORD)postBody.size(), &wr)) {
+        PHP_LOG("TAR_PACK WinHttpWriteData failed gle=%lu", GetLastError());
+        return SFTP_FAILED;
+    }
+    if (!WinHttpReceiveResponse(h.request, nullptr)) {
+        PHP_LOG("TAR_PACK WinHttpReceiveResponse failed gle=%lu", GetLastError());
+        return SFTP_FAILED;
+    }
+
+    DWORD httpCode = 0;
+    if (!QueryStatus(h.request, &httpCode) || !IsHttpSuccess(httpCode)) {
+        PHP_LOG("TAR_PACK HTTP status=%lu", (unsigned long)httpCode);
+        return SFTP_FAILED;
+    }
+    PHP_LOG("TAR_PACK HTTP status=%lu OK", (unsigned long)httpCode);
+
+    TarReader reader(h.request);
+    std::string pendingLongName;
+    int filesExtracted = 0;
+    const int totalFiles = (int)pathMap.size();
+
+    for (;;) {
+        const uint8_t* hdrPtr = reader.peek(512);
+        if (!hdrPtr) break;
+        reader.advance(512);
+
+        if (TarIsZeroBlock(hdrPtr)) {
+            const uint8_t* hdr2 = reader.peek(512);
+            if (hdr2 && TarIsZeroBlock(hdr2)) { reader.advance(512); }
+            break;
+        }
+
+        const auto* hdr    = reinterpret_cast<const TarRawHeader*>(hdrPtr);
+        const int64_t fileSize  = TarParseOctal(hdr->size, 12);
+        const char    typeflag  = hdr->typeflag;
+
+        std::string entryPath;
+        if (hdr->prefix[0] != '\0') {
+            entryPath.assign(hdr->prefix, strnlen(hdr->prefix, 155));
+            entryPath += '/';
+        }
+        entryPath += std::string(hdr->name, strnlen(hdr->name, 100));
+
+        if (typeflag == 'L') {
+            if (fileSize > 0) {
+                std::string longBuf(static_cast<size_t>(fileSize), '\0');
+                size_t rem = longBuf.size(), off = 0;
+                while (rem > 0) {
+                    size_t want = rem < 65536 ? rem : 65536;
+                    const uint8_t* p = reader.peek(want);
+                    if (!p) { rem = 0; break; }
+                    memcpy(longBuf.data() + off, p, want);
+                    reader.advance(want);
+                    off += want; rem -= want;
+                }
+                const int64_t padded = ((fileSize + 511) / 512) * 512;
+                const int64_t pad    = padded - (int64_t)off;
+                if (pad > 0) reader.skip((size_t)pad);
+                while (!longBuf.empty() && longBuf.back() == '\0') longBuf.pop_back();
+                pendingLongName = std::move(longBuf);
+            }
+            continue;
+        }
+
+        if (!pendingLongName.empty()) {
+            entryPath = std::move(pendingLongName);
+            pendingLongName.clear();
+        }
+
+        std::replace(entryPath.begin(), entryPath.end(), '\\', '/');
+        while (!entryPath.empty() && entryPath[0] == '/') entryPath.erase(entryPath.begin());
+        const bool isDirEntry = (typeflag == '5');
+        while (!entryPath.empty() && entryPath.back() == '/') entryPath.pop_back();
+
+        const int64_t paddedSize = ((fileSize + 511) / 512) * 512;
+
+        if (isDirEntry || entryPath.empty()) {
+            if (paddedSize > 0) reader.skip((size_t)paddedSize);
+            continue;
+        }
+
+        // Progress
+        if (totalFiles > 0) {
+            const int pct = filesExtracted * 100 / totalFiles;
+            if (UpdatePercentBar(cs, pct, nullptr, nullptr))
+                return SFTP_ABORT;
+        }
+
+        auto it = pathMap.find(entryPath);
+        if (it == pathMap.end()) {
+            reader.skip((size_t)paddedSize);
+            continue;
+        }
+        const std::wstring& localPath = it->second;
+
+        {
+            const size_t sep = localPath.rfind(L'\\');
+            if (sep != std::wstring::npos) TarEnsureDirW(localPath.substr(0, sep));
+        }
+
+        HANDLE hf = CreateFileW(localPath.c_str(), GENERIC_WRITE, 0, nullptr,
+                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+        if (hf == INVALID_HANDLE_VALUE) {
+            reader.skip((size_t)paddedSize);
+            continue;
+        }
+        AutoFileHandle localFile(hf);
+
+        int64_t remaining = fileSize;
+        while (remaining > 0) {
+            size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
+            const uint8_t* p = reader.peek(want);
+            if (!p) return SFTP_READFAILED;
+            DWORD wr = 0;
+            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+                return SFTP_WRITEFAILED;
+            reader.advance(want);
+            remaining -= (int64_t)want;
+        }
+        const int64_t pad = paddedSize - fileSize;
+        if (pad > 0) reader.skip((size_t)pad);
+        ++filesExtracted;
+    }
+
+    UpdatePercentBar(cs, 100, nullptr, nullptr);
+    PHP_LOG("TAR_PACK download done files=%d", filesExtracted);
+    return SFTP_OK;
+}
+
 int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
                             const std::vector<TarUploadEntry>& entries)
 {
@@ -1459,9 +1696,10 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
     std::wstring headers = L"X-SFTP-OP: TAR_EXTRACT\r\nX-SFTP-AUTH: ";
     headers += unicode_util::utf8_to_wstring(cs->password);
     headers += L"\r\nContent-Type: application/x-tar\r\n";
+    headers += L"Content-Length: " + std::to_wstring(totalTarSize) + L"\r\n";
 
     if (!WinHttpSendRequest(h.request, headers.c_str(), (DWORD)-1L,
-                            WINHTTP_NO_REQUEST_DATA, 0, (DWORD)totalTarSize, 0))
+                            WINHTTP_NO_REQUEST_DATA, 0, WINHTTP_IGNORE_REQUEST_TOTAL_LENGTH, 0))
         return SFTP_FAILED;
 
     // Helper lambda: write raw bytes to WinHTTP
@@ -1493,8 +1731,7 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
             if (!writeRaw(lnameData.c_str(), (DWORD)lnameData.size())) return SFTP_WRITEFAILED;
             int64_t pad = lnamePadded - (int64_t)lnameData.size();
             if (pad > 0) {
-                std::vector<uint8_t> zeros((size_t)pad, 0);
-                if (!writeRaw(zeros.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
+                if (!writeRaw(s_zeroBlock.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
             }
         }
 
@@ -1535,8 +1772,7 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
                 }
                 int64_t pad = paddedSize - e.fileSize;
                 if (pad > 0) {
-                    std::vector<uint8_t> zeros((size_t)pad, 0);
-                    if (!writeRaw(zeros.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
+                    if (!writeRaw(s_zeroBlock.data(), (DWORD)pad)) return SFTP_WRITEFAILED;
                 }
             }
         }

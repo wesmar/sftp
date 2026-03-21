@@ -132,6 +132,7 @@ struct ISshSession {
     virtual int lastError(char** msg, int* len, int wantBuf) = 0;
     virtual int lastErrno() = 0;
     virtual int sessionFlag(int flag, int value) = 0;
+    virtual int blockDirections() = 0;
 
     virtual std::unique_ptr<ISftpSession> sftpInit() = 0;
     virtual std::unique_ptr<ISshChannel> openChannel() = 0;

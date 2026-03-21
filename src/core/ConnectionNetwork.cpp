@@ -48,6 +48,9 @@ int EstablishSocketConnection(pConnectSettings ConnectSettings, LPCSTR connectto
         WSAAddressToString(ai->ai_addr, ai->ai_addrlen, nullptr, addrBuf.data(), &addrLen);
         ShowStatus(("IP address: " + std::string(addrBuf.data())).c_str());
 
+        int nodelay = 1;
+        setsockopt(ConnectSettings->sock, IPPROTO_TCP, TCP_NODELAY,
+                   reinterpret_cast<const char*>(&nodelay), sizeof(nodelay));
         SetBlockingSocket(ConnectSettings->sock, false);
         connected = connect(ConnectSettings->sock, ai->ai_addr, (int)ai->ai_addrlen) == 0;
         if (!connected && WSAGetLastError() == WSAEWOULDBLOCK) {

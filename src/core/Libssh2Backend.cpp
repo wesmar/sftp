@@ -365,6 +365,11 @@ int Libssh2Session::sessionFlag(int flag, int value)
     return libssh2_session_flag(session_, flag, value);
 }
 
+int Libssh2Session::blockDirections()
+{
+    return libssh2_session_block_directions(session_);
+}
+
 std::unique_ptr<ISftpSession> Libssh2Session::sftpInit()
 {
     LIBSSH2_SFTP* sftp = libssh2_sftp_init(session_);

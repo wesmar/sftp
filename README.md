@@ -10,6 +10,17 @@
 > Fixed: both libraries rebuilt from source with `/MT` — fully static C runtime.
 > **The plugin requires no external DLLs or VC++ Redistributable.**
 
+> [!IMPORTANT]
+> **2026-03-21 — PHP Agent TAR batch download + sftp.php update required**
+>
+> Users running recent builds with the **TAR stream** option enabled may have experienced:
+> - Silent batch download failures (0 files received) when downloading multiple files
+> - HTTP 504 Gateway Timeout on OVH / home.pl when downloading large file sets
+> - TAR upload failures for directory archives exceeding 4 GB
+>
+> All three are now fixed. **Upload the updated `sftp.php`** from the plugin directory to your server
+> before using TAR batch download. See [PHP Agent Deployment](#php-agent-deployment) for instructions.
+
 ![SFTP Plugin](images/sftp01.jpg)
 
 **Version 1.0.0.x** — Modern C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86.
@@ -52,7 +63,7 @@ Complete C-to-C++ rewrite of the original SFTP plugin by Christian Ghisler. Core
 | **SCP (native)** | Faster than SFTP on many servers. Includes >2 GB file detection via 64-bit server check. |
 | **Shell Fallback** | `cat` / `dd` / `base64` chunk pipeline for servers blocking SFTP subsystem and `scp`. Operates over a hidden interactive SSH channel. |
 | **Jump Host (ProxyJump)** | Bastion-routed SSH via `direct-tcpip` tunneling. No external `ssh.exe` required. |
-| **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. Directory uploads streamed as a single TAR archive (opt-in via `php_tar` checkbox). |
+| **PHP Agent (HTTP)** | Standalone HTTP transfer mode backed by a single `sftp.php` file. Supports hosts with no SSH account or blocked subsystem. Directory uploads and batch file downloads transferred as a single TAR stream (opt-in via `php_tar` checkbox). TAR transfers replace thousands of individual HTTP requests with one POST/GET. |
 | **PHP Shell (HTTP)** | Pseudo-terminal over HTTP via `SHELL_EXEC` in `sftp.php`. Persistent command history (Up/Down arrows, 128-entry ring buffer) stored in `%APPDATA%\GHISLER\shell_history.txt`. Maintains working-directory context across requests. |
 | **LAN Pair** | Direct Windows-to-Windows pairing mode. Custom PAIR1 authentication protocol, LAN2 file-transfer command protocol, UDP broadcast peer discovery. |
 
@@ -548,11 +559,54 @@ Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero t
 
 Single-file `sftp.php` deployed on the web server. The plugin communicates via WinHTTP (`winhttp.lib`), sending chunked `multipart/form-data` for uploads and receiving raw bytes for downloads.
 
-Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`, `TAR_EXTRACT`.
+Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`, `TAR_STREAM`, `TAR_EXTRACT`, `TAR_PACK`, `SHELL_EXEC`.
 
-#### TAR Streaming Upload
+#### TAR Streaming — Upload (TAR_EXTRACT) and Batch Download (TAR_PACK)
 
-When the `php_tar` checkbox is enabled in the connection profile, directory uploads to a PHP Agent server are streamed as a single TAR archive instead of individual `PUT` requests. The plugin uses TC's `FsStatusInfo` batch session (`FS_STATUS_OP_PUT_MULTI` / `FS_STATUS_OP_PUT_MULTI_THREAD`) to collect all files, computes the exact `Content-Length` in a first pass, then streams the complete POSIX ustar TAR in a single WinHTTP POST to `op=TAR_EXTRACT`. PHP extracts files on-the-fly using a streaming parser (`tar_extract_stream`) — no temporary files on the server. GNU LongLink extension is used for paths longer than 99 characters. Regular `.tar` file uploads (without `php_tar` enabled) are unaffected and transferred normally.
+When the `php_tar` checkbox is enabled in the connection profile, all directory copies and batch file transfers use a single TAR HTTP round-trip instead of individual `PUT`/`GET` requests. This eliminates per-request overhead — critical on shared hosting (OVH, home.pl) where even small files cost full HTTP round-trip latency.
+
+**Upload (TAR_EXTRACT)**
+
+TC's `FsStatusInfo` `PUT_MULTI` / `PUT_MULTI_THREAD` session is used to collect all files. The plugin runs a first pass to compute the exact total size, then streams the complete POSIX ustar TAR in a single WinHTTP POST to `?op=TAR_EXTRACT`. The server script extracts files on-the-fly via a streaming parser (`tar_extract_stream`) — no temporary files created on the server. `Content-Length` is sent as a 64-bit header value (no 4 GB overflow). Regular `.tar` file uploads without `php_tar` enabled are unaffected.
+
+**Batch Download (TAR_PACK)**
+
+When TC signals a multi-file download (`FsStatusInfo GET_MULTI` / `GET_MULTI_THREAD`), each `FsGetFileW` call is intercepted and the remote path queued into `TarDownloadSession`. When the batch ends, a single POST to `?op=TAR_PACK` is sent with all remote paths (newline-separated). The server streams the ustar TAR directly to `php://output` with no buffering — no 504 Gateway Timeout even for large archives. The plugin parses the TAR stream on the fly, writing files as each entry arrives.
+
+Both directions support **GNU LongLink** (`././@LongLink`, typeflag `L`) for paths longer than 99 characters. Files exceeding 8 589 934 591 bytes (POSIX ustar limit) are skipped cleanly without corrupting the rest of the archive.
+
+```mermaid
+sequenceDiagram
+    participant TC as Total Commander
+    participant P as Plugin
+    participant S as sftp.php
+    Note over TC,P: Batch download (GET_MULTI)
+    TC->>P: FsStatusInfo GET_MULTI START
+    P->>P: TarDownloadSessionBegin
+    TC->>P: FsGetFileW (file 1)
+    P->>P: TarDownloadSessionQueue
+    TC->>P: FsGetFileW (file N)
+    P->>P: TarDownloadSessionQueue
+    TC->>P: FsStatusInfo GET_MULTI END
+    P->>S: POST ?op=TAR_PACK
+    S-->>P: ustar TAR stream
+    P->>P: Parse TAR → write local files
+```
+
+```mermaid
+sequenceDiagram
+    participant TC as Total Commander
+    participant P as Plugin
+    participant S as sftp.php
+    Note over TC,P: Batch upload (PUT_MULTI)
+    TC->>P: FsStatusInfo PUT_MULTI START
+    P->>P: TarUploadSessionBegin
+    TC->>P: FsPutFileW (file 1..N)
+    P->>P: TarUploadSessionQueue
+    TC->>P: FsStatusInfo PUT_MULTI END
+    P->>S: POST ?op=TAR_EXTRACT (TAR stream)
+    S-->>P: { "extracted": N }
+```
 
 `AgentUrl` struct parsed from connection profile: `secure` (HTTPS), `host`, `port`, `object` path.
 
@@ -745,7 +799,7 @@ Remote `locale` command output is parsed to determine the server's character enc
 | `SftpRemoteOps.cpp` | Listing, remote file operations | Marker-aware parsing; `SftpSetAttr` |
 | `SftpShell.cpp` | Shell channel execution, EAGAIN guards | |
 | `TransferUtils.cpp` | Progress, rate, shared transfer helpers | |
-| `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP); TAR streaming upload session (`TarUploadSession`, `PhpAgentUploadDirAsTar`) | |
+| `PhpAgentClient.cpp` | PHP Agent HTTP operations (WinHTTP); TAR batch upload session (`TarUploadSession`, `PhpAgentUploadDirAsTar`); TAR batch download session (`TarDownloadSession`, `PhpAgentDownloadFilesAsTar`, `TAR_PACK`) | |
 | `KittyDecryptDeploy.cpp` | Embeds `dp.exe` as CAB RCDATA resource; deploys on first use via FDI; adds Defender path+process exclusion via WMI/COM before extraction | `KittyDecryptDeploy.h` |
 | `PhpShellConsole.cpp` | PHP Shell pseudo-terminal; keyboard input, Tab completion, Up/Down history navigation | |
 | `ShellHistory.cpp` | Persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt` | `ShellHistory.h` |
@@ -1012,6 +1066,8 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
 - **KiTTY password import** — stored KiTTY session passwords decrypted automatically via `dp.exe` (Blowfish/nbcrypt); exe embedded as LZX CAB RCDATA resource, extracted on first use via Windows FDI API; Windows Defender path and process exclusion added before extraction via WMI/COM (`MSFT_MpPreference::Add`, no PowerShell); decrypted password saved as DPAPI
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected
+- **PHP Agent TAR batch download** — opt-in `php_tar` checkbox; multi-file F5 copy sends a single POST to `op=TAR_PACK` with all remote paths; server streams ustar TAR directly without buffering (`php://output`); plugin parses TAR on-the-fly and writes local files; works in foreground (`GET_MULTI`) and background thread (`GET_MULTI_THREAD`) modes; GNU LongLink supported; files >8 GiB skipped cleanly
+- **PHP Agent TAR fixes** — DWORD overflow (TAR upload >4 GB now uses 64-bit `Content-Length` header); TAR pack no longer buffers in `php://temp` on server (eliminates HTTP 504 on OVH); per-file zero-pad allocation removed from upload loop; >8.5 GiB file guard in both C++ and PHP prevents TAR header corruption
 
 ### In Progress
 
@@ -1031,7 +1087,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 
 ---
 
-**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, **KiTTY password import** (embedded dp.exe CAB + WMI/COM Defender exclusion + DPAPI), **PHP Agent TAR upload** (streaming ustar POST, on-the-fly server extraction), no VC++ Redistributable required
+**Highlights:** DllExceptionBarrier (ABI protection), ConnectionGuard RAII, LAN Pair TOFU/timeout, PHP Shell persistent history, 15-language localization (CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN added), checkbox session picker with 4-path memory, PuTTY Portable + WinSCP.ini + KiTTY Portable import, **KiTTY password import** (embedded dp.exe CAB + WMI/COM Defender exclusion + DPAPI), **PHP Agent TAR upload+download** (streaming ustar POST/GET, on-the-fly server extraction, batch download via TAR_PACK, no 4 GB limit), no VC++ Redistributable required
 
 *Secure FTP Plugin v1.0.0.x — Modern C++20 implementation.*
 *Based on the original SFTP plugin by Christian Ghisler; core modules re-engineered from scratch.*

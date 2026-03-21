@@ -557,10 +557,37 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
             }
         }
 
+        if (InfoOperation == FS_STATUS_OP_GET_MULTI ||
+            InfoOperation == FS_STATUS_OP_GET_SINGLE) {
+            std::array<char, wdirtypemax> remotedir{};
+            pConnectSettings cs = GetServerIdAndRelativePathFromPath(RemoteDir, remotedir.data(), remotedir.size() - 1);
+            if (InfoStartEnd == FS_STATUS_START) {
+                SFTP_LOG("STATUS", "GET START: php_tar=%d isPhpAgent=%d tarDlActive=%d",
+                         cs ? cs->php_tar : -1,
+                         cs ? IsPhpAgentTransport(cs) : -1,
+                         TarDownloadSessionIsActive() ? 1 : 0);
+                if (cs && IsPhpAgentTransport(cs) && cs->php_tar)
+                    TarDownloadSessionBegin(cs);
+            } else {
+                SFTP_LOG("STATUS", "GET END: tarDlActive=%d", TarDownloadSessionIsActive() ? 1 : 0);
+                if (TarDownloadSessionIsActive()) {
+                    const int rc = TarDownloadSessionExecuteAndClear();
+                    SFTP_LOG("STATUS", "GET END: TarDlExecute rc=%d", rc);
+                    if (rc != SFTP_OK && rc != SFTP_ABORT)
+                        ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
+                }
+            }
+        }
+
         if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD || InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD) {
             if (InfoStartEnd != FS_STATUS_START) {
                 if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD && TarUploadSessionIsActive()) {
                     const int rc = TarUploadSessionExecuteAndClear();
+                    if (rc != SFTP_OK && rc != SFTP_ABORT)
+                        ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
+                }
+                if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD && TarDownloadSessionIsActive()) {
+                    const int rc = TarDownloadSessionExecuteAndClear();
                     if (rc != SFTP_OK && rc != SFTP_ABORT)
                         ShowStatusId(IDS_LOG_TAR_UPLOAD_FAIL, nullptr, false);
                 }
@@ -576,6 +603,9 @@ void WINAPI FsStatusInfo(LPCSTR RemoteDir, int InfoStartEnd, int InfoOperation)
                 if (InfoOperation == FS_STATUS_OP_PUT_MULTI_THREAD
                     && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
                     TarUploadSessionBegin(nullptr);  // cs filled in by first FsPutFileW
+                if (InfoOperation == FS_STATUS_OP_GET_MULTI_THREAD
+                    && IsPhpAgentTransport(oldserverid) && oldserverid->php_tar)
+                    TarDownloadSessionBegin(nullptr);  // cs filled in by first FsGetFileW
                 oldpass = oldserverid->password.c_str();
                 if (!oldpass[0])
                     oldpass = nullptr;

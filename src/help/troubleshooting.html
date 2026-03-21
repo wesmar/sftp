@@ -30,6 +30,22 @@
   <li>Enable detailed log for diagnostics.</li>
 </ul>
 
+<h2>TAR batch download returns 0 files</h2>
+<ul>
+  <li>Upload the current <code>sftp.php</code> from the plugin directory — old versions do not have <code>TAR_PACK</code> support.</li>
+  <li>If server still returns 0 files, verify the connection URL matches the deployed script location exactly.</li>
+</ul>
+
+<h2>HTTP 504 Gateway Timeout on TAR download (OVH / home.pl)</h2>
+<ul>
+  <li>Upload the current <code>sftp.php</code> — the updated version streams directly without buffering and avoids server-side timeouts.</li>
+</ul>
+
+<h2>TAR upload fails for large directories</h2>
+<ul>
+  <li>Update the plugin to the current build — older builds had a 4 GB limit due to a 32-bit integer overflow.</li>
+</ul>
+
 <h2>CHM does not open</h2>
 <ul>
   <li>If file comes from internet, open file properties and click <code>Unblock</code>.</li>

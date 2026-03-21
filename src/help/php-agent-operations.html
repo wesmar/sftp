@@ -28,6 +28,9 @@
   <li><b>RMDIR:</b> Remove directories</li>
   <li><b>RENAME:</b> Rename/move files</li>
   <li><b>HASH:</b> Compute file hashes (SHA256, etc.)</li>
+  <li><b>TAR_STREAM:</b> Stream entire directory tree as ustar TAR (bulk download)</li>
+  <li><b>TAR_PACK:</b> Pack selected remote files as ustar TAR (batch download)</li>
+  <li><b>TAR_EXTRACT:</b> Extract ustar TAR uploaded by plugin (batch upload)</li>
   <li><b>SHELL_EXEC:</b> Execute shell commands (if enabled)</li>
 </ul>
 
@@ -257,25 +260,41 @@ Response:
 { "ok": true, "path": "file.txt", "algo": "sha256", "hash": "abc123..." }
 </pre>
 
-<h3>TAR_STREAM - Download Directory as TAR</h3>
+<h3>TAR_STREAM - Stream Entire Directory as TAR</h3>
 <pre>
 GET https://example.com/sftp.php?op=TAR_STREAM&amp;path=/subdir
 
 Response: raw ustar TAR stream (application/x-tar)
 </pre>
-<p>The server streams the entire directory tree as a ustar TAR archive. The plugin parses the stream on the fly: directories are created immediately, files are written as their data arrives. GNU long-name extension records (<code>././@LongLink</code>, typeflag <code>L</code>) are handled for paths longer than 99 characters. The stream ends with two consecutive 512-byte zero blocks (standard TAR end-of-archive marker).</p>
-<p>Enabled when the <b>TAR stream</b> checkbox is checked and a directory is being downloaded.</p>
+<p>The server streams the entire directory tree as a ustar TAR archive. The plugin parses the stream on the fly: directories are created immediately, files are written as their data arrives. GNU long-name extension records (<code>././@LongLink</code>, typeflag <code>L</code>) are handled for paths longer than 99 characters. The stream ends with two consecutive 512-byte zero blocks (standard TAR end-of-archive marker). Used when downloading an entire directory.</p>
+<p>Enabled when the <b>TAR stream</b> checkbox is checked and a single directory is being downloaded.</p>
+
+<h3>TAR_PACK - Batch Download Selected Files as TAR</h3>
+<pre>
+POST https://example.com/sftp.php?op=TAR_PACK
+Content-Type: text/plain
+
+relative/path/file1.txt
+relative/path/file2.bin
+subdir/file3.jpg
+
+Response: raw ustar TAR stream (application/x-tar)
+</pre>
+<p>The plugin sends a list of relative remote paths (one per line, newline-separated) in the POST body. The server packs exactly those paths into a ustar TAR and streams the result directly to the response — no temporary file, no memory buffer, no <code>Content-Length</code> header. The plugin parses the TAR on the fly and writes each file to the local destination as it arrives.</p>
+<p>Directories listed are included as directory entries (typeflag <code>5</code>). Files larger than 8 589 934 591 bytes are skipped (POSIX ustar octal limit) without corrupting the rest of the archive. GNU LongLink is used for paths over 99 characters.</p>
+<p>Enabled when the <b>TAR stream</b> checkbox is checked and multiple files are selected for download (TC <code>GET_MULTI</code> batch operation).</p>
 
 <h3>TAR_EXTRACT - Upload Files as TAR</h3>
 <pre>
 POST https://example.com/sftp.php?op=TAR_EXTRACT&amp;path=/subdir
 Content-Type: application/x-tar
+Content-Length: &lt;exact 64-bit size&gt;
 [ustar TAR body]
 
 Response:
 { "ok": true, "extracted": N }
 </pre>
-<p>The plugin packs all queued files into a single ustar TAR stream (with GNU long-name entries where needed) and sends it in one POST. The server extracts it under <code>path</code>. Files are queued during the TC copy operation and sent all at once when TC signals end-of-batch via <code>FsStatusInfo</code>.</p>
+<p>The plugin packs all queued files into a single ustar TAR stream (with GNU long-name entries where needed) and sends it in one POST. The server extracts it under <code>path</code>. Files are queued during the TC copy operation and sent all at once when TC signals end-of-batch via <code>FsStatusInfo</code>. <code>Content-Length</code> is sent as a proper 64-bit value — no overflow for archives exceeding 4 GB.</p>
 <p>Enabled when the <b>TAR stream</b> checkbox is checked and files are being uploaded.</p>
 
 <h3>SHELL_EXEC - Execute Command</h3>

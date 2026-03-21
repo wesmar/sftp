@@ -295,7 +295,10 @@ inline int get_ticks_between(SYSTICKS prev, SYSTICKS now) noexcept {
 }
 
 inline int get_ticks_between(SYSTICKS prev) noexcept {
-    return time_util::get_ticks_between(prev);
+    // Must use the same global get_sys_ticks() (GetTickCount64) as the caller used
+    // to capture 'prev'. time_util::get_sys_ticks() uses a different epoch and
+    // would produce a wildly incorrect elapsed time.
+    return static_cast<int>(get_sys_ticks() - prev);
 }
 
 inline void ConvUnixTimeToFileTime(LPFILETIME ft, int64_t utm) noexcept {

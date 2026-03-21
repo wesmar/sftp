@@ -1781,15 +1781,17 @@ static void OnImportSessionsCommand(HWND hWnd, pConnectSettings dlgConnectResult
     const UINT curLen = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, currentSession.data(), static_cast<int>(currentSession.size()));
     currentSession.resize(curLen);
     
+    if (importedCount > 0) {
+        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
+        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
+    }
+
     if (importedCount > 0 && importedSession[0]) {
         importedSession.resize(strlen(importedSession.data()));
         FillSessionCombo(hWnd, importedSession.data());
         tConnectSettings loaded{};
         if (LoadServerSettings(importedSession.data(), &loaded, dlgCtx->iniFileName))
             ApplyLoadedSessionToDialog(hWnd, &loaded, dlgCtx->iniFileName);
-
-        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
     } else {
         FillSessionCombo(hWnd, currentSession.data());
     }
