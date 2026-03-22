@@ -173,7 +173,7 @@
 258=libssh2 doit être en version 1.7.0 ou supérieure pour prendre en charge les fichiers > 2 Go via SCP.
 259=Le serveur ne prend peut-être pas en charge le transfert de fichiers >2 Go via SCP ! Essayer quand même ?
 260=Pour des raisons de sécurité, les mots de passe ne doivent être enregistrés que sous la protection d'un mot de passe principal.\n\nSi vous avez besoin de 2 mots de passe (pour la clé privée et la connexion), saisissez-les comme suit :\n\n"MotDePasseCle","MotDePasseConnexion"
-261=LAN Pair (type SMB)
+261=Couplage LAN
 262=Role:
 263=Pair:
 264=Auto

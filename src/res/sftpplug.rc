@@ -754,7 +754,7 @@ BEGIN
     IDS_DLL_VERSION         "libssh2 has to be version 1.7.0 or higher to support filesize > 2 GB over SCP."
     IDS_NO_2GB_SUPPORT      "The server may not support the transfer of files >2GB via SCP! Try anyway?"
     IDS_HELP_PASSWORD       "For security reasons, you should only save passwords protected by a master password.\n\nIf you need 2 passwords (for private key and login), enter them as follows:\n\n""KeyPassword"",""LoginPasswort"""
-    IDS_TRANSFERMODE_LANPAIR "LAN Pair (SMB-like)"
+    IDS_TRANSFERMODE_LANPAIR "LAN Pair"
     IDS_LAN_ROLE_LABEL      "Pair role:"
     IDS_LAN_PEER_LABEL      "Peer:"
     IDS_LAN_ROLE_AUTO       "Auto"

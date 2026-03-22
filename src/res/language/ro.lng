@@ -173,7 +173,7 @@
 258=libssh2 trebuie să fie versiunea 1.7.0 sau mai nouă pentru a gestiona fișiere > 2 GB prin SCP.
 259=Serverul poate să nu accepte transferul fișierelor >2 GB prin SCP! Încercați oricum?
 260=Din motive de securitate, parolele ar trebui salvate doar sub protecția parolei principale.\n\nDacă aveți nevoie de 2 parole (pentru cheia privată și autentificare), introduceți-le astfel:\n\n"ParolaCheie","ParolaAutentificare"
-261=LAN Pair (tip SMB)
+261=Asociere LAN
 262=Rol:
 263=Partener:
 264=Auto

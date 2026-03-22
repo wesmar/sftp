@@ -173,7 +173,7 @@
 258=libssh2 debe ser la versión 1.7.0 o superior para admitir tamaños de archivo > 2 GB por SCP.
 259=¡Es posible que el servidor no admita la transferencia de archivos >2 GB por SCP! ¿Intentarlo de todas formas?
 260=Por razones de seguridad, las contraseñas solo deben guardarse protegidas con una contraseña maestra.\n\nSi necesita 2 contraseñas (para la clave privada y el inicio de sesión), introdúzcalas así:\n\n"ContraseñaClave","ContraseñaLogin"
-261=LAN Pair (tipo SMB)
+261=Enlace LAN
 262=Rol:
 263=Par:
 264=Auto

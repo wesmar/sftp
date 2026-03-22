@@ -173,7 +173,7 @@
 258=libssh2 musi być w wersji 1.7.0 lub nowszej, aby obsłużyć rozmiar pliku > 2 GB przez SCP.
 259=Serwer może nie obsługiwać transferu plików >2 GB przez SCP! Mimo to spróbować?
 260=Ze względów bezpieczeństwa hasła powinny być zapisywane tylko pod ochroną hasła głównego.\n\nJeśli potrzebujesz 2 haseł (dla klucza prywatnego i logowania), wpisz je w następujący sposób:\n\n"HasłoKlucza","HasłoLogowania"
-261=LAN Pair (SMB-like)
+261=Parowanie LAN
 262=Tryb:
 263=Partner:
 264=Auto
