@@ -183,6 +183,17 @@ BEGIN
 END
 
 
+IDD_PAIRING_PROGRESS DIALOGEX 0, 0, 220, 62
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION
+CAPTION "LAN Pair"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "",IDC_PAIRING_STATUS,10,10,200,10
+    LTEXT           "",IDC_PAIRING_COUNTDOWN,10,24,200,10
+    PUSHBUTTON      "Cancel",IDCANCEL,85,44,50,12
+END
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // DESIGNINFO
@@ -297,8 +308,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,15
- PRODUCTVERSION 1,0,0,15
+ FILEVERSION 1,0,0,16
+ PRODUCTVERSION 1,0,0,16
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -315,12 +326,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "kvc.pl"
             VALUE "FileDescription", "SFTP Plugin for Total Commander"
-            VALUE "FileVersion", "1.0.0.15"
+            VALUE "FileVersion", "1.0.0.16"
             VALUE "InternalName", "sftpplug"
             VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName", "SFTPplug"
-            VALUE "ProductVersion", "1.0.0.15"
+            VALUE "ProductVersion", "1.0.0.16"
         END
     END
     BLOCK "VarFileInfo"
@@ -813,19 +824,30 @@ BEGIN
     IDS_DLG_JUMPHOST_GRP    "Jump host:"
     IDS_DLG_USE_JUMPHOST    "Use &jump host"
     IDS_DLG_PROXY_SETTINGS  "Proxy settings:"
-    IDS_DLG_DELETELAST      "Delete last proxy"
+    IDS_DLG_DELETELAST      "Delete proxy"
     IDS_DLG_IMPORT          "Import..."
     IDS_PROXY_DLG_CAPTION   "Proxy Settings"
     IDS_PROXY_DLG_GROUP     "Proxy settings"
     IDS_PROXY_DLG_HOST      "Proxy host:"
     IDS_PROXY_DLG_USER      "Proxy user name:"
     IDS_PROXY_DLG_PASS      "Proxy password:"
+    IDS_PROXY_DLG_NOPROXY   "No proxy"
+    IDS_PROXY_DLG_HTTP      "HTTP CONNECT"
+    IDS_PROXY_DLG_SOCKS4A   "SOCKS 4/4a"
+    IDS_PROXY_DLG_SOCKS5    "SOCKS 5"
     IDS_JUMP_DLG_CAPTION    "SSH Jump Host (ProxyJump) Settings"
     IDS_JUMP_DLG_GROUP      "Jump host connection"
     IDS_JUMP_DLG_USE        "&Use jump host (ProxyJump)"
     IDS_JUMP_DLG_HOST       "Jump host:"
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
+    IDS_PAIRING_SECS        "{} s"
+    IDS_PAIRING_TIMEOUT     "LAN Pair: no peer found."
 END
 
 #endif    // English (United States) resources

@@ -2,7 +2,7 @@
 <html>
 <head><meta charset="utf-8"><title>LAN Pair</title><link rel="stylesheet" href="assets/style.css"></head>
 <body>
-<h1>LAN Pair (SMB-like)</h1>
+<h1>LAN Pair</h1>
 
 <p>LAN Pair is a Windows-to-Windows transfer mode for direct local-network pairing without relying on the system SMB stack. It is designed for practical file exchange between trusted machines on the same network.</p>
 
@@ -24,7 +24,7 @@
 <p>LAN Pair uses two ports:</p>
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Port</th><th>Protocol</th><th>Purpose</th></tr>
-  <tr><td><b>45845</b></td><td>UDP (broadcast)</td><td>Peer discovery — both machines announce themselves on the local network every ~1.5 seconds</td></tr>
+  <tr><td><b>45845</b></td><td>UDP (broadcast)</td><td>Peer discovery — both machines announce themselves on the local network every 2 seconds</td></tr>
   <tr><td><b>45846</b></td><td>TCP</td><td>Pairing handshake and file transfer session</td></tr>
 </table>
 <p>Both ports must be open in Windows Firewall on both machines. If peers do not appear in the discovery list, this is the first thing to check.</p>
@@ -48,18 +48,32 @@
 
 <h2>Roles</h2>
 <ul>
-  <li><b>Auto</b> — discovery and listen mode; role is chosen by the user when a peer is detected</li>
-  <li><b>Receiver</b> — waits for an incoming paired client (acts as server)</li>
-  <li><b>Donor</b> — actively connects to a detected receiver (acts as client)</li>
+  <li><b>Auto</b> — guided 60-second pairing wizard; starts listening in the background and waits for a peer to appear</li>
+  <li><b>Receiver</b> — waits for an incoming paired client (acts as server); click <b>Pair...</b> again to stop</li>
+  <li><b>Donor</b> — actively connects to the peer selected in the Peer list (acts as client)</li>
 </ul>
 
+<h2>Auto mode — pairing wizard</h2>
+<p>When <b>Auto</b> is selected and you click <b>Pair...</b>, the plugin runs a guided wizard:</p>
+<ol>
+  <li>The receiver starts listening on TCP 45846 in the background.</li>
+  <li>A <b>60-second countdown dialog</b> appears: <em>"Searching for LAN Pair peer on local network..."</em>. You can cancel at any time.</li>
+  <li>As soon as the other machine is detected, the dialog closes and you are asked to choose a role:
+    <ul>
+      <li><b>Yes → Donor</b> — connects to the discovered peer immediately.</li>
+      <li><b>No → Receiver</b> — stays in listening mode; the server continues running.</li>
+      <li><b>Cancel</b> — the receiver is stopped.</li>
+    </ul>
+  </li>
+  <li>If no peer appears within 60 seconds, the receiver is stopped automatically and a status message is shown. No ports are left open.</li>
+</ol>
 <div class="note">
-  <b>Important:</b> Auto mode does not silently decide roles. When a matching peer is found, the plugin asks which role to use.
+  <b>Tip:</b> Both machines should click <b>Pair...</b> at roughly the same time. With a 60-second window and a 2-second broadcast interval, there is no need to rush.
 </div>
 
 <h2>Basic workflow</h2>
 <ol>
-  <li>Create or edit a session and set <b>Transfer = LAN Pair (SMB-like)</b>.</li>
+  <li>Create or edit a session and set <b>Transfer = LAN Pair</b>.</li>
   <li>Set the session name. This name is also shown as the visible peer label on the other machine.</li>
   <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b> in the role dropdown.</li>
   <li>Optional: set <b>Session timeout</b> in minutes. <code>0</code> means no limit.</li>

@@ -8,6 +8,7 @@
 #include "LanPairSession.h"
 #include "LanPair.h"
 #include "LanPairInternal.h"
+#include "DllExceptionBarrier.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -744,7 +745,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
 
     static constexpr char kDefaultPeerId[] = "lanfilesrv";
 
-    void closeListen() noexcept {
+    void closeListen() {
         running_ = false;
         if (listenSock_ != INVALID_SOCKET) {
             closesocket(listenSock_);
@@ -752,7 +753,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         }
     }
 
-    bool authenticateClient(SOCKET s, std::string& clientPeerId) noexcept {
+    bool authenticateClient(SOCKET s, std::string& clientPeerId) {
         std::string line;
         if (!recvLine(s, &line)) return false;
 
@@ -840,7 +841,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         return sendLine(s, ok.str());
     }
 
-    void serveCommands(SOCKET s) noexcept {
+    void serveCommands(SOCKET s) {
         std::string line;
         while (recvLine(s, &line)) {
             const auto parts = splitBySpace(line);
@@ -886,7 +887,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         return res.substr(i);
     }
 
-    void cmdRoots(SOCKET s) noexcept {
+    void cmdRoots(SOCKET s) {
         const DWORD mask = GetLogicalDrives();
         std::vector<std::string> drives;
         for (int i = 0; i < 26; ++i) {
@@ -901,7 +902,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         for (const auto& d : drives) sendLine(s, d);
     }
 
-    void cmdList(SOCKET s, const std::string& path) noexcept {
+    void cmdList(SOCKET s, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         std::wstring glob = wpath;
         if (!glob.empty() && glob.back() != L'\\') glob += L'\\';
@@ -944,7 +945,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         for (const auto& l : lines) sendLine(s, l);
     }
 
-    void cmdGet(SOCKET s, const std::string& path, int64_t offset) noexcept {
+    void cmdGet(SOCKET s, const std::string& path, int64_t offset) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, 0, nullptr);
@@ -981,7 +982,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         CloseHandle(h);
     }
 
-    void cmdPut(SOCKET s, const std::string& path, int64_t size) noexcept {
+    void cmdPut(SOCKET s, const std::string& path, int64_t size) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, nullptr,
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -1021,12 +1022,12 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         sendLine(s, ok ? "DONE" : "ERR write-failed");
     }
 
-    void cmdMkdir(SOCKET s, const std::string& path) noexcept {
+    void cmdMkdir(SOCKET s, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         sendLine(s, CreateDirectoryW(wpath.c_str(), nullptr) ? "OK" : "ERR mkdir-failed");
     }
 
-    void cmdDel(SOCKET s, const std::string& path) noexcept {
+    void cmdDel(SOCKET s, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         const DWORD attr = GetFileAttributesW(wpath.c_str());
         bool ok = false;
@@ -1045,7 +1046,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                         ? "OK" : "ERR rename-failed");
     }
 
-    void handleClient(SOCKET client) noexcept {
+    void handleClient(SOCKET client) {
         const BOOL keepAlive = TRUE;
         setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
                    reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
@@ -1071,7 +1072,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         closesocket(client);
     }
 
-    void runAcceptLoop() noexcept {
+    void runAcceptLoop() {
         while (running_.load(std::memory_order_relaxed)) {
             sockaddr_in from{};
             int fromLen = sizeof(from);
@@ -1090,12 +1091,13 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             auto self = shared_from_this();
             std::lock_guard<std::mutex> lk(clientThreadsMu_);
             clientThreads_.emplace_back([self, client] {
-                self->handleClient(client);
+                sftp::DllExceptionBarrier barrier;
+                sftp::dll_invoke_void(barrier, [self, client] { self->handleClient(client); });
             });
         }
     }
 
-    void joinClientThreads() noexcept {
+    void joinClientThreads() {
         std::lock_guard<std::mutex> lk(clientThreadsMu_);
         for (auto& t : clientThreads_)
             if (t.joinable()) t.join();
@@ -1108,7 +1110,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
 // ============================================================
 
 LanFileServer::LanFileServer()
-    : impl_(std::make_unique<Impl>()) {}
+    : impl_(std::make_shared<Impl>()) {}
 
 LanFileServer::~LanFileServer() { stop(); }
 
@@ -1154,7 +1156,10 @@ bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
     }
 
     impl_->running_ = true;
-    impl_->acceptThread_ = std::thread([this] { impl_->runAcceptLoop(); });
+    impl_->acceptThread_ = std::thread([this] {
+        sftp::DllExceptionBarrier barrier;
+        sftp::dll_invoke_void(barrier, [this] { impl_->runAcceptLoop(); });
+    });
     return true;
 }
 

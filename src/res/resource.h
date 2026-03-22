@@ -398,6 +398,10 @@
 #define IDS_BTN_OK                      330
 #define IDS_DLG_WIN_LINEBREAKS          450
 #define IDS_DLG_UNIX_LINEBREAKS         451
+#define IDS_PROXY_DLG_NOPROXY           452
+#define IDS_PROXY_DLG_HTTP              453
+#define IDS_PROXY_DLG_SOCKS4A           454
+#define IDS_PROXY_DLG_SOCKS5            455
 #define IDS_TRANSFERMODE_SSH            331
 #define IDS_TRANSFERMODE_PHP_AGENT      332
 #define IDS_TRANSFERMODE_PHP_SHELL      333
@@ -524,6 +528,16 @@
 #define IDS_IMP_ERR_NO_KITTY_SESSIONS   12087
 #define IDS_ERR_SESSION_EXISTS          12088
 #define IDS_TITLE_SFTP                  12089
+
+// ---------------------------------------------------------------------------
+// LAN Pair progress dialog
+// ---------------------------------------------------------------------------
+#define IDD_PAIRING_PROGRESS            117
+#define IDC_PAIRING_STATUS              1106
+#define IDC_PAIRING_COUNTDOWN           1107
+#define IDS_PAIRING_SEARCH              12090
+#define IDS_PAIRING_SECS                12091
+#define IDS_PAIRING_TIMEOUT             12092
 
 // Next default values for new objects
 //

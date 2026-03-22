@@ -295,6 +295,7 @@ struct ConnectDialogContext {
     bool lanDiscoveryRunning = false;
     bool lanServerRunning = false;
     bool lanRolePromptShown = false;
+    bool lanPairingActive = false;
 };
 
 // Forward declaration so GetConnectDialogContext can return context via the class.
@@ -479,6 +480,8 @@ static void SetDialogLabelTextAndRedraw(HWND hWnd, int ctrlId, const wchar_t* te
         return;
     }
 
+    SetWindowTextW(hCtrl, textW ? textW : L"");
+
     RECT rcScreen{};
     if (GetWindowRect(hCtrl, &rcScreen)) {
         POINT tl{ rcScreen.left, rcScreen.top };
@@ -488,9 +491,6 @@ static void SetDialogLabelTextAndRedraw(HWND hWnd, int ctrlId, const wchar_t* te
         RECT rcClient{ tl.x, tl.y, br.x, br.y };
         InvalidateRect(hWnd, &rcClient, TRUE);
     }
-
-    SetWindowTextW(hCtrl, textW ? textW : L"");
-    InvalidateRect(hCtrl, nullptr, TRUE);
 }
 
 static void SetDialogLabelTextAndRedrawA(HWND hWnd, int ctrlId, const char* textA)
@@ -582,6 +582,8 @@ static void GetPhpOptionLabels(std::string& methodLabel, std::string& chunkLabel
 }
 
 constexpr UINT WM_APP_LAN_PEER = WM_APP + 77;
+
+static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept;
 
 static int LanRoleComboToValue(int idx) noexcept
 {
@@ -708,6 +710,77 @@ static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, p
     }
 }
 
+struct PairingProgressParams {
+    ConnectDialogContext* ctx = nullptr;
+    size_t peerCountBefore = 0;
+    int secondsLeft = 60;
+    bool peerFound = false;
+};
+
+static INT_PTR CALLBACK PairingProgressDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    auto* p = reinterpret_cast<PairingProgressParams*>(GetWindowLongPtr(hDlg, DWLP_USER));
+
+    switch (msg) {
+    case WM_INITDIALOG: {
+        p = reinterpret_cast<PairingProgressParams*>(lParam);
+        SetWindowLongPtr(hDlg, DWLP_USER, reinterpret_cast<LONG_PTR>(p));
+        p->secondsLeft = 60;
+
+        const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+        if (!titleW.empty())
+            SetWindowTextW(hDlg, titleW.c_str());
+
+        const std::wstring searchW = LoadResStringW(IDS_PAIRING_SEARCH);
+        SetDlgItemTextW(hDlg, IDC_PAIRING_STATUS,
+            searchW.empty() ? L"Searching for LAN Pair peer on local network..." : searchW.c_str());
+
+        const std::wstring cancelW = LoadResStringW(IDS_BTN_CANCEL);
+        if (!cancelW.empty())
+            SetDlgItemTextW(hDlg, IDCANCEL, cancelW.c_str());
+
+        const std::wstring secsTemplW = LoadResStringW(IDS_PAIRING_SECS);
+        const std::wstring secsNumW = std::to_wstring(p->secondsLeft);
+        const std::wstring secsW = secsTemplW.empty()
+            ? std::format(L"{} s", p->secondsLeft)
+            : FormatBracesW(secsTemplW, { std::wstring_view(secsNumW) });
+        SetDlgItemTextW(hDlg, IDC_PAIRING_COUNTDOWN, secsW.c_str());
+
+        SetTimer(hDlg, 1, 1000, nullptr);
+        return TRUE;
+    }
+    case WM_TIMER:
+        if (wParam == 1 && p) {
+            if (p->ctx->lanPeers.size() > p->peerCountBefore) {
+                KillTimer(hDlg, 1);
+                p->peerFound = true;
+                EndDialog(hDlg, IDOK);
+                return TRUE;
+            }
+            --p->secondsLeft;
+            if (p->secondsLeft <= 0) {
+                KillTimer(hDlg, 1);
+                EndDialog(hDlg, IDCANCEL);
+            } else {
+                const std::wstring secsTemplW = LoadResStringW(IDS_PAIRING_SECS);
+                const std::wstring secsNumW = std::to_wstring(p->secondsLeft);
+                const std::wstring secsW = secsTemplW.empty()
+                    ? std::format(L"{} s", p->secondsLeft)
+                    : FormatBracesW(secsTemplW, { std::wstring_view(secsNumW) });
+                SetDlgItemTextW(hDlg, IDC_PAIRING_COUNTDOWN, secsW.c_str());
+            }
+        }
+        return TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDCANCEL && p) {
+            KillTimer(hDlg, 1);
+            EndDialog(hDlg, IDCANCEL);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
 static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
 {
     if (!dlgCtx || !s) {
@@ -779,8 +852,81 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     if (role == 0) {
         startReceiver(false);
-        const std::wstring s = LoadResStringW(IDS_LAN_MSG_AUTO_LISTEN);
-        ShowStatusW(s.empty() ? L"LAN Pair: listening. Role dialog will appear when peer is detected." : s.c_str());
+
+        // Capture which peers are already known before the dialog opens.
+        std::vector<std::string> peersBefore;
+        peersBefore.reserve(dlgCtx->lanPeers.size());
+        for (const auto& [id, _] : dlgCtx->lanPeers)
+            peersBefore.push_back(id);
+
+        PairingProgressParams params{};
+        params.ctx = dlgCtx;
+        params.peerCountBefore = dlgCtx->lanPeers.size();
+
+        dlgCtx->lanPairingActive = true;
+        ShowLocalizedDialogBoxParam(IDD_PAIRING_PROGRESS, hWnd, PairingProgressDlgProc,
+            reinterpret_cast<LPARAM>(&params));
+        dlgCtx->lanPairingActive = false;
+
+        if (!IsWindow(hWnd))
+            return;
+
+        if (params.peerFound) {
+            // Find the first peer that appeared while the dialog was open.
+            std::string newPeerId;
+            for (const auto& [id, _] : dlgCtx->lanPeers) {
+                if (std::find(peersBefore.begin(), peersBefore.end(), id) == peersBefore.end()) {
+                    newPeerId = id;
+                    break;
+                }
+            }
+            if (!newPeerId.empty()) {
+                RefreshLanPeerCombo(hWnd, dlgCtx, newPeerId);
+
+                const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+                const std::wstring msgW = LoadResStringW(IDS_LAN_ROLE_PROMPT);
+                const int choice = MessageBoxW(
+                    hWnd,
+                    msgW.empty() ? L"LAN Pair peer found.\nSelect role:\n\nYes = Donor\nNo = Receiver\nCancel = no change" : msgW.c_str(),
+                    titleW.empty() ? L"LAN Pair" : titleW.c_str(),
+                    MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
+
+                if (!IsWindow(hWnd))
+                    return;
+
+                if (choice == IDYES) {
+                    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, 2, 0);
+                    for (size_t i = 0; i < dlgCtx->lanPeerOrder.size(); ++i) {
+                        if (dlgCtx->lanPeerOrder[i] == newPeerId) {
+                            SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL,
+                                static_cast<WPARAM>(i + 1), 0);
+                            break;
+                        }
+                    }
+                    HandleLanPairAction(hWnd, dlgCtx, s);
+                } else if (choice == IDNO) {
+                    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, 1, 0);
+                    const std::wstring startedW = LoadResStringW(IDS_LAN_MSG_RECEIVER_STARTED);
+                    ShowStatusW(startedW.empty() ? L"LAN Pair receiver started." : startedW.c_str());
+                } else {
+                    // User cancelled role selection — stop the receiver we started.
+                    if (dlgCtx->lanServer && dlgCtx->lanServerRunning) {
+                        dlgCtx->lanServer->stop();
+                        dlgCtx->lanServerRunning = false;
+                        const std::wstring stoppedW = LoadResStringW(IDS_LAN_MSG_RECEIVER_STOPPED);
+                        ShowStatusW(stoppedW.empty() ? L"LAN Pair receiver stopped." : stoppedW.c_str());
+                    }
+                }
+            }
+        } else {
+            // Timeout or user cancelled — stop the receiver.
+            if (dlgCtx->lanServer && dlgCtx->lanServerRunning) {
+                dlgCtx->lanServer->stop();
+                dlgCtx->lanServerRunning = false;
+            }
+            const std::wstring timeoutW = LoadResStringW(IDS_PAIRING_TIMEOUT);
+            ShowStatusW(timeoutW.empty() ? L"LAN Pair: no peer found." : timeoutW.c_str());
+        }
         return;
     }
 
@@ -950,14 +1096,16 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
     const bool phpMode = transferMode != static_cast<int>(sftp::TransferMode::ssh_auto);
     const bool smbMode = transferMode == static_cast<int>(sftp::TransferMode::smb_lan);
 
-    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_RESETCONTENT, 0, 0);
-    SendDlgItemMessage(hWnd, IDC_UTF8, CB_RESETCONTENT, 0, 0);
-
     if (!smbMode && dlgCtx) {
         if (dlgCtx->lanServerRunning || dlgCtx->lanDiscoveryRunning) {
             StopLanPairing(dlgCtx);
         }
     }
+
+    SendMessage(hWnd, WM_SETREDRAW, FALSE, 0);
+
+    SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_RESETCONTENT, 0, 0);
+    SendDlgItemMessage(hWnd, IDC_UTF8, CB_RESETCONTENT, 0, 0);
 
     if (smbMode) {
         const std::wstring roleLabel = LoadResStringW(IDS_LAN_ROLE_LABEL);
@@ -988,6 +1136,8 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, max(0, min(2, s->lan_pair_role)), 0);
         RefreshLanPeerCombo(hWnd, dlgCtx, s->lan_pair_peer);
         EnsureLanDiscoveryRunning(hWnd, dlgCtx, s);
+        SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
     }
 
@@ -1017,6 +1167,8 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_ADDSTRING, 0, (LPARAM)"64 MB");
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETCURSEL, PhpChunkValueToComboIndex(s->php_chunk_mib), 0);
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, 120, 0);
+        SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
     }
 
@@ -1076,6 +1228,8 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         const int refW = rRef.right - rRef.left;
         SendDlgItemMessage(hWnd, IDC_UTF8, CB_SETDROPPEDWIDTH, (WPARAM)(refW > 0 ? refW * 13 / 10 : 240), 0);
     }
+    SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
 static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept
@@ -1207,6 +1361,7 @@ void UpdateKeyControlsForPrivateKey(HWND hWnd)      { UpdateCertSectionState(hWn
 
 void UpdateScpOnlyDependentControls(HWND hWnd)
 {
+    SendMessage(hWnd, WM_SETREDRAW, FALSE, 0);
     const int transferMode = (int)SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_GETCURSEL, 0, 0);
     const bool smbMode = transferMode == static_cast<int>(sftp::TransferMode::smb_lan);
     const bool phpMode = transferMode != static_cast<int>(sftp::TransferMode::ssh_auto);
@@ -1268,6 +1423,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD_LABEL),      SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD),            SW_HIDE);
+        SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
     }
 
@@ -1309,6 +1466,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
+        SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
     }
 
@@ -1338,6 +1497,9 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     EnableWindow(shellTransfer, scpOnly);
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
+
+    SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
 static void TrimSessionName(char* s) noexcept
@@ -1429,14 +1591,18 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         SetWindowLongPtr(hWnd, DWLP_USER, lParam);
         LocalizeDlgControls(hWnd, IDS_PROXY_DLG_CAPTION, {
-            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP },
-            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST  },
-            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER  },
-            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS  },
-            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS   },
-            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS  },
-            { IDOK,                 IDS_BTN_OK          },
-            { IDCANCEL,             IDS_BTN_CANCEL      },
+            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP   },
+            { IDC_NOPROXY,          IDS_PROXY_DLG_NOPROXY },
+            { IDC_OTHERPROXY,       IDS_PROXY_DLG_HTTP    },
+            { IDC_SOCKS4APROXY,     IDS_PROXY_DLG_SOCKS4A },
+            { IDC_SOCKS5PROXY,      IDS_PROXY_DLG_SOCKS5  },
+            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST    },
+            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER    },
+            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS    },
+            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS     },
+            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS    },
+            { IDOK,                 IDS_BTN_OK            },
+            { IDCANCEL,             IDS_BTN_CANCEL        },
         });
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
@@ -2236,7 +2402,7 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
                 RefreshLanPeerCombo(m_hWnd, m_ctx, m_settings ? m_settings->lan_pair_peer : std::string{});
 
             const int roleSel = (int)SendDlgItemMessage(m_hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
-            if (peerWasNew && roleSel == 0 && !m_ctx->lanRolePromptShown) {
+            if (peerWasNew && roleSel == 0 && !m_ctx->lanRolePromptShown && !m_ctx->lanPairingActive) {
                 m_ctx->lanRolePromptShown = true;
                 const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
                 const std::wstring msgW   = LoadResStringW(IDS_LAN_ROLE_PROMPT);
