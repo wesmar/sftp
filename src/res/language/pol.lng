@@ -241,13 +241,17 @@
 304=Host pośredni:
 305=Użyj &hosta pośredniego
 306=Ustawienia proxy:
-307=Usuń ostatnie proxy
+307=Usuń proxy
 308=Importuj...
 309=Ustawienia proxy
 310=Ustawienia proxy
 311=Host proxy:
 312=Nazwa użytkownika proxy:
 313=Hasło proxy:
+452=Bez proxy
+453=HTTP CONNECT
+454=SOCKS 4/4a
+455=SOCKS 5
 314=Ustawienia SSH Jump Host (ProxyJump)
 315=Połączenie przez host pośredni
 316=Użyj &hosta pośredniego (ProxyJump)
@@ -379,5 +383,8 @@
 12087=Nie znaleziono folderu Sessions w wybranym katalogu KiTTY Portable.
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
 12089=SFTP
+12090=Szukam peera LAN Pair w sieci lokalnej...
+12091={} s
+12092=LAN Pair: nie znaleziono peera.
 450=Windows (CR/LF)
 451=Unix (LF)

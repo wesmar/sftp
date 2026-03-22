@@ -1,5 +1,6 @@
 #include "LanPair.h"
 #include "LanPairInternal.h"
+#include "DllExceptionBarrier.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -231,7 +232,9 @@ struct DiscoveryService::Impl {
                        reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
             }
 
-            std::this_thread::sleep_for(cfg.broadcastInterval);
+            for (int i = 0; i < cfg.broadcastInterval.count() && !stop.load(std::memory_order_relaxed); i += 100) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
     }
 
@@ -321,8 +324,14 @@ bool DiscoveryService::start(const DiscoveryConfig& cfg,
         return false;
     }
 
-    impl_->txThread = std::thread([this] { impl_->runBroadcast(); });
-    impl_->rxThread = std::thread([this] { impl_->runListen(); });
+    impl_->txThread = std::thread([this] {
+        sftp::DllExceptionBarrier barrier;
+        sftp::dll_invoke_void(barrier, [this] { impl_->runBroadcast(); });
+    });
+    impl_->rxThread = std::thread([this] {
+        sftp::DllExceptionBarrier barrier;
+        sftp::dll_invoke_void(barrier, [this] { impl_->runListen(); });
+    });
     return true;
 }
 
@@ -527,7 +536,10 @@ bool PairServer::start(const PairServerConfig& cfg,
         return false;
     }
 
-    impl_->acceptThread = std::thread([this] { impl_->runAcceptLoop(); });
+    impl_->acceptThread = std::thread([this] {
+        sftp::DllExceptionBarrier barrier;
+        sftp::dll_invoke_void(barrier, [this] { impl_->runAcceptLoop(); });
+    });
     return true;
 }
 

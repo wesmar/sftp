@@ -38,7 +38,7 @@ struct PeerAnnouncement {
 struct DiscoveryConfig {
     uint16_t udpPort = 45845;
     uint16_t tcpPort = 45846;
-    std::chrono::milliseconds broadcastInterval{1500};
+    std::chrono::milliseconds broadcastInterval{2000};
     std::string bindAddress = "0.0.0.0";
     std::string broadcastAddress = "255.255.255.255";
     std::string appTag = "KVCPAIR/1";
