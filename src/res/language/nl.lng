@@ -173,7 +173,7 @@
 258=libssh2 moet versie 1.7.0 of hoger zijn om bestanden > 2 GB via SCP te verwerken.
 259=De server ondersteunt mogelijk geen overdracht van bestanden >2 GB via SCP! Toch proberen?
 260=Om veiligheidsredenen mogen wachtwoorden alleen worden opgeslagen onder de bescherming van een hoofdwachtwoord.\n\nAls u 2 wachtwoorden nodig heeft (voor de privésleutel en aanmelding), voer ze als volgt in:\n\n"SleutelWachtwoord","AanmeldWachtwoord"
-261=LAN Pair (SMB-achtig)
+261=LAN-koppeling
 262=Rol:
 263=Partner:
 264=Auto

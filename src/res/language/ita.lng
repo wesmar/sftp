@@ -173,7 +173,7 @@
 258=libssh2 deve essere versione 1.7.0 o superiore per supportare file > 2 GB via SCP.
 259=Il server potrebbe non supportare file >2 GB via SCP! Provare comunque?
 260=Per motivi di sicurezza, salvare le password solo protette da una master password.\n\nSe si necessita di 2 password (per chiave privata e login), inserirle come segue:\n\n"PasswordChiave","PasswordLogin"
-261=LAN Pair (tipo SMB)
+261=Abbinamento LAN
 262=Ruolo:
 263=Peer:
 264=Auto

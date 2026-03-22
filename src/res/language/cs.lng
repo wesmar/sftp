@@ -173,7 +173,7 @@
 258=libssh2 musí být ve verzi 1.7.0 nebo novější, aby zpracovala soubory > 2 GB přes SCP.
 259=Server nemusí podporovat přenos souborů >2 GB přes SCP! Přesto zkusit?
 260=Z bezpečnostních důvodů by hesla měla být ukládána pouze pod ochranou hlavního hesla.\n\nPokud potřebujete 2 hesla (pro soukromý klíč a přihlášení), zadejte je takto:\n\n"HesloKlíče","HesloPřihlášení"
-261=LAN Pair (SMB-like)
+261=Párování LAN
 262=Role:
 263=Partner:
 264=Auto

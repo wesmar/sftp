@@ -173,7 +173,7 @@
 258=libssh2 muss Version 1.7.0 oder höher sein, um Dateigrößen > 2 GB über SCP zu unterstützen.
 259=Der Server unterstützt möglicherweise keine Übertragung von Dateien >2 GB über SCP! Trotzdem versuchen?
 260=Aus Sicherheitsgründen sollten Passwörter nur unter dem Schutz eines Masterpassworts gespeichert werden.\n\nWenn Sie 2 Passwörter benötigen (für privaten Schlüssel und Anmeldung), geben Sie diese wie folgt ein:\n\n"Schlüsselpasswort","Anmeldepasswort"
-261=LAN Pair (SMB-ahnlich)
+261=LAN-Kopplung
 262=Rolle:
 263=Peer:
 264=Auto

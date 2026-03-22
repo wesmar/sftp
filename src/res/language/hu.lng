@@ -173,7 +173,7 @@
 258=A libssh2-nek legalább 1.7.0-s verziónak kell lennie a 2 GB-nál nagyobb fájlok SCP-n keresztüli kezeléséhez.
 259=A kiszolgáló esetleg nem támogatja a >2 GB méretű fájlok SCP-n keresztüli átvitelét! Mégis megpróbálja?
 260=Biztonsági okokból a jelszavakat csak a főjelszó védelmével szabad menteni.\n\nHa 2 jelszóra van szüksége (titkos kulcshoz és bejelentkezéshez), adja meg őket a következő formában:\n\n"KulcsJelszava","BejelentkezésiJelszó"
-261=LAN Pair (SMB-szerű)
+261=LAN-párosítás
 262=Szerep:
 263=Partner:
 264=Automatikus
