@@ -259,7 +259,7 @@
 326=TAR proud
 12067=Importovat vše ({})
 12068=Importovat z přenosné složky PuTTY...
-12069=Importovat ze souboru WinSCP.ini...
+12069=Importovat z přenosné složky WinSCP...
 12070=Importovat přenosné relace KiTTY
 12071=Importovat z přenosné složky KiTTY...
 
@@ -374,6 +374,12 @@ Přeskočeno {} {}.
 12094=LAN Pair: zosobnění TrustedInstaller se nezdařilo. Proces možná není spuštěn jako správce.
 12095=LAN Pair: připojuji se k {}...
 12096=LAN Pair: připojení se nezdařilo
+12097=PuTTY
+12098=WinSCP
+12099=Ostatní
+12100=Vybrat přenosnou složku WinSCP
+12101=Soubor WinSCP.ini nebyl ve vybrané složce nalezen.
+12102=Vybrat přenosnou složku KiTTY
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Chyba protokolu SCP

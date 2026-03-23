@@ -617,7 +617,7 @@ int ImportAllPortable(const std::vector<PortableSessionDescriptor>& sessions,
 // ---------------------------------------------------------------------------
 // Recent import path rotation (up to 4 slots per key prefix)
 // ---------------------------------------------------------------------------
-static constexpr int kMaxImportPaths = 4;
+static constexpr int kMaxImportPaths = 1;
 
 static std::string LoadRecentImportPath(const char* iniFile, const char* keyPrefix)
 {
@@ -1408,47 +1408,74 @@ int ShowExternalSessionImportMenu(HWND owner,
     constexpr UINT kCmdImportFromPuttyReg     = 50005;
     constexpr UINT kCmdImportFromKittyFolder  = 50006;
 
-    HMENU menu = CreatePopupMenu();
+    HMENU hPuttyMenu  = CreatePopupMenu();
+    HMENU hWinScpMenu = CreatePopupMenu();
+    HMENU hOtherMenu  = CreatePopupMenu();
+
+    // PuTTY submenu
     if (hasPutty) {
-        std::wstring puttyTempl = LngStrW(IDS_IMP_MENU_PUTTY);
-        if (puttyTempl.empty()) puttyTempl = L"PuTTY ({})...";
-        AppendMenuW(menu, MF_STRING, kCmdPickPutty,
-                    FormatW(puttyTempl, {std::to_wstring(puttySessions.size())}).c_str());
+        std::wstring templ = LngStrW(IDS_IMP_MENU_PUTTY);
+        if (templ.empty()) templ = L"PuTTY ({})...";
+        AppendMenuW(hPuttyMenu, MF_STRING, kCmdPickPutty,
+                    FormatW(templ, {std::to_wstring(puttySessions.size())}).c_str());
     }
+    {
+        std::wstring s = LngStrW(IDS_IMP_MENU_FROM_PUTTY_PORT);
+        if (s.empty()) s = L"Import from PuTTY Portable folder...";
+        AppendMenuW(hPuttyMenu, MF_STRING, kCmdImportFromPuttyReg, s.c_str());
+    }
+
+    // WinSCP submenu
     if (hasWinScp) {
-        std::wstring winscpTempl = LngStrW(IDS_IMP_MENU_WINSCP);
-        if (winscpTempl.empty()) winscpTempl = L"WinSCP ({})...";
-        AppendMenuW(menu, MF_STRING, kCmdPickWinScp,
-                    FormatW(winscpTempl, {std::to_wstring(winScpSessions.size())}).c_str());
+        std::wstring templ = LngStrW(IDS_IMP_MENU_WINSCP);
+        if (templ.empty()) templ = L"WinSCP ({})...";
+        AppendMenuW(hWinScpMenu, MF_STRING, kCmdPickWinScp,
+                    FormatW(templ, {std::to_wstring(winScpSessions.size())}).c_str());
     }
-    if (hasPutty && hasWinScp) {
+    {
+        std::wstring s = LngStrW(IDS_IMP_MENU_FROM_WINSCP);
+        if (s.empty()) s = L"Import from WinSCP Portable folder...";
+        AppendMenuW(hWinScpMenu, MF_STRING, kCmdImportFromWinScpIni, s.c_str());
+    }
+
+    // Other submenu
+    {
+        std::wstring s = LngStrW(IDS_IMP_MENU_FROM_KITTY_PORT);
+        if (s.empty()) s = L"Import from KiTTY Portable folder...";
+        AppendMenuW(hOtherMenu, MF_STRING, kCmdImportFromKittyFolder, s.c_str());
+    }
+    if (hasPutty || hasWinScp) {
+        AppendMenuW(hOtherMenu, MF_SEPARATOR, 0, nullptr);
         std::wstring allTempl = LngStrW(IDS_IMP_MENU_ALL);
         if (allTempl.empty()) allTempl = L"Import all ({})";
-        AppendMenuW(menu, MF_STRING, kCmdImportAll,
-                    FormatW(allTempl, { std::to_wstring(puttySessions.size() + winScpSessions.size()) }).c_str());
+        const int totalReg = static_cast<int>(puttySessions.size()) + static_cast<int>(winScpSessions.size());
+        AppendMenuW(hOtherMenu, MF_STRING, kCmdImportAll,
+                    FormatW(allTempl, {std::to_wstring(totalReg)}).c_str());
     }
-    AppendMenuA(menu, MF_SEPARATOR, 0, nullptr);
+
+    // Main menu with 3 popup entries
+    HMENU menu = CreatePopupMenu();
     {
-        std::wstring fromPutty = LngStrW(IDS_IMP_MENU_FROM_PUTTY_PORT);
-        if (fromPutty.empty()) fromPutty = L"Import from PuTTY Portable folder...";
-        AppendMenuW(menu, MF_STRING, kCmdImportFromPuttyReg, fromPutty.c_str());
-    }
-    {
-        std::wstring fromWinScp = LngStrW(IDS_IMP_MENU_FROM_WINSCP);
-        if (fromWinScp.empty()) fromWinScp = L"Import from WinSCP.ini file...";
-        AppendMenuW(menu, MF_STRING, kCmdImportFromWinScpIni, fromWinScp.c_str());
+        std::wstring hdr = LngStrW(IDS_IMP_MENU_PUTTY_HDR);
+        if (hdr.empty()) hdr = L"PuTTY";
+        AppendMenuW(menu, MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(hPuttyMenu), hdr.c_str());
     }
     {
-        std::wstring fromKitty = LngStrW(IDS_IMP_MENU_FROM_KITTY_PORT);
-        if (fromKitty.empty()) fromKitty = L"Import from KiTTY Portable folder...";
-        AppendMenuW(menu, MF_STRING, kCmdImportFromKittyFolder, fromKitty.c_str());
+        std::wstring hdr = LngStrW(IDS_IMP_MENU_WINSCP_HDR);
+        if (hdr.empty()) hdr = L"WinSCP";
+        AppendMenuW(menu, MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(hWinScpMenu), hdr.c_str());
+    }
+    {
+        std::wstring hdr = LngStrW(IDS_IMP_MENU_OTHER_HDR);
+        if (hdr.empty()) hdr = L"Other";
+        AppendMenuW(menu, MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(hOtherMenu), hdr.c_str());
     }
 
     POINT pt;
     GetCursorPos(&pt);
     const UINT cmd = TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
                                     pt.x, pt.y, 0, owner, nullptr);
-    DestroyMenu(menu);
+    DestroyMenu(menu); // also destroys hPuttyMenu, hWinScpMenu, hOtherMenu
 
     if (cmd == 0)
         return 0;
@@ -1569,18 +1596,23 @@ int ShowExternalSessionImportMenu(HWND owner,
     };
 
     if (cmd == kCmdImportFromWinScpIni) {
-        const std::string lastDir = LoadRecentImportPath(iniFileName, "WinScpIni");
-        std::string iniPath;
-        if (!BrowseForIniFile(owner, "Select WinSCP.ini", lastDir.c_str(), iniPath))
+        const std::string lastFolder = LoadRecentImportPath(iniFileName, "WinScpFolder");
+        std::string folderPath;
+        const std::string winscpFolderTitle = LngStrU8(IDS_IMP_BROWSE_WINSCP_FOLDER, "Select WinSCP Portable folder");
+        if (!BrowseForFolder(owner, winscpFolderTitle.c_str(), lastFolder.c_str(), folderPath))
             return 0;
-        std::string iniDir = iniPath;
-        const size_t slash = iniDir.find_last_of("\\/");
-        if (slash != std::string::npos) iniDir.erase(slash);
-        SaveRecentImportPaths(iniFileName, "WinScpIni", iniDir);
+        SaveRecentImportPaths(iniFileName, "WinScpFolder", folderPath);
 
+        const std::string iniPath = folderPath + "\\WinSCP.ini";
+        if (GetFileAttributesA(iniPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            WindowsUserFeedback fb(owner);
+            auto s = LngStrW(IDS_IMP_ERR_NO_WINSCP_INI);
+            fb.ShowMessage(WideToUtf8(s.empty() ? std::wstring(L"WinSCP.ini not found in the selected folder.") : s), "SFTP");
+            return 0;
+        }
         std::vector<PortableSessionDescriptor> portableSessions;
         EnumeratePortableSessions(iniPath.c_str(), SessionSource::winscp, portableSessions);
-        imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_WINSCP, "WinSCP.ini");
+        imported = handlePortableImport(portableSessions, IDS_IMP_TITLE_WINSCP, "WinSCP Portable");
         maybeApply();
         showFeedback(IDS_IMP_MSG_SKIP_WINSCP, "unsupported WinSCP session(s)");
         return imported;
@@ -1620,7 +1652,8 @@ int ShowExternalSessionImportMenu(HWND owner,
     if (cmd == kCmdImportFromKittyFolder) {
         const std::string lastFolder = LoadRecentImportPath(iniFileName, "KittyFolder");
         std::string folderPath;
-        if (!BrowseForFolder(owner, "Select KiTTY Portable folder", lastFolder.c_str(), folderPath))
+        const std::string kittyFolderTitle = LngStrU8(IDS_IMP_BROWSE_KITTY_FOLDER, "Select KiTTY Portable folder");
+        if (!BrowseForFolder(owner, kittyFolderTitle.c_str(), lastFolder.c_str(), folderPath))
             return 0;
         SaveRecentImportPaths(iniFileName, "KittyFolder", folderPath);
 

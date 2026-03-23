@@ -259,7 +259,7 @@
 326=TAR adatfolyam
 12067=Összes importálása ({})
 12068=Importálás PuTTY Portable mappából...
-12069=Importálás WinSCP.ini fájlból...
+12069=Importálás WinSCP hordozható mappájából...
 12070=Hordozható KiTTY munkamenetek importálása
 12071=Importálás KiTTY Portable mappából...
 
@@ -374,6 +374,12 @@
 12094=LAN Pair: a TrustedInstaller megszemélyesítése sikertelen. A folyamat esetleg nem fut rendszergazdaként.
 12095=LAN Pair: csatlakozás: {}...
 12096=LAN Pair: kapcsolódás sikertelen
+12097=PuTTY
+12098=WinSCP
+12099=Egyéb
+12100=WinSCP hordozható mappa kiválasztása
+12101=A WinSCP.ini nem található a kiválasztott mappában.
+12102=KiTTY hordozható mappa kiválasztása
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP protokoll hiba

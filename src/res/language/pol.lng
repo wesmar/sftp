@@ -207,7 +207,7 @@
 12066=Nie znaleziono sesji w {}.
 12067=Importuj wszystko ({})
 12068=Importuj z przenośnego folderu PuTTY...
-12069=Importuj z pliku WinSCP.ini...
+12069=Importuj z przenośnego folderu WinSCP...
 12070=Importuj przenośne sesje KiTTY
 12071=Importuj z przenośnego folderu KiTTY...
 324=Pomoc
@@ -390,5 +390,11 @@
 12094=LAN Pair: nie udało się podszyć pod TrustedInstaller. Proces może nie być uruchomiony jako Administrator.
 12095=LAN Pair: łączę z {}...
 12096=LAN Pair: błąd połączenia
+12097=PuTTY
+12098=WinSCP
+12099=Inne
+12100=Wybierz przenośny folder WinSCP
+12101=Plik WinSCP.ini nie został znaleziony w wybranym folderze.
+12102=Wybierz przenośny folder KiTTY
 450=Windows (CR/LF)
 451=Unix (LF)

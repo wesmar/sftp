@@ -260,7 +260,7 @@
 326=TAR-Stream
 12067=Alle importieren ({})
 12068=Aus PuTTY Portable-Ordner importieren...
-12069=Aus WinSCP.ini-Datei importieren...
+12069=Aus portablem WinSCP-Ordner importieren...
 12070=KiTTY Portable-Sitzungen importieren
 12071=Aus KiTTY Portable-Ordner importieren...
 
@@ -375,6 +375,12 @@
 12094=LAN Pair: TrustedInstaller-Identitaetswechsel fehlgeschlagen. Der Prozess laeuft moeglicherweise nicht als Administrator.
 12095=LAN Pair: verbinde mit {}...
 12096=LAN Pair: Verbindung fehlgeschlagen
+12097=PuTTY
+12098=WinSCP
+12099=Andere
+12100=Portablen WinSCP-Ordner auswählen
+12101=WinSCP.ini wurde im ausgewählten Ordner nicht gefunden.
+12102=Portablen KiTTY-Ordner auswählen
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-Protokollfehler

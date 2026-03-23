@@ -259,7 +259,7 @@
 326=TAR-stroom
 12067=Alles importeren ({})
 12068=Importeren uit PuTTY Portable-map...
-12069=Importeren uit WinSCP.ini-bestand...
+12069=Importeren uit draagbare WinSCP-map...
 12070=Draagbare KiTTY-sessies importeren
 12071=Importeren uit KiTTY Portable-map...
 
@@ -374,6 +374,12 @@
 12094=LAN Pair: imitatie van TrustedInstaller mislukt. Het proces wordt mogelijk niet als Administrator uitgevoerd.
 12095=LAN Pair: verbinding maken met {}...
 12096=LAN Pair: verbinding mislukt
+12097=PuTTY
+12098=WinSCP
+12099=Overig
+12100=Draagbare WinSCP-map selecteren
+12101=WinSCP.ini niet gevonden in de geselecteerde map.
+12102=Draagbare KiTTY-map selecteren
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-protocolfout
