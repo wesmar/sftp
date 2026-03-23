@@ -178,11 +178,10 @@ BEGIN
     LTEXT           "",IDC_SESSION_SOURCE_LABEL,5,5,305,8
     CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,5,18,305,152
     PUSHBUTTON      "Select &All",IDC_SELECTALL,5,178,70,14
-    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,80,178,76,14
-    DEFPUSHBUTTON   "&Import",IDOK,205,178,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,260,178,50,14
+    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,81,178,76,14
+    DEFPUSHBUTTON   "&Import",IDOK,184,178,66,14
+    PUSHBUTTON      "Cancel",IDCANCEL,256,178,54,14
 END
-
 
 IDD_PAIRING_PROGRESS DIALOGEX 0, 0, 220, 62
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION
@@ -232,7 +231,7 @@ BEGIN
 
     IDD_SESSION_PICKER, DIALOG
     BEGIN
-        RIGHTMARGIN, 288
+        RIGHTMARGIN, 310
         BOTTOMMARGIN, 201
     END
 END
@@ -459,11 +458,18 @@ BEGIN
     IDS_IMP_ERR_NO_PUTTY_REG 
                             "putty.reg not found in the selected folder or its subfolders."
     IDS_IMP_ERR_PARSE_PUTTY_REG "Failed to read or parse putty.reg."
-    IDS_IMP_ERR_NO_KITTY_SESSIONS
+    IDS_IMP_ERR_NO_KITTY_SESSIONS 
                             "Sessions folder not found in the selected KiTTY Portable directory."
     IDS_ERR_SESSION_EXISTS  "Session with this name already exists.\nChoose a different session name."
     IDS_TITLE_SFTP          "SFTP"
-    END
+    IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
+    IDS_PAIRING_SECS        "{} s"
+    IDS_PAIRING_TIMEOUT     "LAN Pair: no peer found."
+    IDS_LAN_TI              "TrustedInstaller"
+    IDS_LAN_TI_ERR          "LAN Pair: TrustedInstaller impersonation failed. The process may not be running as Administrator."
+    IDS_LAN_CONNECTING      "LAN Pair: connecting to {}..."
+END
+
 STRINGTABLE
 BEGIN
     IDS_JUMP_DLG_PASS       "&Password:"
@@ -477,13 +483,21 @@ BEGIN
     IDS_DLG_PHP_METHOD      "Method:"
     IDS_DLG_PHP_CHUNKS      "Chunks:"
     IDS_BTN_OK              "OK"
-    IDS_DLG_WIN_LINEBREAKS  "Windows (CR/LF)"
-    IDS_DLG_UNIX_LINEBREAKS "Unix (LF)"
     IDS_TRANSFERMODE_SSH    "SSH (SFTP/SCP)"
     IDS_TRANSFERMODE_PHP_AGENT "PHP Agent (HTTP)"
     IDS_TRANSFERMODE_PHP_SHELL "PHP Shell (HTTP)"
     IDS_PHP_ERR_UNREACHABLE "Cannot reach PHP agent endpoint."
     IDS_PHP_ERR_NOT_FOUND   "PHP agent endpoint not found (HTTP 404).\nCheck URL path/filename and upload sftp.php to that location."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_DLG_WIN_LINEBREAKS  "Windows (CR/LF)"
+    IDS_DLG_UNIX_LINEBREAKS "Unix (LF)"
+    IDS_PROXY_DLG_NOPROXY   "No proxy"
+    IDS_PROXY_DLG_HTTP      "HTTP CONNECT"
+    IDS_PROXY_DLG_SOCKS4A   "SOCKS 4/4a"
+    IDS_PROXY_DLG_SOCKS5    "SOCKS 5"
 END
 
 STRINGTABLE
@@ -592,23 +606,19 @@ END
 STRINGTABLE
 BEGIN
     IDS_LOG_TAR_UPLOAD_FAIL "TAR upload failed"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_DLG_SELECT_PUBKEY           "Select public key file"
-    IDS_DLG_SELECT_PRIVKEY          "Select private key file"
-    IDS_IMP_BROWSE_PUTTY_FOLDER     "Select PuTTY Portable folder"
-    IDS_IMP_MENU_PUTTY              "PuTTY ({})..."
-    IDS_IMP_MENU_WINSCP             "WinSCP ({})..."
-    IDS_IMP_MSG_IMPORTED            "Imported {} session(s)."
-    IDS_IMP_MSG_IMPORTED_SKIPPED    "Imported {} session(s).\nSkipped {} {}."
-    IDS_IMP_MSG_SKIP_UNSUPPORTED    "unsupported session(s)"
-    IDS_IMP_MSG_SKIP_WINSCP         "unsupported WinSCP session(s)"
-    IDS_PROXY_LABEL_SOCKS4A         "SOCKS4a: "
-    IDS_PROXY_LABEL_SOCKS5          "SOCKS5: "
-    IDS_DLG_CODEPAGE_TITLE          "Code page"
-    IDS_DLG_CODEPAGE_PROMPT         "Code page (e.g. 28591):"
+    IDS_DLG_SELECT_PUBKEY   "Select public key file"
+    IDS_DLG_SELECT_PRIVKEY  "Select private key file"
+    IDS_IMP_BROWSE_PUTTY_FOLDER "Select PuTTY Portable folder"
+    IDS_IMP_MENU_PUTTY      "PuTTY ({})..."
+    IDS_IMP_MENU_WINSCP     "WinSCP ({})..."
+    IDS_IMP_MSG_IMPORTED    "Imported {} session(s)."
+    IDS_IMP_MSG_IMPORTED_SKIPPED "Imported {} session(s).\nSkipped {} {}."
+    IDS_IMP_MSG_SKIP_UNSUPPORTED "unsupported session(s)"
+    IDS_IMP_MSG_SKIP_WINSCP "unsupported WinSCP session(s)"
+    IDS_PROXY_LABEL_SOCKS4A "SOCKS4a: "
+    IDS_PROXY_LABEL_SOCKS5  "SOCKS5: "
+    IDS_DLG_CODEPAGE_TITLE  "Code page"
+    IDS_DLG_CODEPAGE_PROMPT "Code page (e.g. 28591):"
 END
 
 STRINGTABLE
@@ -832,10 +842,6 @@ BEGIN
     IDS_PROXY_DLG_HOST      "Proxy host:"
     IDS_PROXY_DLG_USER      "Proxy user name:"
     IDS_PROXY_DLG_PASS      "Proxy password:"
-    IDS_PROXY_DLG_NOPROXY   "No proxy"
-    IDS_PROXY_DLG_HTTP      "HTTP CONNECT"
-    IDS_PROXY_DLG_SOCKS4A   "SOCKS 4/4a"
-    IDS_PROXY_DLG_SOCKS5    "SOCKS 5"
     IDS_JUMP_DLG_CAPTION    "SSH Jump Host (ProxyJump) Settings"
     IDS_JUMP_DLG_GROUP      "Jump host connection"
     IDS_JUMP_DLG_USE        "&Use jump host (ProxyJump)"
@@ -846,12 +852,6 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
-    IDS_PAIRING_SECS        "{} s"
-    IDS_PAIRING_TIMEOUT     "LAN Pair: no peer found."
-    IDS_LAN_TI              "TrustedInstaller"
-    IDS_LAN_TI_ERR          "LAN Pair: TrustedInstaller impersonation failed. The process may not be running as Administrator."
-    IDS_LAN_CONNECTING      "LAN Pair: connecting to {}..."
     IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
 END
 
