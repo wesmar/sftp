@@ -549,7 +549,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         int dataLen = static_cast<int>(read);
         char* data = buffer.data();
         if (textMode)
-            dataLen = ConvertCrLfToCr(data, read);
+            dataLen = ConvertCrLfToLf(data, read);
 
         size_t toWrite = static_cast<size_t>(dataLen);
         size_t written = 0;
