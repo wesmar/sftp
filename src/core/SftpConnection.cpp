@@ -313,22 +313,21 @@ static std::string MakeLanPeerId()
     return std::string(host); // hostname only — stable across TC restarts
 }
 
-void StartGlobalLanServices()
+void StartGlobalLanServices(bool startServer)
 {
-    if (g_lanFileServer && g_lanFileServer->isRunning())
-        return;
-
-    g_lanFileServer = std::make_unique<LanFileServer>();
-    lanpair::PairError err;
-    if (!g_lanFileServer->start(45846, &err)) {
-        SFTP_LOG("LAN", "LanFileServer start failed: %s", err.message.c_str());
-        g_lanFileServer.reset();
-    } else {
-        // Restore previously saved server password (set when any LAN Pair profile was connected).
-        std::string storedPw;
-        if (lanpair::DpapiSecretStore::loadSecret("lanpair-server-pw", &storedPw, nullptr) &&
-            !storedPw.empty()) {
-            g_lanFileServer->setPassword(storedPw);
+    if (startServer && (!g_lanFileServer || !g_lanFileServer->isRunning())) {
+        g_lanFileServer = std::make_unique<LanFileServer>();
+        lanpair::PairError err;
+        if (!g_lanFileServer->start(45846, &err)) {
+            SFTP_LOG("LAN", "LanFileServer start failed: %s", err.message.c_str());
+            g_lanFileServer.reset();
+        } else {
+            // Restore previously saved server password (set when any LAN Pair profile was connected).
+            std::string storedPw;
+            if (lanpair::DpapiSecretStore::loadSecret("lanpair-server-pw", &storedPw, nullptr) &&
+                !storedPw.empty()) {
+                g_lanFileServer->setPassword(storedPw);
+            }
         }
     }
 
@@ -369,7 +368,16 @@ void StopGlobalLanServices()
 // then connect + authenticate with DPAPI trust key.
 static int LanPairConnect(pConnectSettings cs)
 {
-    StartGlobalLanServices();
+    // lan_pair_role: 0=mutual, 1=receiver (biorca), 2=donor (dawca)
+    if (cs->lan_pair_role == 2) {
+        StartGlobalLanServices(true);   // ensure our server is running for inbound connections
+        if (cs->feedback)
+            cs->feedback->ShowError(LngStrU8(IDS_LAN_ERR_DONOR_NO_CONNECT,
+                "LAN Pair: this machine is configured as Donor. The remote Receiver must connect here.").c_str());
+        return SFTP_FAILED;
+    }
+    // Receiver (role==1) does not start a local file server; mutual (role==0) starts both.
+    StartGlobalLanServices(cs->lan_pair_role == 0);
 
     // If we already have an active session, nothing to do.
     if (cs->lanSession && cs->lanSession->isConnected())

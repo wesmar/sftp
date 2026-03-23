@@ -859,6 +859,7 @@ BEGIN
     IDS_IMP_BROWSE_WINSCP_FOLDER "Select WinSCP Portable folder"
     IDS_IMP_ERR_NO_WINSCP_INI    "WinSCP.ini not found in the selected folder."
     IDS_IMP_BROWSE_KITTY_FOLDER  "Select KiTTY Portable folder"
+    IDS_LAN_ERR_DONOR_NO_CONNECT "LAN Pair: this machine is configured as Donor. The remote Receiver must connect here."
 END
 
 #endif    // English (United States) resources

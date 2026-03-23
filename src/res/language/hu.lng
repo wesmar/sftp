@@ -380,6 +380,7 @@
 12100=WinSCP hordozható mappa kiválasztása
 12101=A WinSCP.ini nem található a kiválasztott mappában.
 12102=KiTTY hordozható mappa kiválasztása
+12103=LAN Pair: ez a számítógép Adóként van konfigurálva. A távoli Vevőnek ide kell csatlakoznia.
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP protokoll hiba

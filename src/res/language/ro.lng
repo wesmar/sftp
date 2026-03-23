@@ -380,6 +380,7 @@
 12100=Selectați folderul portabil WinSCP
 12101=WinSCP.ini nu a fost găsit în folderul selectat.
 12102=Selectați folderul portabil KiTTY
+12103=LAN Pair: acest computer este configurat ca Donator. Receptorul de la distanță trebuie să se conecteze aici.
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Eroare protocol SCP

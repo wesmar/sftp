@@ -380,6 +380,7 @@
 12100=Selecionar pasta portátil do WinSCP
 12101=WinSCP.ini não encontrado na pasta selecionada.
 12102=Selecionar pasta portátil do KiTTY
+12103=LAN Pair: este computador está configurado como Doador. O Receptor remoto deve conectar-se aqui.
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Erro de protocolo SCP

@@ -99,7 +99,7 @@ std::optional<std::vector<uint8_t>> dpapiProtect(std::span<const uint8_t> plain)
 
     DATA_BLOB out{};
     if (!CryptProtectData(&in, L"sftpplug-lanpair", nullptr, nullptr, nullptr,
-                          CRYPTPROTECT_UI_FORBIDDEN, &out))
+                          CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, &out))
         return std::nullopt;
 
     std::vector<uint8_t> enc(out.pbData, out.pbData + out.cbData);
@@ -800,7 +800,7 @@ bool saveSecret(const std::string& key,
 
     const auto path = dir / (sanitizeKey(key) + ".bin");
     FILE* f = nullptr;
-    if (fopen_s(&f, path.string().c_str(), "wb") != 0 || !f) {
+    if (_wfopen_s(&f, path.wstring().c_str(), L"wb") != 0 || !f) {
         setErr(err, GetLastError(), "Cannot open secret file for write");
         return false;
     }
@@ -824,7 +824,7 @@ bool loadSecret(const std::string& key,
 
     const auto path = secretsDir() / (sanitizeKey(key) + ".bin");
     FILE* f = nullptr;
-    if (fopen_s(&f, path.string().c_str(), "rb") != 0 || !f) {
+    if (_wfopen_s(&f, path.wstring().c_str(), L"rb") != 0 || !f) {
         setErr(err, ERROR_FILE_NOT_FOUND, "Secret file not found");
         return false;
     }
@@ -845,7 +845,14 @@ bool loadSecret(const std::string& key,
 
     const auto plain = dpapiUnprotect(enc);
     if (!plain) {
-        setErr(err, GetLastError(), "CryptUnprotectData failed");
+        // File is readable but DPAPI can't decrypt it — almost certainly a user-context
+        // mismatch (e.g. key was saved under a normal user account, now loaded under
+        // TrustedInstaller or a different session).  Delete the stale file so the next
+        // connection triggers TRUSTNEW and re-establishes keys in the current context.
+        const DWORD dpapiErr = GetLastError();  // capture before remove() resets it
+        std::error_code ec2;
+        std::filesystem::remove(path, ec2);
+        setErr(err, dpapiErr, "CryptUnprotectData failed");
         return false;
     }
 

@@ -24,7 +24,7 @@
 #include "PhpAgentClient.h"
 
 // Declared in SftpConnection.cpp
-void StartGlobalLanServices();
+void StartGlobalLanServices(bool startServer = true);
 void StopGlobalLanServices();
 
 HINSTANCE hinst = nullptr;

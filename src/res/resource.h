@@ -553,6 +553,7 @@
 #define IDS_IMP_BROWSE_WINSCP_FOLDER    12100
 #define IDS_IMP_ERR_NO_WINSCP_INI       12101
 #define IDS_IMP_BROWSE_KITTY_FOLDER     12102
+#define IDS_LAN_ERR_DONOR_NO_CONNECT    12103
 
 // Next default values for new objects
 //
