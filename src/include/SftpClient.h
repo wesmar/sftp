@@ -131,7 +131,8 @@ struct tConnectSettings {
     std::string lan_pair_peer; // peerId of the remote machine (set during pairing)
     std::string lan_pair_ip;   // current IP of remote peer (found by discovery)
     uint16_t lan_pair_port = 45846; // TCP port of remote peer's file server
-    int lan_pair_timeout_min = 0;   // 0=no limit
+    int lan_pair_timeout_min = 0;         // 0=no limit
+    bool lan_pair_trusted_installer = false; // impersonate NT SERVICE\TrustedInstaller on connect
     std::unique_ptr<LanPairSession> lanSession; // active file session (nullptr when disconnected)
 
     // -----------------------------------------------------------------------

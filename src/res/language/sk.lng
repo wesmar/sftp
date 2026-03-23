@@ -370,6 +370,10 @@ Preskočených {} {}.
 12090=Hľadám partnera LAN Pair v lokálnej sieti...
 12091={} s
 12092=LAN Pair: partner nebol nájdený.
+12093=TrustedInstaller
+12094=LAN Pair: zosobnenie TrustedInstaller zlyhalo. Proces nemusí byť spustený ako správca.
+12095=LAN Pair: pripájam sa k {}...
+12096=LAN Pair: pripojenie zlyhalo
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Chyba protokolu SCP

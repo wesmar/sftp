@@ -49,6 +49,9 @@ public:
     // 0 = no limit (default).
     void setTimeoutMin(int minutes) noexcept;
 
+    // Enable or disable TrustedInstaller impersonation for client file operations.
+    void setTrustedInstaller(bool enabled) noexcept;
+
     // Remote filesystem operations.
     bool listRoots(std::vector<std::string>& roots) noexcept;
 
@@ -107,6 +110,9 @@ public:
     // Set the shared password used to verify first-time connections from new peers.
     // Call after start(); may be called at any time from any thread.
     void setPassword(const std::string& password) noexcept;
+
+    // Enable or disable TrustedInstaller impersonation for incoming file operations.
+    void setTrustedInstaller(bool enabled) noexcept;
 
 private:
     struct Impl;

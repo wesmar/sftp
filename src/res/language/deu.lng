@@ -371,6 +371,10 @@
 12090=Suche nach LAN-Pair-Partner im lokalen Netzwerk...
 12091={} s
 12092=LAN Pair: kein Partner gefunden.
+12093=TrustedInstaller
+12094=LAN Pair: TrustedInstaller-Identitaetswechsel fehlgeschlagen. Der Prozess laeuft moeglicherweise nicht als Administrator.
+12095=LAN Pair: verbinde mit {}...
+12096=LAN Pair: Verbindung fehlgeschlagen
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-Protokollfehler

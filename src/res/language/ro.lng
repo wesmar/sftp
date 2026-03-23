@@ -370,6 +370,10 @@
 12090=Caut peer LAN Pair în rețeaua locală...
 12091={} s
 12092=LAN Pair: niciun peer găsit.
+12093=TrustedInstaller
+12094=LAN Pair: personificarea TrustedInstaller a esuat. Este posibil ca procesul sa nu ruleze ca Administrator.
+12095=LAN Pair: conectare la {}...
+12096=LAN Pair: conexiune eșuată
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Eroare protocol SCP

@@ -39,6 +39,7 @@
 #include "ConnectionAuth.h"
 #include "SshLibraryLoader.h"
 #include "LanPairSession.h"
+#include "TrustedInstallerToken.h"
 #include "JumpHostConnection.h"
 
 #pragma comment(lib, "Crypt32.lib")
@@ -352,6 +353,12 @@ void LanFileServerSetPassword(const std::string& pw)
         g_lanFileServer->setPassword(pw);
 }
 
+void LanFileServerSetTrustedInstaller(bool enabled)
+{
+    if (g_lanFileServer)
+        g_lanFileServer->setTrustedInstaller(enabled);
+}
+
 void StopGlobalLanServices()
 {
     if (g_lanDiscovery) { g_lanDiscovery->stop(); g_lanDiscovery.reset(); }
@@ -426,7 +433,12 @@ static int LanPairConnect(pConnectSettings cs)
             g_lanFileServer->setPassword(cs->password);
     }
 
-    ShowStatus(("LAN Pair: connecting to " + foundIp + "...").c_str());
+    {
+        std::string s = LngStrU8(IDS_LAN_CONNECTING, "LAN Pair: connecting to {}...");
+        const auto p = s.find("{}");
+        if (p != std::string::npos) s.replace(p, 2, foundIp);
+        ShowStatus(s.c_str());
+    }
 
     lanpair::PairError err;
     auto session = LanPairSession::connect(
@@ -435,14 +447,22 @@ static int LanPairConnect(pConnectSettings cs)
         &err);
 
     if (!session) {
-        std::string msg = "LAN Pair: connection failed";
-        if (!err.message.empty()) msg += " — " + err.message;
+        std::string msg = LngStrU8(IDS_LAN_ERR_CONN_FAILED, "LAN Pair: connection failed");
+        if (!err.message.empty()) msg += " \xe2\x80\x94 " + err.message;
         if (cs->feedback) cs->feedback->ShowError(msg.c_str());
         return SFTP_FAILED;
     }
 
     session->setTimeoutMin(cs->lan_pair_timeout_min);
+    session->setTrustedInstaller(cs->lan_pair_trusted_installer);
     cs->lanSession = std::move(session);
+
+    if (cs->lan_pair_trusted_installer) {
+        if (!AcquireTrustedInstallerToken()) {
+            if (cs->feedback)
+                cs->feedback->ShowError(LngStrU8(IDS_LAN_TI_ERR, "LAN Pair: TrustedInstaller impersonation failed.").c_str());
+        }
+    }
 
     ShowStatusId(IDS_LOG_LAN_CONNECTED, nullptr, true);
     return SFTP_OK;

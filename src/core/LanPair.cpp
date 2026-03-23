@@ -404,7 +404,23 @@ struct PairServer::Impl {
         if (!cfg.password.empty()) {
             if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH")
                 return false;
-            const auto derived = deriveKeyPbkdf2(cfg.password, salt, kDerivedKeySize);
+
+            std::string combined;
+            if (clientPeerId < cfg.peerId)
+                combined = clientPeerId + "<>" + cfg.peerId;
+            else
+                combined = cfg.peerId + "<>" + clientPeerId;
+            std::vector<uint8_t> derivedSalt(16, 0);
+            auto h = hmacSha256(
+                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+            if (h && h->size() >= 16) {
+                for (size_t i = 0; i < 16; ++i) derivedSalt[i] = (*h)[i];
+            } else {
+                memcpy(derivedSalt.data(), "sftpplug-pair...", 16);
+            }
+            const auto derived = deriveKeyPbkdf2(cfg.password, std::span<const uint8_t>(derivedSalt.data(), derivedSalt.size()), kDerivedKeySize);
+
             if (!derived) return false;
             key = *derived;
             const auto expected = hmacSha256(key,
@@ -639,7 +655,21 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     const std::string serverProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
 
     if (!cfg.password.empty()) {
-        const auto derived = deriveKeyPbkdf2(cfg.password, *salt, kDerivedKeySize);
+        std::string combined;
+        if (cfg.peerId < serverPeerId)
+            combined = cfg.peerId + "<>" + serverPeerId;
+        else
+            combined = serverPeerId + "<>" + cfg.peerId;
+        std::vector<uint8_t> derivedSalt(16, 0);
+        auto h = hmacSha256(
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+        if (h && h->size() >= 16) {
+            for (size_t i = 0; i < 16; ++i) derivedSalt[i] = (*h)[i];
+        } else {
+            memcpy(derivedSalt.data(), "sftpplug-pair...", 16);
+        }
+        const auto derived = deriveKeyPbkdf2(cfg.password, std::span<const uint8_t>(derivedSalt.data(), derivedSalt.size()), kDerivedKeySize);
         if (!derived) {
             closesocket(s);
             setErr(err, ERROR_INVALID_DATA, "PBKDF2 failed");

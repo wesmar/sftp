@@ -369,6 +369,10 @@
 12090=ローカルネットワーク上のLAN Pairピアを検索中...
 12091={} 秒
 12092=LAN Pair: ピアが見つかりません。
+12093=TrustedInstaller
+12094=LAN Pair: TrustedInstallerの偽装に失敗しました。プロセスが管理者として実行されていない可能性があります。
+12095=LAN Pair: {}に接続中...
+12096=LAN Pair: 接続に失敗しました
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCPプロトコルエラー

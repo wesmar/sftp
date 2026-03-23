@@ -386,5 +386,9 @@
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s
 12092=LAN Pair: nie znaleziono peera.
+12093=TrustedInstaller
+12094=LAN Pair: nie udało się podszyć pod TrustedInstaller. Proces może nie być uruchomiony jako Administrator.
+12095=LAN Pair: łączę z {}...
+12096=LAN Pair: błąd połączenia
 450=Windows (CR/LF)
 451=Unix (LF)
