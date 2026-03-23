@@ -195,7 +195,8 @@ AuthResult pair1Connect(
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    lanpair::PairError*    err) noexcept
+    lanpair::PairError* err,
+    bool               forceNew = false) noexcept
 {
     AuthResult result;
 
@@ -282,31 +283,33 @@ AuthResult pair1Connect(
         std::string trustSecret;
         const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
 
-        if (!password.empty()) {
-            std::string combined;
-            if (localPeerId < serverPeerId)
-                combined = localPeerId + "<>" + serverPeerId;
-            else
-                combined = serverPeerId + "<>" + localPeerId;
-            std::vector<uint8_t> salt(16, 0);
-            auto h = hmacSha256(
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-            if (h && h->size() >= 16) {
-                for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-            } else {
-                memcpy(salt.data(), "sftpplug-pair...", 16);
+        if (!forceNew) {
+            if (!password.empty()) {
+                std::string combined;
+                if (localPeerId < serverPeerId)
+                    combined = localPeerId + "<>" + serverPeerId;
+                else
+                    combined = serverPeerId + "<>" + localPeerId;
+                std::vector<uint8_t> salt(16, 0);
+                auto h = hmacSha256(
+                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+                if (h && h->size() >= 16) {
+                    for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
+                } else {
+                    memcpy(salt.data(), "sftpplug-pair...", 16);
+                }
+                auto derived = deriveKeyPbkdf2(password, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                if (derived) {
+                    key = *derived;
+                    std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
+                    lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
+                }
             }
-            auto derived = deriveKeyPbkdf2(password, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
-            if (derived) {
-                key = *derived;
-                std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
-                lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-            }
-        }
 
-        if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
-            key.assign(trustSecret.begin(), trustSecret.end());
+            if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
+                key.assign(trustSecret.begin(), trustSecret.end());
+            }
         }
 
         if (!key.empty()) {
@@ -495,8 +498,27 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
     AuthResult ar = pair1Connect(targetIp, targetPort,
                                  localPeerId, remotePeerId, password, err);
     if (ar.sock == INVALID_SOCKET) {
-        SFTP_LOG("LAN2", "pair1Connect FAILED: %s", err ? err->message.c_str() : "?");
-        return nullptr;
+        const bool trustUnknown = err && err->message.find("trust-unknown") != std::string::npos;
+        if (trustUnknown) {
+            // Server couldn't verify our stored key (e.g. DPAPI context mismatch after
+            // enabling TrustedInstaller).  Delete the stale client-side key and retry
+            // with TRUSTNEW so the peer issues a fresh shared secret.
+            SFTP_LOG("LAN2", "trust-unknown: deleting stale client key, retrying with TRUSTNEW");
+            lanpair::DpapiSecretStore::deleteSecret(
+                trustKeyForClient(remotePeerId, localPeerId), nullptr);
+            lanpair::PairError retryErr;
+            ar = pair1Connect(targetIp, targetPort,
+                              localPeerId, remotePeerId, password, &retryErr, true);
+            if (ar.sock != INVALID_SOCKET) {
+                if (err) { err->code = 0; err->message.clear(); }
+            } else {
+                if (err) *err = retryErr;
+            }
+        }
+        if (ar.sock == INVALID_SOCKET) {
+            SFTP_LOG("LAN2", "pair1Connect FAILED: %s", err ? err->message.c_str() : "?");
+            return nullptr;
+        }
     }
     SFTP_LOG("LAN2", "pair1Connect OK, sending LAN2 HELLO");
 

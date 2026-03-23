@@ -380,6 +380,7 @@
 12100=Draagbare WinSCP-map selecteren
 12101=WinSCP.ini niet gevonden in de geselecteerde map.
 12102=Draagbare KiTTY-map selecteren
+12103=LAN Pair: deze computer is geconfigureerd als Donor. De externe Ontvanger moet hier verbinding maken.
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-protocolfout

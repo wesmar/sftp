@@ -396,5 +396,6 @@
 12100=Wybierz przenośny folder WinSCP
 12101=Plik WinSCP.ini nie został znaleziony w wybranym folderze.
 12102=Wybierz przenośny folder KiTTY
+12103=LAN Pair: ten komputer jest skonfigurowany jako Dawca. Zdalny Biorca musi się tutaj połączyć.
 450=Windows (CR/LF)
 451=Unix (LF)

@@ -380,6 +380,7 @@ Přeskočeno {} {}.
 12100=Vybrat přenosnou složku WinSCP
 12101=Soubor WinSCP.ini nebyl ve vybrané složce nalezen.
 12102=Vybrat přenosnou složku KiTTY
+12103=LAN Pair: tento počítač je nakonfigurován jako Dárce. Vzdálený Příjemce se musí připojit sem.
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Chyba protokolu SCP
