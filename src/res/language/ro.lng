@@ -259,7 +259,7 @@
 326=Flux TAR
 12067=Importă tot ({})
 12068=Importă din folderul PuTTY Portable...
-12069=Importă din fișierul WinSCP.ini...
+12069=Importați din folderul portabil WinSCP...
 12070=Importă sesiuni KiTTY Portable
 12071=Importă din folderul KiTTY Portable...
 
@@ -374,6 +374,12 @@
 12094=LAN Pair: personificarea TrustedInstaller a esuat. Este posibil ca procesul sa nu ruleze ca Administrator.
 12095=LAN Pair: conectare la {}...
 12096=LAN Pair: conexiune eșuată
+12097=PuTTY
+12098=WinSCP
+12099=Altele
+12100=Selectați folderul portabil WinSCP
+12101=WinSCP.ini nu a fost găsit în folderul selectat.
+12102=Selectați folderul portabil KiTTY
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Eroare protocol SCP

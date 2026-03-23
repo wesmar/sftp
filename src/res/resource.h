@@ -547,6 +547,12 @@
 #define IDS_LAN_TI_ERR                  12094
 #define IDS_LAN_CONNECTING              12095
 #define IDS_LAN_ERR_CONN_FAILED         12096
+#define IDS_IMP_MENU_PUTTY_HDR          12097
+#define IDS_IMP_MENU_WINSCP_HDR         12098
+#define IDS_IMP_MENU_OTHER_HDR          12099
+#define IDS_IMP_BROWSE_WINSCP_FOLDER    12100
+#define IDS_IMP_ERR_NO_WINSCP_INI       12101
+#define IDS_IMP_BROWSE_KITTY_FOLDER     12102
 
 // Next default values for new objects
 //

@@ -432,7 +432,7 @@ BEGIN
     IDS_IMP_MSG_NOT_FOUND   "No sessions found in {}."
     IDS_IMP_MENU_ALL        "Import all ({})"
     IDS_IMP_MENU_FROM_PUTTY_PORT "Import from PuTTY Portable folder..."
-    IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP.ini file..."
+    IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP Portable folder..."
     IDS_IMP_TITLE_KITTY_PORT "Import KiTTY Portable Sessions"
     IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
     IDS_SCP_PROTOCOL_ERROR  "SCP Protocol Error"
@@ -853,6 +853,12 @@ END
 STRINGTABLE
 BEGIN
     IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
+    IDS_IMP_MENU_PUTTY_HDR       "PuTTY"
+    IDS_IMP_MENU_WINSCP_HDR      "WinSCP"
+    IDS_IMP_MENU_OTHER_HDR       "Other"
+    IDS_IMP_BROWSE_WINSCP_FOLDER "Select WinSCP Portable folder"
+    IDS_IMP_ERR_NO_WINSCP_INI    "WinSCP.ini not found in the selected folder."
+    IDS_IMP_BROWSE_KITTY_FOLDER  "Select KiTTY Portable folder"
 END
 
 #endif    // English (United States) resources

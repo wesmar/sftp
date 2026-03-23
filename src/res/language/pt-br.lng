@@ -259,7 +259,7 @@
 326=Fluxo TAR
 12067=Importar tudo ({})
 12068=Importar da pasta PuTTY Portable...
-12069=Importar do arquivo WinSCP.ini...
+12069=Importar da pasta portátil do WinSCP...
 12070=Importar sessões portáteis do KiTTY
 12071=Importar da pasta KiTTY Portable...
 
@@ -374,6 +374,12 @@
 12094=LAN Pair: falha ao personificar TrustedInstaller. O processo pode nao estar sendo executado como Administrador.
 12095=LAN Pair: conectando a {}...
 12096=LAN Pair: falha na conexão
+12097=PuTTY
+12098=WinSCP
+12099=Outros
+12100=Selecionar pasta portátil do WinSCP
+12101=WinSCP.ini não encontrado na pasta selecionada.
+12102=Selecionar pasta portátil do KiTTY
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Erro de protocolo SCP

@@ -259,7 +259,7 @@
 326=TAR 流
 12067=全部导入 ({})
 12068=从 PuTTY Portable 文件夹导入...
-12069=从 WinSCP.ini 文件导入...
+12069=从 WinSCP 便携文件夹导入...
 12070=导入 KiTTY Portable 会话
 12071=从 KiTTY Portable 文件夹导入...
 
@@ -373,6 +373,12 @@
 12094=LAN Pair: 模拟 TrustedInstaller 失败。进程可能未以管理员身份运行。
 12095=LAN Pair: 正在连接 {}...
 12096=LAN Pair: 连接失败
+12097=PuTTY
+12098=WinSCP
+12099=其他
+12100=选择 WinSCP 便携文件夹
+12101=在所选文件夹中未找到 WinSCP.ini。
+12102=选择 KiTTY 便携文件夹
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP 协议错误
