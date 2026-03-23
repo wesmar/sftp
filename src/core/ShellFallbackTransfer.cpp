@@ -821,7 +821,7 @@ int ShellScpUploadFile(
     while (ReadFile(localfile, dataBuf.data(), (DWORD)dataBuf.size(), &len, nullptr) && len > 0) {
         size_t sendLen = len;
         if (textMode)
-            sendLen = (size_t)ConvertCrLfToCr(dataBuf.data(), len);
+            sendLen = (size_t)ConvertCrLfToLf(dataBuf.data(), len);
         if (!ScpWriteAll(channel.get(), cs, dataBuf.data(), sendLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             DisconnectShell(channel.get());
             return SFTP_WRITEFAILED;

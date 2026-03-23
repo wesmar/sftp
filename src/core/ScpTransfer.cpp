@@ -176,7 +176,7 @@ bool ParseScpCLine(const std::string& line, int64_t& outSize, std::string& outNa
 
 } // anonymous namespace
 
-int ConvertCrLfToCr(LPSTR data, size_t len)
+int ConvertCrLfToLf(LPSTR data, size_t len)
 {
     if (!data || len == 0)
         return 0;
@@ -184,7 +184,7 @@ int ConvertCrLfToCr(LPSTR data, size_t len)
     size_t out = 0;
     for (size_t i = 0; i < len; ++i) {
         const char ch = data[i];
-        if (ch == '\n' && i > 0 && data[i - 1] == '\r') {
+        if (ch == '\r' && i + 1 < len && data[i + 1] == '\n') {
             continue;
         }
         data[out++] = ch;

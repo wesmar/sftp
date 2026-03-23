@@ -601,7 +601,7 @@ function op_tar_pack(): void
                 $written += strlen($chunk);
             }
             fclose($fh);
-            $pad = (($written + 511) & ~511) - $written;
+            $pad = (($size + 511) & ~511) - $written;
             if ($pad > 0) {
                 fwrite($mem, str_repeat("\0", $pad));
             }
