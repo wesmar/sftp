@@ -189,6 +189,7 @@
     <ClCompile Include="..\src\core\SshLibraryLoader.cpp" />
     <ClCompile Include="..\src\core\LanPair.cpp" />
     <ClCompile Include="..\src\core\LanPairSession.cpp" />
+    <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" />
   </ItemGroup>
   <!-- Header Files -->
   <ItemGroup>
@@ -234,6 +235,7 @@
     <ClInclude Include="..\src\include\SshLibraryLoader.h" />
     <ClInclude Include="..\src\include\LanPair.h" />
     <ClInclude Include="..\src\include\LanPairSession.h" />
+    <ClInclude Include="..\src\include\TrustedInstallerToken.h" />
     <ClInclude Include="..\src\include\third_party\libssh2.h" />
     <ClInclude Include="..\src\include\third_party\libssh2_sftp.h" />
     <ClInclude Include="..\src\include\third_party\libssh2_config.h" />

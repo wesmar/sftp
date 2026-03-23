@@ -371,6 +371,10 @@
 12090=Recherche d'un pair LAN Pair sur le réseau local...
 12091={} s
 12092=LAN Pair: aucun pair trouvé.
+12093=TrustedInstaller
+12094=LAN Pair: l'emprunt d'identite TrustedInstaller a echoue. Le processus ne s'execute peut-etre pas en tant qu'Administrateur.
+12095=LAN Pair: connexion à {}...
+12096=LAN Pair: connexion échouée
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Erreur de protocole SCP

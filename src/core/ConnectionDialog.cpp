@@ -1,10 +1,14 @@
 // Connection dialog/UI extracted from SftpConnection.cpp
 #include "global.h"
 #include <windows.h>
+#include <commctrl.h>
 #include <commdlg.h>
 #include <array>
-#include <map>
-#include <mutex>
+#include <vector>
+#include <string>
+
+// Declared in SftpConnection.cpp
+extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include <new>
 #include <unordered_map>
 #include <vector>
@@ -122,6 +126,49 @@ static void ArrangeProtocolButtons(HWND hDlg)
         SetWindowPos(hw, NULL, right, r.top, w, r.bottom - r.top, SWP_NOZORDER);
         right -= gap;
     }
+}
+
+// Position the LAN Pair Session timeout and TrustedInstaller checkbox.
+static void ArrangeLanTimeoutRow(HWND hDlg)
+{
+    HWND hLabel   = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_LABEL);
+    HWND hEdit    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT);
+    HWND hHint    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_HINT);
+    HWND hTi      = GetDlgItem(hDlg, IDC_LAN_TI);
+    HWND hSystem  = GetDlgItem(hDlg, IDC_SYSTEM);
+
+    if (!hLabel || !hEdit || !hHint || !hTi || !hSystem)
+        return;
+
+    const RECT rLabel = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_LABEL);
+    const RECT rEdit  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT);
+    const RECT rHint  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_HINT);
+    const RECT rTi    = DlgLayout::GetRect(hDlg, IDC_LAN_TI);
+    const RECT rSystem= DlgLayout::GetRect(hDlg, IDC_SYSTEM);
+    RECT rDlg{};
+    GetClientRect(hDlg, &rDlg);
+
+    const int gap = DlgLayout::kGap;
+
+    const int szLabel = DlgLayout::MeasureText(hDlg, hLabel);
+    const int labelX  = rLabel.left;
+    const int labelW  = szLabel + gap;
+
+    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_LABEL, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
+
+    const int editX = labelX + labelW;
+    const int editW = rEdit.right - rEdit.left;
+    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT, editX, rEdit.top, editW, rEdit.bottom - rEdit.top);
+
+    const int szHint = DlgLayout::MeasureText(hDlg, hHint);
+    const int hintX  = editX + editW + gap;
+    const int hintW  = szHint + gap;
+    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_HINT, hintX, rHint.top, hintW, rHint.bottom - rHint.top);
+
+    const int tiX = rSystem.left;
+    const int tiW = rDlg.right - gap - tiX;
+    if (tiW > 0)
+        DlgLayout::Move(hDlg, IDC_LAN_TI, tiX, rTi.top, tiW, rTi.bottom - rTi.top);
 }
 
 // Position the PHP TAR checkbox 4px to the right of the permissions-row right edit.
@@ -1411,18 +1458,20 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(phpShellBtn, TRUE);
         const std::wstring pairBtn = LoadResStringW(IDS_BUTTON_PAIR);
         SetWindowTextW(phpShellBtn, pairBtn.empty() ? L"Pair..." : pairBtn.c_str());
-        EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), FALSE);
+        ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR),           SW_HIDE);
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
         ShowWindow(GetDlgItem(hWnd, IDC_LANPAIR_GROUP),     SW_SHOW);
         ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT_LABEL), SW_SHOW);
         ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT),       SW_SHOW);
         ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT_HINT),  SW_SHOW);
+        ShowWindow(GetDlgItem(hWnd, IDC_LAN_TI),            SW_SHOW);
         ShowWindow(GetDlgItem(hWnd, IDC_PERMISSIONS_GROUP), SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD_LABEL),     SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD_LABEL),      SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD),            SW_HIDE);
+        ArrangeLanTimeoutRow(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1432,6 +1481,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT_LABEL), SW_HIDE);
     ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT),       SW_HIDE);
     ShowWindow(GetDlgItem(hWnd, IDC_LAN_TIMEOUT_HINT),  SW_HIDE);
+    ShowWindow(GetDlgItem(hWnd, IDC_LAN_TI),            SW_HIDE);
+    ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR),           SW_SHOW);
     ShowWindow(GetDlgItem(hWnd, IDC_PERMISSIONS_GROUP), SW_SHOW);
     ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD_LABEL),     SW_SHOW);
     ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_SHOW);
@@ -1559,6 +1610,7 @@ static void ApplyLoadedSessionToDialog(HWND hWnd, pConnectSettings s, LPCSTR ini
     CheckDlgButton(hWnd, IDC_SHELLTRANSFER, (s->shell_transfer_dd && s->shell_transfer_force) ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE, s->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hWnd, IDC_PHP_TAR, s->php_tar ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hWnd, IDC_LAN_TI, s->lan_pair_trusted_installer ? BST_CHECKED : BST_UNCHECKED);
     SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, s->transfermode)), 0);
     RebuildSystemAndEncodingCombos(hWnd, dlgCtx, s);
     if (dlgCtx)
@@ -2113,6 +2165,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
         { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
         { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
+        { IDC_LAN_TI,               IDS_LAN_TI              },
         { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
         { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
         { IDC_PLUGINHELP,         IDS_BTN_HELP              },
@@ -2219,6 +2272,8 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
             CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
         if (m_settings->php_tar)
             CheckDlgButton(m_hWnd, IDC_PHP_TAR, BST_CHECKED);
+        if (m_settings->lan_pair_trusted_installer)
+            CheckDlgButton(m_hWnd, IDC_LAN_TI, BST_CHECKED);
 
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, m_settings->transfermode)), 0);
 
@@ -2483,7 +2538,8 @@ void ConnectionDialog::OnOk()
     GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
-    m_settings->php_tar       = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR)      == BST_CHECKED;
+    m_settings->php_tar                  = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR) == BST_CHECKED;
+    m_settings->lan_pair_trusted_installer = IsDlgButtonChecked(m_hWnd, IDC_LAN_TI)  == BST_CHECKED;
     m_settings->detailedlog   = IsDlgButtonChecked(m_hWnd, IDC_DETAILED_LOG) == BST_CHECKED;
     m_settings->compressed    = IsDlgButtonChecked(m_hWnd, IDC_COMPRESS)     == BST_CHECKED;
     m_settings->scpfordata    = IsDlgButtonChecked(m_hWnd, IDC_SCP_DATA)     == BST_CHECKED;
@@ -2585,6 +2641,8 @@ void ConnectionDialog::OnOk()
         WritePrivateProfileString(targetProfile.data(), "lanpairpeer", m_settings->lan_pair_peer.empty() ? nullptr : m_settings->lan_pair_peer.c_str(), dlgIniFileName);
         _itoa_s(max(0, m_settings->lan_pair_timeout_min), buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), "lanpairtimeout", m_settings->lan_pair_timeout_min == 0 ? nullptr : buf.data(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "lanparti", m_settings->lan_pair_trusted_installer ? "1" : nullptr, dlgIniFileName);
+        LanFileServerSetTrustedInstaller(m_settings->lan_pair_trusted_installer);
         if (m_settings->transfermode == static_cast<int>(sftp::TransferMode::smb_lan) &&
             !m_settings->password.empty() && !m_settings->lan_pair_peer.empty()) {
             const std::string localId = MakeLanPeerId();
@@ -2723,6 +2781,7 @@ void ConnectionDialog::OnTransferModeChanged()
             else
                 m_settings->lan_pair_peer.clear();
             m_settings->lan_pair_timeout_min = ReadLanTimeoutMinutes(m_hWnd);
+            m_settings->lan_pair_trusted_installer = IsDlgButtonChecked(m_hWnd, IDC_LAN_TI) == BST_CHECKED;
         }
     }
     RebuildSystemAndEncodingCombos(m_hWnd, m_ctx, m_settings);

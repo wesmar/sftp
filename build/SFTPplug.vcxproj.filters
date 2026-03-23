@@ -145,6 +145,9 @@
     <ClCompile Include="..\src\core\LanPairSession.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\TrustedInstallerToken.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\core\PluginEntryPointsFind.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -278,6 +281,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\LanPairSession.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\include\TrustedInstallerToken.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\include\PluginEntryPointsInternal.h">

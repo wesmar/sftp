@@ -370,6 +370,10 @@
 12090=LAN Pair-partner zoeken in het lokale netwerk...
 12091={} s
 12092=LAN Pair: geen partner gevonden.
+12093=TrustedInstaller
+12094=LAN Pair: imitatie van TrustedInstaller mislukt. Het proces wordt mogelijk niet als Administrator uitgevoerd.
+12095=LAN Pair: verbinding maken met {}...
+12096=LAN Pair: verbinding mislukt
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP-protocolfout

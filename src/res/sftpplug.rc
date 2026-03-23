@@ -72,8 +72,9 @@ BEGIN
     EDITTEXT        IDC_DIRMOD,210,222,28,12,ES_AUTOHSCROLL | ES_NUMBER
     GROUPBOX        " LAN Pair Session: ",IDC_LANPAIR_GROUP,5,212,295,26,NOT WS_VISIBLE | WS_GROUP
     LTEXT           "Session timeout (min):",IDC_LAN_TIMEOUT_LABEL,13,224,80,8,NOT WS_VISIBLE
-    EDITTEXT        IDC_LAN_TIMEOUT,95,222,30,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
+    EDITTEXT        IDC_LAN_TIMEOUT,95,222,15,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
     LTEXT           "(0=no limit)",IDC_LAN_TIMEOUT_HINT,130,224,50,8,NOT WS_VISIBLE
+    CONTROL         "TrustedInstaller",IDC_LAN_TI,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,185,224,105,8,NOT WS_VISIBLE
     LTEXT           "Session:",IDC_LABEL_SESSION,5,241,30,8
     COMBOBOX        IDC_SESSIONCOMBO,38,239,227,120,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "Shell...",IDC_PHPSHELL,270,238,40,14
@@ -848,6 +849,10 @@ BEGIN
     IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
     IDS_PAIRING_SECS        "{} s"
     IDS_PAIRING_TIMEOUT     "LAN Pair: no peer found."
+    IDS_LAN_TI              "TrustedInstaller"
+    IDS_LAN_TI_ERR          "LAN Pair: TrustedInstaller impersonation failed. The process may not be running as Administrator."
+    IDS_LAN_CONNECTING      "LAN Pair: connecting to {}..."
+    IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
 END
 
 #endif    // English (United States) resources

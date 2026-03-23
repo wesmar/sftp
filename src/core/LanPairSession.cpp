@@ -9,6 +9,7 @@
 #include "LanPair.h"
 #include "LanPairInternal.h"
 #include "DllExceptionBarrier.h"
+#include "TrustedInstallerToken.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -280,8 +281,35 @@ AuthResult pair1Connect(
     auto sendAuthAndGetKey = [&]() -> bool {
         std::string trustSecret;
         const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
-        if (lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
+
+        if (!password.empty()) {
+            std::string combined;
+            if (localPeerId < serverPeerId)
+                combined = localPeerId + "<>" + serverPeerId;
+            else
+                combined = serverPeerId + "<>" + localPeerId;
+            std::vector<uint8_t> salt(16, 0);
+            auto h = hmacSha256(
+                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+            if (h && h->size() >= 16) {
+                for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
+            } else {
+                memcpy(salt.data(), "sftpplug-pair...", 16);
+            }
+            auto derived = deriveKeyPbkdf2(password, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+            if (derived) {
+                key = *derived;
+                std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
+                lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
+            }
+        }
+
+        if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
             key.assign(trustSecret.begin(), trustSecret.end());
+        }
+
+        if (!key.empty()) {
             auto proof = hmacSha256(key,
                 std::span<const uint8_t>(
                     reinterpret_cast<const uint8_t*>(proofMaterial.data()),
@@ -291,6 +319,7 @@ AuthResult pair1Connect(
             auth << "PAIR1 AUTH " << hexEncode(proof->data(), proof->size());
             return sendLine(s, auth.str());
         }
+
         return sendLine(s, "PAIR1 TRUSTNEW");
     };
 
@@ -370,7 +399,12 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
 {
     using namespace lanpair_internal;
 
-    std::string combined = localPeerId + "<>" + remotePeerId;
+    std::string combined;
+    if (localPeerId < remotePeerId)
+        combined = localPeerId + "<>" + remotePeerId;
+    else
+        combined = remotePeerId + "<>" + localPeerId;
+
     std::vector<uint8_t> salt(16, 0);
     auto h = hmacSha256(
         std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
@@ -402,6 +436,7 @@ struct LanPairSession::Impl {
     bool     connected_  = false;
     int      timeoutMin_ = 0;
     std::chrono::steady_clock::time_point sessionStart_ = std::chrono::steady_clock::now();
+    bool     trustedInstaller_ = false;
 
     bool isTimedOut() const noexcept {
         if (timeoutMin_ <= 0) return false;
@@ -497,6 +532,10 @@ void LanPairSession::setTimeoutMin(int minutes) noexcept {
     if (impl_) impl_->timeoutMin_ = minutes;
 }
 
+void LanPairSession::setTrustedInstaller(bool enabled) noexcept {
+    if (impl_) impl_->trustedInstaller_ = enabled;
+}
+
 bool LanPairSession::listRoots(std::vector<std::string>& roots) noexcept {
     if (!isConnected()) return false;
     roots.clear();
@@ -563,10 +602,12 @@ bool LanPairSession::getFile(const std::string& remotePath,
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
 
+    if (impl_ && impl_->trustedInstaller_) AcquireTrustedInstallerToken();
+
     int64_t offset = 0;
     if (resume) {
         HANDLE hExist = CreateFileW(localPath, GENERIC_READ, FILE_SHARE_READ,
-                                    nullptr, OPEN_EXISTING, 0, nullptr);
+                                    nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (hExist != INVALID_HANDLE_VALUE) {
             LARGE_INTEGER sz{};
             if (GetFileSizeEx(hExist, &sz)) offset = sz.QuadPart;
@@ -587,7 +628,7 @@ bool LanPairSession::getFile(const std::string& remotePath,
 
     const DWORD createDisp = resume ? OPEN_ALWAYS : (overwrite ? CREATE_ALWAYS : CREATE_NEW);
     HANDLE hLocal = CreateFileW(localPath, GENERIC_WRITE, 0, nullptr,
-                                createDisp, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                createDisp, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (hLocal == INVALID_HANDLE_VALUE) {
         if (fsResult) *fsResult =
             (GetLastError() == ERROR_FILE_EXISTS) ? FS_FILE_EXISTS : FS_FILE_WRITEERROR;
@@ -645,8 +686,10 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
 
+    if (impl_ && impl_->trustedInstaller_) AcquireTrustedInstallerToken();
+
     HANDLE hLocal = CreateFileW(localPath, GENERIC_READ, FILE_SHARE_READ,
-                                nullptr, OPEN_EXISTING, 0, nullptr);
+                                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (hLocal == INVALID_HANDLE_VALUE) {
         if (fsResult) *fsResult = FS_FILE_NOTFOUND;
         return false;
@@ -739,6 +782,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     uint16_t            port_         = 45846;
     mutable std::mutex  passwordMu_;
     std::string         password_;
+    std::atomic<bool>   trustedInstaller_{false};
 
     std::mutex               clientThreadsMu_;
     std::vector<std::thread> clientThreads_;
@@ -804,15 +848,50 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             };
 
             std::string storedSecret;
-            if (!lanpair::DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr)) {
+            if (lanpair::DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr)) {
+                key.assign(storedSecret.begin(), storedSecret.end());
+            }
+
+            if (!key.empty() && !verifyProof(key)) {
+                key.clear();
+            }
+
+            if (key.empty()) {
+                std::lock_guard<std::mutex> lk(passwordMu_);
+                if (!password_.empty()) {
+                    std::string combined;
+                    if (serverPeerId_ < clientPeerId)
+                        combined = serverPeerId_ + "<>" + clientPeerId;
+                    else
+                        combined = clientPeerId + "<>" + serverPeerId_;
+                    std::vector<uint8_t> salt(16, 0);
+                    auto h = hmacSha256(
+                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
+                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
+                    if (h && h->size() >= 16) {
+                        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
+                    } else {
+                        memcpy(salt.data(), "sftpplug-pair...", 16);
+                    }
+                    auto derived = deriveKeyPbkdf2(password_, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                    if (derived) key = *derived;
+                }
+            }
+
+            if (key.empty()) {
                 sendLine(s, "PAIR1 FAIL trust-unknown");
                 return false;
             }
-            key.assign(storedSecret.begin(), storedSecret.end());
+
             if (!verifyProof(key)) {
                 sendLine(s, "PAIR1 FAIL bad-auth");
                 return false;
             }
+
+            // Ensure key is cached in DPAPI for future fast connections
+            std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
+            lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
+
         } else if (auth.size() == 2 && auth[0] == "PAIR1" && auth[1] == "TRUSTNEW") {
             std::array<uint8_t, kDerivedKeySize> fresh{};
             if (!randomBytes(fresh.data(), fresh.size())) return false;
@@ -948,7 +1027,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     void cmdGet(SOCKET s, const std::string& path, int64_t offset) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                               nullptr, OPEN_EXISTING, 0, nullptr);
+                               nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (h == INVALID_HANDLE_VALUE) { sendLine(s, "ERR not-found"); return; }
 
         LARGE_INTEGER sz{};
@@ -985,19 +1064,10 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     void cmdPut(SOCKET s, const std::string& path, int64_t size) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, nullptr,
-                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (h == INVALID_HANDLE_VALUE) {
+            // Client sends data only AFTER receiving "OK", so nothing to drain here.
             sendLine(s, "ERR open-failed");
-            // Drain the incoming data to keep the connection usable.
-            constexpr size_t kChunk = 65536;
-            std::vector<uint8_t> discard(kChunk);
-            int64_t rem = size;
-            while (rem > 0) {
-                const size_t want = static_cast<size_t>(
-                    std::min<int64_t>(rem, static_cast<int64_t>(kChunk)));
-                if (!recvAll(s, discard.data(), want)) return;
-                rem -= static_cast<int64_t>(want);
-            }
             return;
         }
 
@@ -1047,6 +1117,10 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     }
 
     void handleClient(SOCKET client) {
+        if (trustedInstaller_.load(std::memory_order_relaxed)) {
+            AcquireTrustedInstallerToken();
+        }
+
         const BOOL keepAlive = TRUE;
         setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
                    reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
@@ -1180,4 +1254,9 @@ void LanFileServer::setPassword(const std::string& password) noexcept {
     if (!impl_) return;
     std::lock_guard<std::mutex> lk(impl_->passwordMu_);
     impl_->password_ = password;
+}
+
+void LanFileServer::setTrustedInstaller(bool enabled) noexcept {
+    if (!impl_) return;
+    impl_->trustedInstaller_.store(enabled, std::memory_order_relaxed);
 }

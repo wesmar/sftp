@@ -101,6 +101,7 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     ConnectResults->lan_pair_timeout_min = GetPrivateProfileInt(DisplayName, "lanpairtimeout", 0, iniFileName);
     if (ConnectResults->lan_pair_timeout_min < 0)
         ConnectResults->lan_pair_timeout_min = 0;
+    ConnectResults->lan_pair_trusted_installer = GetPrivateProfileInt(DisplayName, "lanparti", 0, iniFileName) != 0;
     ConnectResults->trycustomlistcommand = 2;
 
     ConnectResults->detailedlog = GetPrivateProfileInt(DisplayName, "detailedlog", 0, iniFileName) != 0;

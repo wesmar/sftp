@@ -370,6 +370,10 @@
 12090=LAN Pair-partner keresése a helyi hálózaton...
 12091={} s
 12092=LAN Pair: nem található partner.
+12093=TrustedInstaller
+12094=LAN Pair: a TrustedInstaller megszemélyesítése sikertelen. A folyamat esetleg nem fut rendszergazdaként.
+12095=LAN Pair: csatlakozás: {}...
+12096=LAN Pair: kapcsolódás sikertelen
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=SCP protokoll hiba

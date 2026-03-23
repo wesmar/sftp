@@ -370,6 +370,10 @@
 12090=Procurando par LAN na rede local...
 12091={} s
 12092=LAN Pair: nenhum par encontrado.
+12093=TrustedInstaller
+12094=LAN Pair: falha ao personificar TrustedInstaller. O processo pode nao estar sendo executado como Administrador.
+12095=LAN Pair: conectando a {}...
+12096=LAN Pair: falha na conexão
 450=Windows (CR/LF)
 451=Unix (LF)
 12072=Erro de protocolo SCP

@@ -539,6 +539,15 @@
 #define IDS_PAIRING_SECS                12091
 #define IDS_PAIRING_TIMEOUT             12092
 
+// ---------------------------------------------------------------------------
+// LAN Pair — TrustedInstaller checkbox
+// ---------------------------------------------------------------------------
+#define IDC_LAN_TI                      1108
+#define IDS_LAN_TI                      12093
+#define IDS_LAN_TI_ERR                  12094
+#define IDS_LAN_CONNECTING              12095
+#define IDS_LAN_ERR_CONN_FAILED         12096
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED
