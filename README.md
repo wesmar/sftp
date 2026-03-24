@@ -495,7 +495,7 @@ Direct Windows-to-Windows file transfer without SSH. Uses a custom application-l
 |-----------|---------|
 | UDP broadcast port | 45845 |
 | TCP pairing port | 45846 |
-| Broadcast interval | 1500 ms |
+| Broadcast interval | 2000 ms |
 | App tag | `KVCPAIR/1` |
 
 `PeerAnnouncement` fields: `peerId`, `hostName`, `displayName`, `ip`, `tcpPort`, `role` (`Donor` / `Receiver` / `Dual`), `lastSeen`.
@@ -521,9 +521,28 @@ proof  = HMAC-SHA256(key, clientNonce ‖ serverNonce ‖ "client")
 
 Both client and server verify each other's proof. On first successful connection with password, the server issues a trust token (`OKTRUST`). On subsequent connections, the stored DPAPI trust key is used instead of the password — TOFU (Trust On First Use) model.
 
+### LAN Pair Roles
+
+| Role | INI value | Behavior |
+|------|-----------|----------|
+| **Donor** | `lanpairrole=2` | Starts the local LAN Pair file server; waits for incoming Receiver connections; refuses to initiate outgoing connections. Use on the machine whose files will be accessed remotely. |
+| **Receiver** | `lanpairrole=1` | Does not start a local file server; connects as client to the Donor. Use on the machine that will browse and transfer files. |
+| **Auto** | `lanpairrole=0` | Starts the local file server and shows a guided 60-second pairing wizard. |
+
+In the **Auto** wizard: **Yes** = connect immediately to the discovered peer (this machine acts as Receiver/client); **No** = stay as server/Donor; **Cancel** = stop server.
+
+### TrustedInstaller Access
+
+When the **Trusted Installer** checkbox (`lanparti=1`) is enabled:
+
+- **As Donor (server):** incoming connections are served under TrustedInstaller impersonation — the remote Receiver can read, write, delete, and rename files owned by TrustedInstaller on this machine (e.g. files in `C:\Windows\`, Windows Update caches, `WindowsApps`).
+- **As Receiver (client):** file transfers on this machine run under TI impersonation — allows downloading to TI-protected local directories and uploading from TI-protected local paths.
+
+Impersonation is per-connection (server) or per-transfer (client) and is always reverted after use. Requires `SeDebugPrivilege` (elevated TC). The TrustedInstaller service is started automatically if not already running.
+
 ### DPAPI Trust Key Storage
 
-`DpapiSecretStore` in `LanPair.h` persists trust keys in DPAPI-protected storage keyed by `"lanpair_trust_srv_<serverPeerId>__<clientPeerId>"`. Trust is per peer-pair, per Windows user account.
+`DpapiSecretStore` in `LanPair.h` persists trust keys in DPAPI-protected storage keyed by `"lanpair_trust_srv_<serverPeerId>__<clientPeerId>"`. Trust is per peer-pair, per Windows user account. Trust keys are saved with `CRYPTPROTECT_LOCAL_MACHINE` flag for compatibility with TrustedInstaller context. If an old key cannot be decrypted (e.g. after enabling TI), it is deleted automatically and re-pairing is triggered.
 
 ### LAN2 Command Protocol
 
@@ -1030,7 +1049,22 @@ The binary ships with an English-only compiled resource (`sftpplug.rc`). All non
 | `language\ja.lng` | Japanese |
 | `language\zh-cn.lng` | Simplified Chinese |
 
-To add a new language: create `language\XYZ.lng` (UTF-8) following the existing format (`ID=text`, `#` comments, RC-style `\n \t \\` escapes), deploy it alongside the plugin, and add the language code mapping to `LangIdToTcCode` in `LngLoader.cpp`.
+### Language override
+
+If TC uses a language the plugin cannot auto-detect (custom/community language file, or a language not in the supported 15), the UI falls back to English. This can be overridden via `[Configuration]` in `sftpplug.ini`:
+
+```ini
+[Configuration]
+Language=English
+```
+
+Accepted values: `English`, `Polish`/`pol`/`pl`, `German`/`deu`/`de`, `French`/`fra`/`fr`, `Spanish`/`esp`/`es`, `Italian`/`ita`/`it`, `Russian`/`rus`/`ru`, `Czech`/`cs`, `Hungarian`/`hu`, `Japanese`/`ja`, `Dutch`/`nl`, `Portuguese`/`pt-br`, `Romanian`/`ro`, `Slovak`/`sk`, `Ukrainian`/`uk`, `Chinese`/`zh-cn`.
+
+Custom `.lng` files are also supported: place `language\fin.lng` in the plugin directory and set `Language=fin`. Any string not found in the file falls back to English automatically.
+
+The file `sftpplug.tpl` (shipped with the plugin) is copied to `sftpplug.ini` on first run as a template with documentation comments.
+
+To add a new language: create `language\XYZ.lng` (UTF-8) following the existing format (`ID=text`, `#` comments, RC-style `\n \t \\` escapes) and deploy it alongside the plugin. If you want full LANGID mapping (Windows locale for date/number formatting), also add the code to `LangIdToTcCode` in `LngLoader.cpp`.
 
 ---
 
@@ -1063,6 +1097,9 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - **Checkbox session picker** — replaces flat submenus; SysListView32 with LVS_EX_CHECKBOXES; Select All / Deselect All; imports any combination in one step
 - **4-path import memory** — last 4 folder/file paths persisted in `[ImportPaths]` of sftpplug.ini; browse dialog pre-selects last used location
 - **15-language localization** — added CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN; all auto-detected from TC `wincmd.ini` `LanguageIni` setting
+- **Language override** — `Language=` key in `[Configuration]` of `sftpplug.ini`; supports all 15 built-in languages by name/ISO code, plus custom `.lng` stems for unsupported languages; `sftpplug.tpl` template shipped with the plugin
+- **LAN Pair strict roles** — Donor/Receiver/Auto with unidirectional enforcement; Donor starts file server and refuses outgoing connections; Receiver connects as client without starting a local server
+- **LAN Pair TrustedInstaller** — per-connection TI impersonation on the Donor server; per-transfer TI impersonation on the Receiver client; `CRYPTPROTECT_LOCAL_MACHINE` for DPAPI trust keys; auto-delete stale keys + auto-retry on first connect failure
 - **Session delete fix** — single-character session names (e.g. `1`, `2`) can now be deleted via F8/Del
 - **KiTTY password import** — stored KiTTY session passwords decrypted automatically via `dp.exe` (Blowfish/nbcrypt); exe embedded as LZX CAB RCDATA resource, extracted on first use via Windows FDI API; Windows Defender path and process exclusion added before extraction via WMI/COM (`MSFT_MpPreference::Add`, no PowerShell); decrypted password saved as DPAPI
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected

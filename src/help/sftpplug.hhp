@@ -7,12 +7,13 @@ Display compile progress=Yes
 Full-text search=Yes
 Index file=sftpplug.hhk
 Language=0x409 English (United States)
-Title=SFTPplug Help v1.0.0.16 - Comprehensive Guide
+Title=SFTPplug Help v10.0.0.17 - Comprehensive Guide
 
 [FILES]
 index.html
 quickstart.html
 settings-reference.html
+plugin-config.html
 proxy-configuration.html
 encoding.html
 sessions.html

@@ -194,12 +194,13 @@ static bool ParsePpkFile(const char* path, PpkData& ppk)
         return false;
     }
 
-    DWORD fsize = GetFileSize(hf, nullptr);
-    if (fsize == INVALID_FILE_SIZE || fsize == 0 || fsize > 512 * 1024) {
+    LARGE_INTEGER fsizeEx{};
+    if (!GetFileSizeEx(hf, &fsizeEx) || fsizeEx.QuadPart == 0 || fsizeEx.QuadPart > 512 * 1024) {
         CloseHandle(hf);
-        PPK_LOG_ERROR("Invalid file size: %lu", fsize);
+        PPK_LOG_ERROR("Invalid file size: %lld", (long long)fsizeEx.QuadPart);
         return false;
     }
+    const DWORD fsize = static_cast<DWORD>(fsizeEx.QuadPart);
 
     std::vector<char> content(fsize + 1, '\0');
     DWORD bytesRead = 0;

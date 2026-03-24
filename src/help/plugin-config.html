@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Plugin Configuration (sftpplug.ini)</title><link rel="stylesheet" href="assets/style.css"></head>
+<body>
+<h1>Plugin Configuration (sftpplug.ini)</h1>
+
+<p>Plugin-wide settings that are not part of individual sessions are stored in the <code>[Configuration]</code> section of <code>sftpplug.ini</code>.</p>
+
+<h2>File location</h2>
+<p>Total Commander stores plugin ini files in its configuration directory, typically:</p>
+<pre>C:\Users\YourName\AppData\Roaming\GHISLER\sftpplug.ini</pre>
+<p>The exact path depends on how TC was installed:</p>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>TC installation type</th><th>Typical sftpplug.ini location</th></tr>
+  <tr><td>Standard install (per-user)</td><td><code>C:\Users\YourName\AppData\Roaming\GHISLER\sftpplug.ini</code></td></tr>
+  <tr><td>Standard install (all users)</td><td><code>C:\ProgramData\GHISLER\sftpplug.ini</code></td></tr>
+  <tr><td>Portable / USB install</td><td><code>&lt;TC folder&gt;\sftpplug.ini</code></td></tr>
+</table>
+<div class="note">
+  <b>Tip:</b> In Total Commander, open <b>Configuration → Options → General</b> — the path shown next to <em>wincmd.ini</em> is the TC configuration directory. <code>sftpplug.ini</code> is in the same folder.
+</div>
+
+<p>If <code>sftpplug.ini</code> does not exist yet, the plugin copies a template (<code>sftpplug.tpl</code>) from the plugin directory on first run. You can also create the file manually.</p>
+
+<h2>Configuration keys</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Key</th><th>Default</th><th>Description</th></tr>
+  <tr>
+    <td><code>Language</code></td>
+    <td><em>(follows TC)</em></td>
+    <td>Overrides the plugin UI language. See <a href="#language">Language override</a> below.</td>
+  </tr>
+</table>
+
+<h2 id="language">Language override</h2>
+<p>By default the plugin detects the language from Total Commander's own setting (<code>wincmd.ini</code> → <code>LanguageIni</code>). The <code>Language=</code> key overrides this detection.</p>
+
+<p>Use it in two situations:</p>
+<ul>
+  <li><b>TC uses an unsupported language</b> — the plugin supports 15 languages. If TC is set to a language not in that list (e.g. Finnish, Turkish, Arabic, Norwegian, Hebrew), the plugin falls back to English. Use <code>Language=</code> to pick the closest available language instead.</li>
+  <li><b>Wrong language detected</b> — if TC uses a custom or community language file whose filename the plugin cannot identify (e.g. the plugin shows Chinese characters instead of your language), force the correct language here.</li>
+</ul>
+
+<h3>Built-in languages</h3>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Language</th><th>Accepted values for Language=</th></tr>
+  <tr><td>English</td><td><code>English</code>, <code>en</code>, <code>enu</code></td></tr>
+  <tr><td>Polish</td><td><code>Polish</code>, <code>pl</code>, <code>pol</code></td></tr>
+  <tr><td>German</td><td><code>German</code>, <code>de</code>, <code>deu</code></td></tr>
+  <tr><td>French</td><td><code>French</code>, <code>fr</code>, <code>fra</code></td></tr>
+  <tr><td>Spanish</td><td><code>Spanish</code>, <code>es</code>, <code>esp</code></td></tr>
+  <tr><td>Italian</td><td><code>Italian</code>, <code>it</code>, <code>ita</code></td></tr>
+  <tr><td>Russian</td><td><code>Russian</code>, <code>ru</code>, <code>rus</code></td></tr>
+  <tr><td>Czech</td><td><code>Czech</code>, <code>cs</code></td></tr>
+  <tr><td>Hungarian</td><td><code>Hungarian</code>, <code>hu</code></td></tr>
+  <tr><td>Japanese</td><td><code>Japanese</code>, <code>ja</code></td></tr>
+  <tr><td>Dutch</td><td><code>Dutch</code>, <code>nl</code></td></tr>
+  <tr><td>Portuguese (Brazil)</td><td><code>Portuguese</code>, <code>pt-br</code>, <code>ptb</code></td></tr>
+  <tr><td>Romanian</td><td><code>Romanian</code>, <code>ro</code></td></tr>
+  <tr><td>Slovak</td><td><code>Slovak</code>, <code>sk</code></td></tr>
+  <tr><td>Ukrainian</td><td><code>Ukrainian</code>, <code>uk</code></td></tr>
+  <tr><td>Chinese (Simplified)</td><td><code>Chinese</code>, <code>zh-cn</code>, <code>chs</code></td></tr>
+</table>
+
+<div class="note">
+  <b>Example — force English:</b> Open <code>sftpplug.ini</code> in a text editor, find or create the <code>[Configuration]</code> section, and add the <code>Language=</code> line:
+<pre>[Configuration]
+Language=English</pre>
+  Restart Total Commander for the change to take effect.
+</div>
+
+<h3>Custom translation file</h3>
+<p>If your language is not in the list above, you can create a custom <code>.lng</code> file:</p>
+<ol>
+  <li>Find the plugin directory — it contains the plugin DLL (<code>sftpplug.wfx</code> / <code>sftpplug.wfx64</code>) and a <code>language\</code> subfolder.</li>
+  <li>Copy one of the existing <code>.lng</code> files from the <code>language\</code> subfolder as a starting point, for example:<br>
+      copy <code>language\deu.lng</code> → <code>language\fin.lng</code></li>
+  <li>Open <code>language\fin.lng</code> in a UTF-8 text editor (e.g. Notepad++). Each line has the format:
+<pre># This is a comment (ignored)
+12345=Translated string here
+12346=Another string</pre>
+      Translate the strings on the right side of each <code>=</code>. Leave the numeric IDs on the left unchanged. Lines starting with <code>#</code> are comments.</li>
+  <li>Save the file as UTF-8 (with or without BOM — both are accepted).</li>
+  <li>Add to <code>sftpplug.ini</code>:
+<pre>[Configuration]
+Language=fin</pre>
+  </li>
+  <li>Restart Total Commander.</li>
+</ol>
+<div class="note">
+  <b>Partial translations are fine.</b> Any string ID not present in the <code>.lng</code> file will fall back to English automatically. You only need to translate the strings you care about.
+</div>
+
+<p><a href="settings-reference.html">Back to Settings Reference</a> &nbsp;|&nbsp; <a href="index.html">Back to index</a></p>
+</body>
+</html>

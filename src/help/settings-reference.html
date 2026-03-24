@@ -84,11 +84,16 @@
 
 <h3>LAN Pair Controls</h3>
 <ul>
-  <li><b>Role:</b> Auto / Receiver / Donor</li>
+  <li><b>Role:</b> Auto / Receiver / Donor — controls which side initiates the connection; see <a href="lan-pair.html">LAN Pair</a> for details</li>
   <li><b>Peer:</b> Detected LAN peer dropdown</li>
   <li><b>Session timeout:</b> Minutes; <code>0</code> means no limit</li>
+  <li><b>Trusted Installer (checkbox):</b> When checked, the local LAN Pair file server impersonates the TrustedInstaller account when serving incoming connections. This allows a remote peer to read and write files that are owned by TrustedInstaller (Windows system files, Windows Update directories, etc.) on <em>this</em> machine. Requires that the process has SeDebugPrivilege; Total Commander normally runs with sufficient privileges. See <a href="lan-pair.html#trustedinstaller">LAN Pair &rarr; TrustedInstaller</a> for a full explanation.</li>
   <li><b>Pair...</b> Starts pairing or role negotiation</li>
 </ul>
+
+<h2>Plugin-wide Configuration (sftpplug.ini)</h2>
+<p>Plugin-wide settings (language override, etc.) are stored in the <code>[Configuration]</code> section of <code>sftpplug.ini</code>. See the dedicated page for the file location, all available keys, and examples including custom translation files:</p>
+<p><a href="plugin-config.html">→ Plugin Configuration (sftpplug.ini)</a></p>
 
 <h3>Advanced Options</h3>
 <ul>

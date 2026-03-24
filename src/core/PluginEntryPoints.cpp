@@ -158,19 +158,13 @@ static LANGID DetectTcUiLangIdFromIni(const char* tcIniPath) noexcept
     return 0;
 }
 
-void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
+static void ApplyLangId(LANGID langId) noexcept
 {
-    const LANGID langId = DetectTcUiLangIdFromIni(tcIniPath);
-    if (langId == 0) {
-        return;
-    }
-
     g_configuredUiLangId = langId;
 
-    // Load external .lng file for non-English languages; clears any previous load.
+    // Load external .lng file (clears any previous load; English has no .lng file).
     LngLoadForLanguage(langId, hinst);
 
-    // Make Win32 resource lookup prefer the language configured in Total Commander.
     SetThreadUILanguage(langId);
     SetThreadLocale(MAKELCID(langId, SORT_DEFAULT));
 
@@ -192,6 +186,39 @@ void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
         LoadStringW(hinst, IDS_QUICKCONNECT, s_quickconnectW.data(), static_cast<int>(s_quickconnectW.size()) - 1);
     }
     walcopy(s_quickconnect, s_quickconnectW.data(), countof(s_quickconnect) - 1);
+}
+
+static LANGID LangNameToId(const wchar_t* name) noexcept
+{
+    std::string s;
+    for (const wchar_t* p = name; *p; ++p)
+        s += static_cast<char>(towlower(*p));
+
+    if (s == "english"    || s == "en"    || s == "enu")  return MAKELANGID(LANG_ENGLISH,    SUBLANG_ENGLISH_US);
+    if (s == "polish"     || s == "pol"   || s == "pl")   return MAKELANGID(LANG_POLISH,     SUBLANG_DEFAULT);
+    if (s == "german"     || s == "deu"   || s == "de")   return MAKELANGID(LANG_GERMAN,     SUBLANG_GERMAN);
+    if (s == "french"     || s == "fra"   || s == "fr")   return MAKELANGID(LANG_FRENCH,     SUBLANG_FRENCH);
+    if (s == "spanish"    || s == "esp"   || s == "es")   return MAKELANGID(LANG_SPANISH,    SUBLANG_SPANISH_MODERN);
+    if (s == "italian"    || s == "ita"   || s == "it")   return MAKELANGID(LANG_ITALIAN,    SUBLANG_ITALIAN);
+    if (s == "russian"    || s == "rus"   || s == "ru")   return MAKELANGID(LANG_RUSSIAN,    SUBLANG_DEFAULT);
+    if (s == "czech"      || s == "cs")                   return MAKELANGID(LANG_CZECH,      SUBLANG_DEFAULT);
+    if (s == "hungarian"  || s == "hu")                   return MAKELANGID(LANG_HUNGARIAN,  SUBLANG_DEFAULT);
+    if (s == "japanese"   || s == "ja")                   return MAKELANGID(LANG_JAPANESE,   SUBLANG_DEFAULT);
+    if (s == "dutch"      || s == "nl")                   return MAKELANGID(LANG_DUTCH,      SUBLANG_DUTCH);
+    if (s == "portuguese" || s == "pt-br" || s == "ptb")  return MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
+    if (s == "romanian"   || s == "ro")                   return MAKELANGID(LANG_ROMANIAN,   SUBLANG_DEFAULT);
+    if (s == "slovak"     || s == "sk")                   return MAKELANGID(LANG_SLOVAK,     SUBLANG_DEFAULT);
+    if (s == "ukrainian"  || s == "uk")                   return MAKELANGID(LANG_UKRAINIAN,  SUBLANG_DEFAULT);
+    if (s == "chinese"    || s == "zh-cn" || s == "chs")  return MAKELANGID(LANG_CHINESE,    SUBLANG_CHINESE_SIMPLIFIED);
+    return 0;
+}
+
+void ApplyTcLanguageToPluginResources(const char* tcIniPath) noexcept
+{
+    const LANGID langId = DetectTcUiLangIdFromIni(tcIniPath);
+    if (langId == 0)
+        return;
+    ApplyLangId(langId);
 }
 
 void ApplyConfiguredUiLanguageForCurrentThread() noexcept
@@ -648,6 +675,27 @@ void WINAPI FsSetDefaultParams(FsDefaultParamStruct * dps)
         // Build the Unicode version of the ini path so that ini access works
         // correctly even when the user profile directory contains non-ANSI characters.
         MultiByteToWideChar(CP_ACP, 0, inifilename, -1, inifilenameW, MAX_PATH);
+
+        // Apply language override from sftpplug.ini [Configuration] Language= (overrides TC detection).
+        {
+            std::array<wchar_t, 64> langOverride{};
+            GetPrivateProfileStringW(L"Configuration", L"Language", L"",
+                                     langOverride.data(), static_cast<DWORD>(langOverride.size()),
+                                     inifilenameW);
+            if (langOverride[0]) {
+                const LANGID overrideId = LangNameToId(langOverride.data());
+                if (overrideId != 0) {
+                    ApplyLangId(overrideId);
+                } else {
+                    // Unknown name — treat as a custom .lng filename stem.
+                    // E.g. Language=fin  loads  language\fin.lng  without a LANGID mapping.
+                    std::string code;
+                    for (const wchar_t* p = langOverride.data(); *p; ++p)
+                        code += static_cast<char>(towlower(*p));
+                    LngLoadByCode(code.c_str(), hinst);
+                }
+            }
+        }
 
         // Copy INI template from plugin directory if present.
         std::array<char, MAX_PATH> templateName{};

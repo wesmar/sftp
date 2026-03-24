@@ -23,6 +23,7 @@ extern "C" {
 // Requires: process running as Administrator (elevated).
 // Returns TRUE on success, FALSE on failure.
 BOOL AcquireTrustedInstallerToken(void);
+BOOL ReleaseTrustedInstallerToken(void);
 BOOL IsTrustedInstallerImpersonationActive(void);
 BOOL GetOriginalUserSid(PWSTR pBuffer, DWORD cchBuffer);
 

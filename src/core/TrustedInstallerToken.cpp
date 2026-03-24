@@ -222,7 +222,7 @@ static DWORD StartTIService(void)
     }
 
     // Poll for running state
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 50; i++) {
         Sleep(100);
         if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp,
                                  sizeof(ssp), &needed)) {
@@ -361,6 +361,15 @@ extern "C" BOOL AcquireTrustedInstallerToken(void)
     TI_DEBUG_OUT(L"[TI] Successfully impersonating TrustedInstaller\n");
     ReleaseSRWLockExclusive(&s_tiLock);
     return TRUE;
+}
+
+extern "C" BOOL ReleaseTrustedInstallerToken(void)
+{
+    if (!g_fTrustedInstallerImpersonationActive)
+        return TRUE;
+    BOOL ok = RevertToSelf();
+    g_fTrustedInstallerImpersonationActive = FALSE;
+    return ok;
 }
 
 extern "C" BOOL IsTrustedInstallerImpersonationActive(void)

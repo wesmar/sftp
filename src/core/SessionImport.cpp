@@ -191,20 +191,24 @@ bool SessionExistsInIni(const std::string& section, LPCSTR iniFileName)
     return len > 0;
 }
 
+static bool IniSectionExists(const std::string& name, LPCSTR iniFileName)
+{
+    std::array<char, 16> buf{};
+    if (GetPrivateProfileStringA(name.c_str(), "server", nullptr, buf.data(), buf.size(), iniFileName) > 0)
+        return true;
+    return GetPrivateProfileStringA(name.c_str(), "user", nullptr, buf.data(), buf.size(), iniFileName) > 0;
+}
+
 std::string MakeUniqueIniSection(const std::string& baseName, SessionSource source, LPCSTR iniFileName)
 {
-    // Check if section already exists by looking for any key in it
-    std::array<char, 16> buffer{};
-    DWORD len = GetPrivateProfileStringA(baseName.c_str(), "server", nullptr, buffer.data(), buffer.size(), iniFileName);
-    if (len > 0)
-        return baseName;  // Section exists with server key
-    
-    // Fallback check using the "user" key.
-    len = GetPrivateProfileStringA(baseName.c_str(), "user", nullptr, buffer.data(), buffer.size(), iniFileName);
-    if (len > 0)
-        return baseName;  // Section exists with user key
-    
-    // Section doesn't exist, use base name
+    if (!IniSectionExists(baseName, iniFileName))
+        return baseName;
+
+    for (int n = 2; n < 1000; ++n) {
+        std::string candidate = baseName + "_" + std::to_string(n);
+        if (!IniSectionExists(candidate, iniFileName))
+            return candidate;
+    }
     return baseName;
 }
 

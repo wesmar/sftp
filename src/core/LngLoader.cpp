@@ -105,34 +105,11 @@ static const char* LangIdToTcCode(LANGID id) noexcept
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Internal file loader
 // ---------------------------------------------------------------------------
 
-void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept
+static void LoadLngFromPath(const std::string& lngPath) noexcept
 {
-    g_lngMap.clear();
-
-    const char* code = LangIdToTcCode(langId);
-    if (!code)
-        return;  // English or unknown — use built-in RC strings
-
-    // Derive the plugin DLL directory.
-    std::array<char, MAX_PATH> dllPath{};
-    if (GetModuleFileNameA(hPluginInst, dllPath.data(),
-                           static_cast<DWORD>(dllPath.size()) - 1) == 0)
-        return;
-
-    char* lastSlash = strrchr(dllPath.data(), '\\');
-    if (!lastSlash)
-        return;
-    lastSlash[1] = '\0';  // Keep trailing backslash
-
-    // Build full path: <plugindir>\language\XX.lng
-    std::string lngPath = dllPath.data();
-    lngPath += "language\\";
-    lngPath += code;
-    lngPath += ".lng";
-
     HANDLE hFile = CreateFileA(lngPath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE)
@@ -179,6 +156,52 @@ void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept
 
         pos = end + 1;
     }
+}
+
+static std::string GetPluginLangDir(HINSTANCE hPluginInst) noexcept
+{
+    std::array<char, MAX_PATH> dllPath{};
+    if (GetModuleFileNameA(hPluginInst, dllPath.data(),
+                           static_cast<DWORD>(dllPath.size()) - 1) == 0)
+        return {};
+    char* lastSlash = strrchr(dllPath.data(), '\\');
+    if (!lastSlash)
+        return {};
+    lastSlash[1] = '\0';
+    return std::string(dllPath.data()) + "language\\";
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept
+{
+    g_lngMap.clear();
+
+    const char* code = LangIdToTcCode(langId);
+    if (!code)
+        return;  // English or unknown — use built-in RC strings
+
+    const std::string dir = GetPluginLangDir(hPluginInst);
+    if (dir.empty())
+        return;
+
+    LoadLngFromPath(dir + code + ".lng");
+}
+
+void LngLoadByCode(const char* code, HINSTANCE hPluginInst) noexcept
+{
+    g_lngMap.clear();
+
+    if (!code || !code[0])
+        return;
+
+    const std::string dir = GetPluginLangDir(hPluginInst);
+    if (dir.empty())
+        return;
+
+    LoadLngFromPath(dir + code + ".lng");
 }
 
 const char* LngGetString(UINT id) noexcept
