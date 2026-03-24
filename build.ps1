@@ -20,7 +20,7 @@ $helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
 $helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
 
 # Read plugin version from version.h (single source of truth)
-$pluginVersion = "1.0.0.16"
+$pluginVersion = "10.0.0.17"
 $verHPath = Join-Path $projectRoot "src\include\version.h"
 if (Test-Path $verHPath) {
     $verHContent = Get-Content $verHPath -Raw
@@ -365,7 +365,7 @@ type=wfx
 file=$projectName.wfx
 file64=$projectName.wfx64
 defaultdir=$projectName
-version=1.0.0.16
+version=10.0.0.17
 "@
 
     Add-Type -AssemblyName System.IO.Compression
@@ -398,6 +398,9 @@ version=1.0.0.16
 
         if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
         if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName.chm" }
+
+        $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
+        if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
 
         # Pack all external language files
         $lngDir = Join-Path $projectRoot "src\res\language"
@@ -454,6 +457,12 @@ if (-not $nodeploy) {
             if (Test-Path $phpAgentSource) {
                 Copy-Item -Path $phpAgentSource -Destination (Join-Path $pluginDir "sftp.php") -Force
                 Write-Host "  Deployed: sftp.php" -ForegroundColor Green
+            }
+
+            $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
+            if (Test-Path $tplSource) {
+                Copy-Item -Path $tplSource -Destination (Join-Path $pluginDir "sftpplug.tpl") -Force
+                Write-Host "  Deployed: sftpplug.tpl" -ForegroundColor Green
             }
 
             # Deploy external language files

@@ -107,9 +107,9 @@ int CleanupFailedConnect(
     // (above) but BEFORE the jump socket closes.
     cs->transport_stream.reset();
     Sleep(RECONNECT_SLEEP_MS);
-    if (cs->sock) {
+    if (cs->sock != INVALID_SOCKET) {
         closesocket(cs->sock);
-        cs->sock = 0;
+        cs->sock = INVALID_SOCKET;
     }
     return code;
 }

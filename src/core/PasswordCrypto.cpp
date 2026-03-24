@@ -177,7 +177,7 @@ void DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain, UINT cchPlain)
     // Special marker "!" for TC master password
     if (input == "!") {
         if (CryptProc)
-            strlcpy(pszPlain, "\001", cchPlain - 1);
+            strlcpy(pszPlain, "\001", cchPlain);
         return;
     }
 

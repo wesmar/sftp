@@ -37,18 +37,35 @@ struct JmpKbdCtx {
     const char* password = nullptr;
 };
 
-// Keyboard-interactive callback for jump host: just echo the stored password.
+// Keyboard-interactive callback for jump host: echo the stored password only for
+// password-looking prompts; send an empty string for OTP/MFA prompts.
 extern "C" static void jmp_kbd_callback(
     LPCSTR /*name*/,   int /*name_len*/,
     LPCSTR /*instr*/,  int /*instr_len*/,
     int num_prompts,
-    const LIBSSH2_USERAUTH_KBDINT_PROMPT* /*prompts*/,
+    const LIBSSH2_USERAUTH_KBDINT_PROMPT* prompts,
     LIBSSH2_USERAUTH_KBDINT_RESPONSE* responses,
     LPVOID* abstract)
 {
     auto* ctx = static_cast<JmpKbdCtx*>(*abstract);
     for (int i = 0; i < num_prompts; i++) {
-        const char* pw = (ctx && ctx->password) ? ctx->password : "";
+        const char* pw = "";
+        if (ctx && ctx->password) {
+            // Copy and lowercase the prompt text to check if it looks like a password prompt.
+            std::array<char, 256> lower{};
+            const size_t copyLen = min(
+                prompts ? static_cast<size_t>(prompts[i].length) : size_t{0},
+                lower.size() - 1);
+            if (copyLen > 0) memcpy(lower.data(), prompts[i].text, copyLen);
+            lower[copyLen] = '\0';
+            _strlwr_s(lower.data(), lower.size());
+            const bool isPass = strstr(lower.data(), "pass") != nullptr
+                             && !strstr(lower.data(), "oath")
+                             && !strstr(lower.data(), "one time")
+                             && !strstr(lower.data(), "one-time");
+            if (isPass || copyLen == 0)
+                pw = ctx->password;
+        }
         responses[i].text   = _strdup(pw);
         responses[i].length = static_cast<unsigned int>(strlen(pw));
     }

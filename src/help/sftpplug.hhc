@@ -11,6 +11,7 @@
       <LI><OBJECT type="text/sitemap"><param name="Name" value="Character Encoding"><param name="Local" value="encoding.html"></OBJECT>
       <LI><OBJECT type="text/sitemap"><param name="Name" value="Session Management"><param name="Local" value="sessions.html"></OBJECT>
       <LI><OBJECT type="text/sitemap"><param name="Name" value="Authentication Methods"><param name="Local" value="authentication.html"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Plugin Configuration (sftpplug.ini)"><param name="Local" value="plugin-config.html"></OBJECT>
     </UL>
     <LI><OBJECT type="text/sitemap"><param name="Name" value="Transfer Modes"><param name="Local" value="transfer-modes.html"></OBJECT>
     <UL>

@@ -624,7 +624,8 @@ bool LanPairSession::getFile(const std::string& remotePath,
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
 
-    if (impl_ && impl_->trustedInstaller_) AcquireTrustedInstallerToken();
+    const bool tiAcquired = (impl_ && impl_->trustedInstaller_) && AcquireTrustedInstallerToken();
+    struct TiScope { bool a; ~TiScope() { if (a) ReleaseTrustedInstallerToken(); } } tiScope{tiAcquired};
 
     int64_t offset = 0;
     if (resume) {
@@ -708,7 +709,8 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
     if (fsResult) *fsResult = FS_FILE_READERROR;
     if (!isConnected()) return false;
 
-    if (impl_ && impl_->trustedInstaller_) AcquireTrustedInstallerToken();
+    const bool tiAcquired = (impl_ && impl_->trustedInstaller_) && AcquireTrustedInstallerToken();
+    struct TiScope { bool a; ~TiScope() { if (a) ReleaseTrustedInstallerToken(); } } tiScope{tiAcquired};
 
     HANDLE hLocal = CreateFileW(localPath, GENERIC_READ, FILE_SHARE_READ,
                                 nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);

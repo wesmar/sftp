@@ -59,7 +59,9 @@ void kbd_callback(LPCSTR name, int name_len,
     for (int i = 0; i < num_prompts; i++) {
         // Pass the stored password as the first response for password-like prompts.
         // Multiple callback invocations are tracked via InteractivePasswordSent.
-        strlcpy(retbuf.data(), reinterpret_cast<LPCSTR>(prompts[i].text), min(static_cast<size_t>(prompts[i].length), retbuf.size()-1));
+        const size_t copyLen = min(static_cast<size_t>(prompts[i].length), retbuf.size() - 1);
+        memcpy(retbuf.data(), prompts[i].text, copyLen);
+        retbuf[copyLen] = '\0';
         ShowStatus(retbuf.data());
         bool autoSendPassword = (ConnectSettings && !ConnectSettings->password.empty() && !ConnectSettings->InteractivePasswordSent);
         if (autoSendPassword) {

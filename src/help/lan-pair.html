@@ -48,24 +48,27 @@
 
 <h2>Roles</h2>
 <ul>
-  <li><b>Auto</b> — guided 60-second pairing wizard; starts listening in the background and waits for a peer to appear</li>
-  <li><b>Receiver</b> — waits for an incoming paired client (acts as server); click <b>Pair...</b> again to stop</li>
-  <li><b>Donor</b> — actively connects to the peer selected in the Peer list (acts as client)</li>
+  <li><b>Auto</b> — guided 60-second pairing wizard; the plugin starts the local file server in the background and waits up to 60 seconds for a peer to appear, then prompts you to connect or stay as server.</li>
+  <li><b>Donor</b> — runs the local LAN Pair file server and waits for an incoming Receiver connection. Does <em>not</em> initiate outgoing connections — the other machine (configured as Receiver) must connect first. Use this on the machine whose files you want to access remotely.</li>
+  <li><b>Receiver</b> — connects to the Donor's file server. Does <em>not</em> start a local file server. Use this on the machine that will browse and transfer files from the Donor.</li>
 </ul>
+<div class="note">
+  <b>Which role for which machine?</b> The <em>Donor</em> is the machine that has the files — it runs as server and waits. The <em>Receiver</em> is the machine that connects and browses — it acts as client. Both machines must be running Total Commander with the plugin installed.
+</div>
 
 <h2>Auto mode — pairing wizard</h2>
 <p>When <b>Auto</b> is selected and you click <b>Pair...</b>, the plugin runs a guided wizard:</p>
 <ol>
-  <li>The receiver starts listening on TCP 45846 in the background.</li>
+  <li>The local file server starts listening on TCP 45846 in the background.</li>
   <li>A <b>60-second countdown dialog</b> appears: <em>"Searching for LAN Pair peer on local network..."</em>. You can cancel at any time.</li>
-  <li>As soon as the other machine is detected, the dialog closes and you are asked to choose a role:
+  <li>As soon as the other machine is detected, the dialog closes and a prompt appears:
     <ul>
-      <li><b>Yes → Donor</b> — connects to the discovered peer immediately.</li>
-      <li><b>No → Receiver</b> — stays in listening mode; the server continues running.</li>
-      <li><b>Cancel</b> — the receiver is stopped.</li>
+      <li><b>Yes</b> — connect to the discovered peer immediately (this machine acts as client / Receiver).</li>
+      <li><b>No</b> — stay in server / Donor mode; the local file server keeps running.</li>
+      <li><b>Cancel</b> — stop the local server and cancel.</li>
     </ul>
   </li>
-  <li>If no peer appears within 60 seconds, the receiver is stopped automatically and a status message is shown. No ports are left open.</li>
+  <li>If no peer appears within 60 seconds, the local server is stopped automatically and a status message is shown. No ports are left open.</li>
 </ol>
 <div class="note">
   <b>Tip:</b> Both machines should click <b>Pair...</b> at roughly the same time. With a 60-second window and a 2-second broadcast interval, there is no need to rush.
@@ -82,6 +85,33 @@
   <li>When the peer is found and roles are confirmed, the session opens as a regular TC file panel.</li>
 </ol>
 
+<h2 id="trustedinstaller">TrustedInstaller — accessing protected system files</h2>
+<p>Windows protects certain system files and directories by assigning them to the <b>TrustedInstaller</b> service account (e.g. files in <code>C:\Windows\</code>, <code>C:\Program Files\WindowsApps\</code>, Windows Update caches). Even an Administrator account cannot modify these files directly without taking ownership. The <b>Trusted Installer</b> checkbox in the LAN Pair connection settings lets you work around this restriction for <em>incoming</em> connections.</p>
+
+<h3>How it works</h3>
+<ol>
+  <li>When a remote peer connects to the local LAN Pair file server, the server thread impersonates the TrustedInstaller service account before handling any commands.</li>
+  <li>While impersonating TrustedInstaller, all file operations (read, write, delete, rename, mkdir) run with TrustedInstaller privileges, bypassing the normal ownership restrictions.</li>
+  <li>Impersonation is reverted automatically when the remote peer disconnects.</li>
+</ol>
+<p>The <b>Trusted Installer</b> checkbox has two independent effects depending on which role this machine plays:</p>
+<ul>
+  <li><b>As Donor (file server):</b> incoming connections from a Receiver are served under TI impersonation — the Receiver can read, write, delete, and rename TI-owned files on this machine.</li>
+  <li><b>As Receiver (file client):</b> outgoing file transfers run under TI impersonation on this machine — you can download files <em>to</em> TI-protected local directories and upload files <em>from</em> TI-protected local paths.</li>
+</ul>
+<p>To work with TI-protected files on the <em>remote</em> machine (the Donor), the checkbox must be enabled on the <em>Donor's</em> connection profile, not the Receiver's.</p>
+
+<h3>Requirements</h3>
+<ul>
+  <li>The process hosting the plugin (Total Commander) must be running with <b>SeDebugPrivilege</b>. TC normally has this privilege when run as Administrator or with the standard elevated token.</li>
+  <li>The TrustedInstaller Windows service must be startable. The plugin starts it automatically if it is not already running.</li>
+  <li>The setting takes effect immediately on the next incoming connection — no TC restart needed after enabling or disabling the checkbox.</li>
+</ul>
+
+<div class="note">
+  <b>Security note:</b> TrustedInstaller impersonation grants write access to core Windows system files. Enable this option only on machines you fully control and only while you actually need it.
+</div>
+
 <h2>Session timeout</h2>
 <ul>
   <li><code>0</code> = no timeout</li>
@@ -91,13 +121,23 @@
 </ul>
 
 <h2>Saved settings</h2>
-<p>Typical LAN Pair session keys in <code>sftpplug.ini</code>:</p>
+<p>LAN Pair session keys in <code>sftpplug.ini</code>:</p>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr><th>Key</th><th>Values</th><th>Description</th></tr>
+  <tr><td><code>transfermode</code></td><td><code>3</code></td><td>Fixed value for LAN Pair mode</td></tr>
+  <tr><td><code>server</code></td><td><code>lanpair://peer/PEERNAME</code></td><td>Peer identifier URI</td></tr>
+  <tr><td><code>lanpairrole</code></td><td><code>0</code> / <code>1</code> / <code>2</code></td><td><code>0</code> = Auto, <code>1</code> = Receiver, <code>2</code> = Donor</td></tr>
+  <tr><td><code>lanpairpeer</code></td><td>peer name string</td><td>Name of the target peer as seen in the discovery list</td></tr>
+  <tr><td><code>lanpairtimeout</code></td><td>integer ≥ 0</td><td>Session timeout in minutes; <code>0</code> = no limit</td></tr>
+  <tr><td><code>lanparti</code></td><td><code>0</code> / <code>1</code></td><td><code>1</code> = enable TrustedInstaller impersonation for incoming connections on this machine</td></tr>
+</table>
 <pre>[MyLAN]
 transfermode=3
 server=lanpair://peer/WORKSTATION-01
 lanpairrole=0
 lanpairpeer=WORKSTATION-01
 lanpairtimeout=0
+lanparti=0
 </pre>
 
 <h2>UI behavior</h2>
@@ -122,6 +162,8 @@ lanpairtimeout=0
   <tr><td>Password rejected on first connect</td><td>Passwords do not match on both sides</td><td>Ensure both sides use exactly the same pairing password (case-sensitive)</td></tr>
   <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user/machine and lost on reinstall</td><td>Re-pair with password; trust will be rebuilt automatically</td></tr>
   <tr><td>Peers found but classic SMB works — LAN Pair does not</td><td>UDP broadcast not reaching the other machine (VLAN, managed switch isolation)</td><td>Check switch/VLAN settings; UDP broadcast must reach port 45845 on both sides</td></tr>
+  <tr><td>TrustedInstaller files cannot be modified</td><td>TrustedInstaller option not enabled, or TC not running with SeDebugPrivilege</td><td>Enable the <b>Trusted Installer</b> checkbox in the connection settings on the machine that owns the files; run Total Commander as Administrator if needed</td></tr>
+  <tr><td>TrustedInstaller option enabled but pairing fails on first connect</td><td>Old DPAPI trust key was saved under a different user context and cannot be decrypted</td><td>Delete the matching <code>lanpair_trust_*.bin</code> file from the plugin directory and re-pair; trust will be rebuilt using machine-context encryption compatible with TrustedInstaller</td></tr>
 </table>
 
 <p><a href="index.html">Back to index</a></p>

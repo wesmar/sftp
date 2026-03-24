@@ -8,6 +8,10 @@
 // The loaded strings are held in an in-process map.
 void LngLoadForLanguage(LANGID langId, HINSTANCE hPluginInst) noexcept;
 
+// Load a .lng file by explicit filename stem (e.g. "fin" loads language\fin.lng).
+// Used for custom/unsupported languages specified via Language= in sftpplug.ini.
+void LngLoadByCode(const char* code, HINSTANCE hPluginInst) noexcept;
+
 // Return the translated string for id, or nullptr if no .lng override exists.
 // The returned pointer is valid for the lifetime of the process.
 const char* LngGetString(UINT id) noexcept;

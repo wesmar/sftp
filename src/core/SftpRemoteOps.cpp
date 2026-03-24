@@ -178,7 +178,7 @@ int SftpFindFirstFileW(pConnectSettings cs, LPCWSTR remotedir, LPVOID* davdatapt
         return SFTP_OK;
     }
 
-if (cs->scponly) {
+    if (cs->scponly) {
         // Retry loop in case of silent TCP disconnections (e.g., home.pl)
         for (int attempt = 0; attempt < 2; ++attempt) {
             if (!EnsureScpShell(cs)) {

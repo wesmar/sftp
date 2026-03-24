@@ -440,6 +440,7 @@ static int LanPairConnect(pConnectSettings cs)
         if (g_lanFileServer)
             g_lanFileServer->setPassword(cs->password);
     }
+    LanFileServerSetTrustedInstaller(cs->lan_pair_trusted_installer);
 
     {
         std::string s = LngStrU8(IDS_LAN_CONNECTING, "LAN Pair: connecting to {}...");
@@ -464,13 +465,6 @@ static int LanPairConnect(pConnectSettings cs)
     session->setTimeoutMin(cs->lan_pair_timeout_min);
     session->setTrustedInstaller(cs->lan_pair_trusted_installer);
     cs->lanSession = std::move(session);
-
-    if (cs->lan_pair_trusted_installer) {
-        if (!AcquireTrustedInstallerToken()) {
-            if (cs->feedback)
-                cs->feedback->ShowError(LngStrU8(IDS_LAN_TI_ERR, "LAN Pair: TrustedInstaller impersonation failed.").c_str());
-        }
-    }
 
     ShowStatusId(IDS_LOG_LAN_CONNECTED, nullptr, true);
     return SFTP_OK;
