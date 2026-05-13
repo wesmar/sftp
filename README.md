@@ -1,15 +1,5 @@
 # Secure FTP Plugin for Total Commander
 
-> [!CAUTION]
-> **2026-03-13 — Visual C++ Redistributable dependency removed**
->
-> Previous builds reported *"Error loading plugin file! The plugin probably needs some DLLs missing"*
-> on clean systems without Visual C++ Redistributable installed (`MSVCRT.dll` / `vcruntime140.dll`).
->
-> Root cause: `argon2_a.lib` and `libssh2.lib` were compiled with `/MD` (dynamic CRT).
-> Fixed: both libraries rebuilt from source with `/MT` — fully static C runtime.
-> **The plugin requires no external DLLs or VC++ Redistributable.**
-
 > [!IMPORTANT]
 > **2026-05-13 — Modern OpenSSH key auth fixed (libssh2 mbedTLS migration)**
 >
