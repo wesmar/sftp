@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Projekty/sftp/thirdparty/libssh2/build-x86/cmake_install.cmake",
+		"C:/Projekty/sftp/thirdparty/libssh2/build-x86/src/cmake_install.cmake",
+		"C:/Projekty/sftp/thirdparty/libssh2/build-x86/docs/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

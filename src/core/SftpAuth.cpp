@@ -522,7 +522,11 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
 
     ShowStatusId(IDS_AUTH_PUBKEY_FOR, ConnectSettings->user.c_str(), true);
 
-    if (pubkeyfileptr && _stricmp(pubkeyfile.data(), privkeyfile.data()) == 0)
+    // Pass nullptr (not an empty buffer) when no public key file is set, so libssh2's
+    // OpenSSL/mbedTLS backends derive the public key from the private one instead of
+    // calling fopen("") and failing with LIBSSH2_ERROR_FILE.
+    if (pubkeyfileptr && (pubkeyfile.data()[0] == 0 ||
+                          _stricmp(pubkeyfile.data(), privkeyfile.data()) == 0))
         pubkeyfileptr = nullptr;
 
     LoadStr(buf, IDS_AUTH_PUBKEY);
@@ -545,6 +549,12 @@ int SftpAuthPubKey(pConnectSettings ConnectSettings, LPCSTR progressbuf, int pro
         WaitForTransportReadable(ConnectSettings);  // Sleep to avoid 100% CPU usage.
     }
     AUTH_LOG("userauthPubkeyFromFile result=%d", auth);
+    {
+        char* dbgErr = nullptr;
+        int dbgLen = 0;
+        int dbgErrno = ConnectSettings->session->lastError(&dbgErr, &dbgLen, false);
+        AUTH_LOG("  lastErrno=%d lastError='%s'", dbgErrno, (dbgErr && dbgErr[0]) ? dbgErr : "(empty)");
+    }
 #ifndef SFTP_ALLINONE
         // NOTE: LIBSSH2_ERROR_REQUIRE_KEYBOARD / REQUIRE_PASSWORD are non-standard error codes
         // provided by the local libssh2 fork to signal mid-auth method switching.

@@ -11,6 +11,15 @@
 > **The plugin requires no external DLLs or VC++ Redistributable.**
 
 > [!IMPORTANT]
+> **2026-05-13 — Modern OpenSSH key auth fixed (libssh2 mbedTLS migration)**
+>
+> Public-key authentication regressed in v10.0.0.17 against modern OpenSSH servers (8.8+, including stock Ubuntu 24.04/26.04 with OpenSSH 10.x): the plugin silently fell back to password prompts even with valid `ed25519` and `RSA` keys.
+>
+> Root cause: the bundled libssh2 was built against the Windows WinCNG crypto backend, which does not implement `ed25519`, `curve25519-sha256`, `AES-GCM`, or RFC 4251 mpint encoding for RSA public keys (`gen_publickey_from_rsa` missed the leading-zero rule, so the SHA-256 fingerprint of the client-presented pubkey never matched `authorized_keys` when the modulus had its MSB set — roughly half of real keys).
+>
+> Fixed by switching libssh2 to a statically linked **mbedTLS 3.6.6** backend and patching three upstream libssh2 1.11.1 defects (uninitialized `int ret`, missing mpint leading-zero, RSA-SHA2 default when `server-sig-algs` is absent). Plugin grew ~1 MB; still single-file, no DLLs, no VC++ Redistributable. ed25519, ECDSA, AES-GCM, curve25519-sha256, mlkem768x25519 all now work end-to-end.
+
+> [!IMPORTANT]
 > **2026-03-21 — PHP Agent TAR batch download + sftp.php update required**
 >
 > Users running recent builds with the **TAR stream** option enabled may have experienced:
@@ -897,26 +906,25 @@ src/
   lib/
     argon2_a_x64.lib           # Argon2 static lib — x64, /MT (rebuilt from source)
     argon2_a_x86.lib           # Argon2 static lib — x86, /MT (rebuilt from source)
-    libssh2_x64.lib            # libssh2 static lib — x64, WinCNG, /MT (rebuilt from source)
-    libssh2_x86.lib            # libssh2 static lib — x86, WinCNG, /MT (rebuilt from source)
+    libssh2_x64.lib            # libssh2 1.11.1 static lib — x64, mbedTLS backend, /MT
+    libssh2_x86.lib            # libssh2 1.11.1 static lib — x86, mbedTLS backend, /MT
+    mbedcrypto_x64.lib         # mbedTLS 3.6.6 static lib — x64, /MT
+    mbedcrypto_x86.lib         # mbedTLS 3.6.6 static lib — x86, /MT
   res/
     sftpplug.rc                # String tables: EN / PL / DE / FR / ES
     resource.h
     icon*.ico
     kitty-decrypt.cab          # dp.exe packed as LZX CAB (RCDATA resource IDR_KITTY_DECRYPT_CAB)
-third_party/
-  build.ps1                    # Builds all dependency libs (argon2 + libssh2, x64 + x86, /MT)
-  argon/
-    vs2026/
-      Argon2Static/
-        Argon2Static.vcxproj   # MSVC project: argon2_a_x64.lib / argon2_a_x86.lib, /MT
-    build/
-      x64/argon2_a_x64.lib    # (build artifact — excluded from git)
-      x86/argon2_a_x86.lib    # (build artifact — excluded from git)
-  libssh2/
-    ...                        # libssh2 source (excluded from git via .gitignore)
-    bld_x64/                   # (build artifact — excluded from git)
-    bld_x86/                   # (build artifact — excluded from git)
+build-deps.ps1                 # Builds mbedTLS + libssh2 (x64 + x86, /MT) → src/lib/
+thirdparty/
+  mbedtls/                     # mbedTLS 3.6.6 source tree (excluded from git)
+    build-x64/                 # (build artifact)
+    build-x86/                 # (build artifact)
+  libssh2/                     # libssh2 1.11.1 source tree (excluded from git)
+                               #   local patches in src/mbedtls.c (mpint leading-zero,
+                               #   uninitialized ret) and src/userauth.c (RSA-SHA2 default)
+    build-x64/                 # (build artifact)
+    build-x86/                 # (build artifact)
 ```
 
 ---
@@ -960,19 +968,20 @@ Single-language mode strips unused RC language blocks before compile and restore
 - `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
 - `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `C:\temp\sftpplug_debug.log`
 
-**Rebuilding dependency libraries (`third_party/build.ps1`):**
+**Rebuilding crypto dependencies (`build-deps.ps1`):**
 
-All dependency static libs (argon2 and libssh2) can be rebuilt from source:
+mbedTLS 3.6.6 and libssh2 1.11.1 can be rebuilt from source under `thirdparty/`:
 
 ```powershell
-.\third_party\build.ps1           # Build all (argon2 + libssh2, x64 + x86)
-.\third_party\build.ps1 -argon    # argon2 only
-.\third_party\build.ps1 -libssh2  # libssh2 only
-.\third_party\build.ps1 -x64only  # x64 only
-.\third_party\build.ps1 -x86only  # x86 only
+.\build-deps.ps1                  # Build all (mbedTLS + libssh2, x64 + x86)
+.\build-deps.ps1 -x64only         # x64 only
+.\build-deps.ps1 -x86only         # x86 only
+.\build-deps.ps1 -force           # Rebuild even if .lib files already exist
 ```
 
-Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`). The script verifies `/MT` (`LIBCMT`) linkage in every output lib before copying.
+The script invokes CMake + Ninja under VS18 `vcvars64.bat` / `vcvars32.bat`, builds with `/MT /O2 /Z7`, and copies the resulting `mbedcrypto_{x64,x86}.lib` and `libssh2_{x64,x86}.lib` into `src\lib\`. Public libssh2 headers are synced to `src\include\libssh2\`.
+
+Argon2 static libs (`argon2_a_x64.lib`, `argon2_a_x86.lib`) ship pre-built in `src\lib\` (Argon2 source is not vendored in this repo).
 
 ---
 
@@ -984,7 +993,7 @@ Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x8
 | Total Commander | Version 9.0 or later (x64 or x86) |
 | Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
-| libssh2 | Statically linked (≥ 1.11.1), built with WinCNG backend |
+| libssh2 | Statically linked (1.11.1), **mbedTLS 3.6.6** crypto backend, three local patches (see top banner) — supports ed25519 / ECDSA / curve25519-sha256 / AES-GCM |
 | **Dependencies** | None — libssh2 and argon2 statically linked with `/MT` (no VC++ Redistributable required) |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
@@ -1105,6 +1114,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - **PHP Agent TAR upload** — opt-in `php_tar` checkbox; directory F5 copy streams a single POSIX ustar TAR POST to `op=TAR_EXTRACT`; PHP extracts on-the-fly; GNU LongLink for long paths; two-pass Content-Length; works in foreground (`PUT_MULTI`) and background thread (`PUT_MULTI_THREAD`) modes; plain `.tar` file uploads unaffected
 - **PHP Agent TAR batch download** — opt-in `php_tar` checkbox; multi-file F5 copy sends a single POST to `op=TAR_PACK` with all remote paths; server streams ustar TAR directly without buffering (`php://output`); plugin parses TAR on-the-fly and writes local files; works in foreground (`GET_MULTI`) and background thread (`GET_MULTI_THREAD`) modes; GNU LongLink supported; files >8 GiB skipped cleanly
 - **PHP Agent TAR fixes** — DWORD overflow (TAR upload >4 GB now uses 64-bit `Content-Length` header); TAR pack no longer buffers in `php://temp` on server (eliminates HTTP 504 on OVH); per-file zero-pad allocation removed from upload loop; >8.5 GiB file guard in both C++ and PHP prevents TAR header corruption
+- **libssh2 crypto backend migrated WinCNG → mbedTLS 3.6.6** — restores public-key auth against OpenSSH 8.8+/10.x servers (Ubuntu 24.04/26.04 default config). Adds support for `ed25519`, `ECDSA`, `curve25519-sha256`, `AES-GCM`, `mlkem768x25519`. Three local patches against libssh2 1.11.1: (1) `int ret = 0` in `_libssh2_mbedtls_pub_priv_key` (was returning stack garbage); (2) RFC 4251 mpint leading-zero handling in `gen_publickey_from_rsa` (without it, ≈50% of RSA keys produced the wrong on-wire pubkey hash → `PUBLICKEY_UNRECOGNIZED`); (3) RSA-SHA2 default upgrade in `_libssh2_key_sign_algorithm` when `server-sig-algs` is absent. Built statically `/MT` via new `build-deps.ps1`; plugin remains DLL-free
 
 ### In Progress
 
