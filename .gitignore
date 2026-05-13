@@ -37,6 +37,49 @@ Desktop.ini
 third_party/libssh2/bld*/
 third_party/argon/build/
 
+# thirdparty/ build artifacts (rebuilt by build-deps.ps1)
+thirdparty/mbedtls/build-x64/
+thirdparty/mbedtls/build-x86/
+thirdparty/libssh2/build-x64/
+thirdparty/libssh2/build-x86/
+
+# thirdparty/ — only files needed for build-deps.ps1 are tracked.
+# Everything below is autotools / test / docs cruft never invoked by our CMake build.
+thirdparty/mbedtls/tests/
+thirdparty/mbedtls/programs/
+thirdparty/mbedtls/docs/
+thirdparty/mbedtls/doxygen/
+thirdparty/mbedtls/visualc/
+thirdparty/mbedtls/ChangeLog.d/
+thirdparty/mbedtls/DartConfiguration.tcl
+
+thirdparty/libssh2/example/
+thirdparty/libssh2/tests/
+thirdparty/libssh2/os400/
+thirdparty/libssh2/vms/
+thirdparty/libssh2/m4/
+thirdparty/libssh2/Makefile.am
+thirdparty/libssh2/Makefile.in
+thirdparty/libssh2/aclocal.m4
+thirdparty/libssh2/acinclude.m4
+thirdparty/libssh2/configure
+thirdparty/libssh2/configure.ac
+thirdparty/libssh2/compile
+thirdparty/libssh2/config.guess
+thirdparty/libssh2/config.rpath
+thirdparty/libssh2/config.sub
+thirdparty/libssh2/depcomp
+thirdparty/libssh2/install-sh
+thirdparty/libssh2/ltmain.sh
+thirdparty/libssh2/missing
+thirdparty/libssh2/tap-driver.sh
+thirdparty/libssh2/test-driver
+thirdparty/libssh2/get_ver.awk
+thirdparty/libssh2/git2news.pl
+thirdparty/libssh2/maketgz
+thirdparty/libssh2/libssh2-style.el
+thirdparty/libssh2/libssh2.pc.in
+
 # Archiwa lokalne
 *.7z
 *.tar.gz
