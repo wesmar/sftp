@@ -30,3 +30,15 @@
 ;
 ; Example — force Polish:
 ;Language=Polish
+
+; Per-session option:
+; Add this to a saved session section when the SSH server does not expose the
+; standard "sftp" subsystem, but an SFTP server binary can be started manually.
+; This is equivalent to OpenSSH's `sftp -s /path/to/sftp-server`.
+; This value can be set in the connection dialog or manually in this ini file.
+;
+; Example:
+;[OpenWrt]
+;server=192.168.33.1
+;user=root
+;sftpservercommand=/usr/lib/sftp-server

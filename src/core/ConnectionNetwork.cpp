@@ -92,14 +92,34 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
     std::array<char, 1024> buf{};
     char* errmsg = nullptr;
     int errmsg_len = 0;
+
+    if (ConnectSettings->sftpservercommand.empty() &&
+        !ConnectSettings->DisplayName.empty() &&
+        !ConnectSettings->IniFileName.empty()) {
+        std::array<char, MAX_PATH> commandBuf{};
+        GetPrivateProfileString(ConnectSettings->DisplayName.c_str(),
+                                "sftpservercommand",
+                                "",
+                                commandBuf.data(),
+                                commandBuf.size() - 1,
+                                ConnectSettings->IniFileName.c_str());
+        ConnectSettings->sftpservercommand = commandBuf.data();
+    }
+
     ShowStatusId(IDS_LOG_SFTP_INIT, nullptr, true);
-    SFTP_LOG("CONN", "Initializing SFTP subsystem");
+    SFTP_LOG("CONN", "Initializing SFTP %s",
+             ConnectSettings->sftpservercommand.empty() ? "subsystem" : "server command");
+    if (!ConnectSettings->sftpservercommand.empty()) {
+        ShowStatus(("Custom SFTP server command: " + ConnectSettings->sftpservercommand).c_str());
+    }
     ShowStatusId(IDS_SESSION_STARTUP, " (SFTP)", true);
     do {
         ConnectSettings->sftpsession = nullptr;
         if (ProgressLoop(buf.data(), progress, progress + 10, loop, lasttime))
             break;
-        auto sftpPtr = ConnectSettings->session->sftpInit();
+        auto sftpPtr = ConnectSettings->sftpservercommand.empty()
+            ? ConnectSettings->session->sftpInit()
+            : ConnectSettings->session->sftpInitCommand(ConnectSettings->sftpservercommand.c_str());
         if (sftpPtr) {
             ConnectSettings->sftpsession = std::move(sftpPtr);
         } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {
@@ -113,7 +133,11 @@ bool InitializeSftpSubsystemIfNeeded(pConnectSettings ConnectSettings, int progr
         ShowStatusId(IDS_ERR_INIT_SFTP, errmsg, true);
         SFTP_LOG("CONN", "SFTP init failed: %s", errmsg ? errmsg : "(null)");
         if (LogProc) {
-            const std::string msg = std::format("SFTP: SFTP subsystem init failed: {}", errmsg ? errmsg : "(no details)");
+            const std::string msg = std::format("SFTP: SFTP init failed{}: {}",
+                                                ConnectSettings->sftpservercommand.empty()
+                                                    ? ""
+                                                    : std::format(" via '{}'", ConnectSettings->sftpservercommand),
+                                                errmsg ? errmsg : "(no details)");
             LogProc(PluginNumber, MSGTYPE_IMPORTANTERROR, msg.c_str());
         }
         return false;

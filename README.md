@@ -275,6 +275,22 @@ Operational constraints enforced in every network loop:
 
 Full SFTP subsystem support via libssh2. Streaming reads and writes with configurable chunk sizes. Transfer resume implemented correctly: uses `LIBSSH2_SFTP_ATTR_SIZE` flag in `fstat` to determine the actual remote file size before seeking — fixing a regression where resumes always restarted from offset 0.
 
+Some SSH servers allow interactive SSH login and can run an SFTP server binary
+manually, but do not expose the standard `sftp` subsystem. One real-world
+example is OpenWrt 25.x with Dropbear, where an SFTP server binary may be
+available but the subsystem request fails.
+
+For these servers, a saved session can set:
+
+```ini
+sftpservercommand=/usr/lib/sftp-server
+```
+
+This starts SFTP with an SSH `exec` request, equivalent to OpenSSH's
+`sftp -s /path/to/sftp-server host`.
+
+The value can be set in the connection dialog or manually in `sftpplug.ini`.
+
 ### SCP (Native)
 
 Dedicated `ScpTransfer.cpp` engine. Handles the SCP wire protocol without the SFTP subsystem. Faster than SFTP on many servers due to lower protocol overhead.

@@ -70,6 +70,7 @@ struct tConnectSettings {
     std::string user;
     std::string password;
     std::string connectsendcommand;
+    std::string sftpservercommand;
     WCHAR lastactivepath[1024];
     std::string savedfingerprint;
     std::string pubkeyfile;

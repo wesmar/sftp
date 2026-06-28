@@ -1433,6 +1433,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     HWND certHelp = GetDlgItem(hWnd, IDC_CERTHELP);
     HWND certHelpPriv = GetDlgItem(hWnd, IDC_CERTHELPPRIV);
     HWND phpShellBtn = GetDlgItem(hWnd, IDC_PHPSHELL);
+    HWND sftpServerCommandLabel = GetDlgItem(hWnd, IDC_SFTPSERVERCOMMAND_LABEL);
+    HWND sftpServerCommand = GetDlgItem(hWnd, IDC_SFTPSERVERCOMMAND);
     if (smbMode) {
         CheckDlgButton(hWnd, IDC_SCP_DATA, BST_UNCHECKED);
         CheckDlgButton(hWnd, IDC_SCP_ALL, BST_UNCHECKED);
@@ -1456,6 +1458,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, TRUE);
+        EnableWindow(sftpServerCommandLabel, FALSE);
+        EnableWindow(sftpServerCommand, FALSE);
         const std::wstring pairBtn = LoadResStringW(IDS_BUTTON_PAIR);
         SetWindowTextW(phpShellBtn, pairBtn.empty() ? L"Pair..." : pairBtn.c_str());
         ShowWindow(GetDlgItem(hWnd, IDC_PHP_TAR),           SW_HIDE);
@@ -1512,6 +1516,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         EnableWindow(certHelp, FALSE);
         EnableWindow(certHelpPriv, FALSE);
         EnableWindow(phpShellBtn, phpShellMode ? TRUE : FALSE);
+        EnableWindow(sftpServerCommandLabel, FALSE);
+        EnableWindow(sftpServerCommand, FALSE);
         EnableWindow(GetDlgItem(hWnd, IDC_PHP_TAR), (phpAgentMode || phpShellMode) ? TRUE : FALSE);
         const std::wstring shellBtn = LoadResStringW(IDS_BUTTON_SHELL);
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
@@ -1546,6 +1552,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
 
     EnableWindow(scpData, !scpOnly);
     EnableWindow(shellTransfer, scpOnly);
+    EnableWindow(sftpServerCommandLabel, !scpOnly);
+    EnableWindow(sftpServerCommand, !scpOnly);
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
 
@@ -1595,6 +1603,7 @@ static void ApplyLoadedSessionToDialog(HWND hWnd, pConnectSettings s, LPCSTR ini
     SetDlgItemText(hWnd, IDC_PUBKEY, s->pubkeyfile);
     SetDlgItemText(hWnd, IDC_PRIVKEY, s->privkeyfile);
     SetDlgItemText(hWnd, IDC_PASSWORD, s->password);
+    SetDlgItemText(hWnd, IDC_SFTPSERVERCOMMAND, s->sftpservercommand.c_str());
 
     switch (s->protocoltype) {
     case 1:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV4); break;
@@ -2157,6 +2166,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
         { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
         { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
+        { IDC_SFTPSERVERCOMMAND_LABEL, IDS_DLG_SFTP_SERVER_COMMAND },
         { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
         { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
         { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
@@ -2192,6 +2202,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
     ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
     ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
+    ArrangeExpandLabel(m_hWnd, IDC_SFTPSERVERCOMMAND_LABEL, IDC_SFTPSERVERCOMMAND);
     ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONCOMBO, IDC_PHPSHELL);
 
     if (m_ctx->lanPeerId.empty())
@@ -2306,6 +2317,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
         SetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
         SetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
+        SetDlgItemText(m_hWnd, IDC_SFTPSERVERCOMMAND, m_settings->sftpservercommand.c_str());
 
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
         SetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data());
@@ -2317,6 +2329,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         CheckRadioButton(m_hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO);
         SetDlgItemText(m_hWnd, IDC_FILEMOD, "644");
         SetDlgItemText(m_hWnd, IDC_DIRMOD, "755");
+        SetDlgItemText(m_hWnd, IDC_SFTPSERVERCOMMAND, "");
         CheckDlgButton(m_hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
         SendDlgItemMessage(m_hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, 0, 0);
         fillProxyCombobox(m_hWnd, 0, dlgIniFileName);
@@ -2536,6 +2549,7 @@ void ConnectionDialog::OnOk()
 
     GetDlgItemText(m_hWnd, IDC_PUBKEY, m_settings->pubkeyfile);
     GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
+    GetDlgItemText(m_hWnd, IDC_SFTPSERVERCOMMAND, m_settings->sftpservercommand);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
     m_settings->php_tar                  = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR) == BST_CHECKED;
@@ -2659,6 +2673,7 @@ void ConnectionDialog::OnOk()
         WritePrivateProfileString(targetProfile.data(), "scponly",         m_settings->scponly              ? "1" : nullptr, dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "shelltransfer",   m_settings->shell_transfer_dd    ? "1" : nullptr, dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "shelltransferforce", m_settings->shell_transfer_force ? "1" : nullptr, dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "sftpservercommand", m_settings->sftpservercommand.empty() ? nullptr : m_settings->sftpservercommand.c_str(), dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "pubkeyfile",   m_settings->pubkeyfile.empty()   ? nullptr : m_settings->pubkeyfile.c_str(),   dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);

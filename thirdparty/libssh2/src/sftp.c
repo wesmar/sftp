@@ -776,7 +776,9 @@ LIBSSH2_CHANNEL_CLOSE_FUNC(libssh2_sftp_dtor)
 /* sftp_init
  * Startup an SFTP session
  */
-static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
+static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session,
+                               const char *command,
+                               size_t command_len)
 {
     unsigned char *data;
     size_t data_len = 0;
@@ -830,18 +832,26 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
     }
 
     if(session->sftpInit_state == libssh2_NB_state_sent) {
+        const char *request = (command && command_len > 0) ? "exec" : "subsystem";
+        const size_t request_len = (command && command_len > 0) ? sizeof("exec") - 1 : sizeof("subsystem") - 1;
+        const char *message = (command && command_len > 0) ? command : "sftp";
+        const size_t message_len = (command && command_len > 0) ? command_len : strlen("sftp");
         int ret = _libssh2_channel_process_startup(session->sftpInit_channel,
-                                                   "subsystem",
-                                                   sizeof("subsystem") - 1,
-                                                   "sftp",
-                                                   strlen("sftp"));
+                                                   request,
+                                                   (unsigned int)request_len,
+                                                   message,
+                                                   message_len);
         if(ret == LIBSSH2_ERROR_EAGAIN) {
             _libssh2_error(session, LIBSSH2_ERROR_EAGAIN,
+                           command && command_len > 0 ?
+                           "Would block to execute SFTP server command" :
                            "Would block to request SFTP subsystem");
             return NULL;
         }
         else if(ret) {
             _libssh2_error(session, LIBSSH2_ERROR_CHANNEL_FAILURE,
+                           command && command_len > 0 ?
+                           "Unable to execute SFTP server command" :
                            "Unable to request SFTP subsystem");
             goto sftp_init_error;
         }
@@ -1044,7 +1054,27 @@ LIBSSH2_API LIBSSH2_SFTP *libssh2_sftp_init(LIBSSH2_SESSION *session)
         return NULL;
     }
 
-    BLOCK_ADJUST_ERRNO(ptr, session, sftp_init(session));
+    BLOCK_ADJUST_ERRNO(ptr, session, sftp_init(session, NULL, 0));
+    return ptr;
+}
+
+LIBSSH2_API LIBSSH2_SFTP *libssh2_sftp_init_command(LIBSSH2_SESSION *session,
+                                                    const char *command,
+                                                    unsigned int command_len)
+{
+    LIBSSH2_SFTP *ptr;
+
+    if(!session || !command || !command_len)
+        return libssh2_sftp_init(session);
+
+    if(!(session->state & LIBSSH2_STATE_AUTHENTICATED)) {
+        _libssh2_error(session, LIBSSH2_ERROR_INVAL,
+                       "session not authenticated yet");
+        return NULL;
+    }
+
+    BLOCK_ADJUST_ERRNO(ptr, session,
+                       sftp_init(session, command, command_len));
     return ptr;
 }
 

@@ -135,6 +135,7 @@ struct ISshSession {
     virtual int blockDirections() = 0;
 
     virtual std::unique_ptr<ISftpSession> sftpInit() = 0;
+    virtual std::unique_ptr<ISftpSession> sftpInitCommand(const char* command) = 0;
     virtual std::unique_ptr<ISshChannel> openChannel() = 0;
     virtual std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                                    libssh2_struct_stat* sb) = 0;

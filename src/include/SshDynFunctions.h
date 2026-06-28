@@ -66,6 +66,7 @@ FUNCDEF(LIBSSH2_API int ,libssh2_trace,(LIBSSH2_SESSION *session, int bitmask));
 
 /* SFTP *************************************************/
 FUNCDEF(LIBSSH2_API LIBSSH2_SFTP *, libssh2_sftp_init, (LIBSSH2_SESSION *session));
+FUNCDEF(LIBSSH2_API LIBSSH2_SFTP *, libssh2_sftp_init_command, (LIBSSH2_SESSION *session, const char *command, unsigned int command_len));
 FUNCDEF(LIBSSH2_API int, libssh2_sftp_shutdown,(LIBSSH2_SFTP *sftp));
 FUNCDEF(LIBSSH2_API unsigned long, libssh2_sftp_last_error,(LIBSSH2_SFTP *sftp));
 

@@ -130,6 +130,7 @@ public:
     int blockDirections() override;
 
     std::unique_ptr<ISftpSession> sftpInit() override;
+    std::unique_ptr<ISftpSession> sftpInitCommand(const char* command) override;
     std::unique_ptr<ISshChannel> openChannel() override;
     std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                            libssh2_struct_stat* sb) override;

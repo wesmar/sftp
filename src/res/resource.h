@@ -347,6 +347,8 @@
 #define IDC_SELECTALL                   1102
 #define IDC_DESELECTALL                 1103
 #define IDC_SESSION_SOURCE_LABEL        1104
+#define IDC_SFTPSERVERCOMMAND_LABEL     1109
+#define IDC_SFTPSERVERCOMMAND           1110
 
 // Dialog label string IDs for runtime localization via LNG loader
 #define IDS_DLG_CAPTION                 284
@@ -396,6 +398,7 @@
 #define IDS_DLG_PHP_METHOD              328
 #define IDS_DLG_PHP_CHUNKS              329
 #define IDS_BTN_OK                      330
+#define IDS_DLG_SFTP_SERVER_COMMAND     456
 #define IDS_DLG_WIN_LINEBREAKS          450
 #define IDS_DLG_UNIX_LINEBREAKS         451
 #define IDS_PROXY_DLG_NOPROXY           452

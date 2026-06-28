@@ -161,6 +161,9 @@ bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPC
     std::array<char, MAX_PATH> sendCommandBuf{};
     GetPrivateProfileString(DisplayName, "sendcommand", "", sendCommandBuf.data(), sendCommandBuf.size() - 1, iniFileName);
     ConnectResults->connectsendcommand = sendCommandBuf.data();
+    std::array<char, MAX_PATH> sftpServerCommandBuf{};
+    GetPrivateProfileString(DisplayName, "sftpservercommand", "", sftpServerCommandBuf.data(), sftpServerCommandBuf.size() - 1, iniFileName);
+    ConnectResults->sftpservercommand = sftpServerCommandBuf.data();
     ConnectResults->sendcommandmode = GetPrivateProfileInt(DisplayName, "sendcommandmode", 0, iniFileName);
     return !ConnectResults->server.empty();
 }

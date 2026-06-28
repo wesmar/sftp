@@ -378,6 +378,18 @@ std::unique_ptr<ISftpSession> Libssh2Session::sftpInit()
     return std::make_unique<Libssh2SftpSession>(sftp);
 }
 
+std::unique_ptr<ISftpSession> Libssh2Session::sftpInitCommand(const char* command)
+{
+    if (!command || !command[0])
+        return sftpInit();
+
+    LIBSSH2_SFTP* sftp = libssh2_sftp_init_command(session_, command,
+                                                   (unsigned int)strlen(command));
+    if (!sftp)
+        return nullptr;
+    return std::make_unique<Libssh2SftpSession>(sftp);
+}
+
 std::unique_ptr<ISshChannel> Libssh2Session::openChannel()
 {
     LIBSSH2_CHANNEL* ch = libssh2_channel_open_ex(
