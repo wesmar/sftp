@@ -482,6 +482,8 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
     // Open remote
     std::unique_ptr<ISftpHandle> sftpHandle;
     std::unique_ptr<ISshChannel> scpHandle;
+    std::unique_ptr<RemoteSftpFile> remoteSftp;
+    std::unique_ptr<RemoteScpChannel> remoteScp;
     int64_t resumeOffset = 0;
 
     if (useScp) {
@@ -501,6 +503,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
                 SftpLogLastError("SCP upload error: ", cs->session->lastErrno());
                 return SFTP_READFAILED;
             }
+            remoteScp = std::make_unique<RemoteScpChannel>(std::move(scpHandle), cs);
         }
     } else {
         unsigned long flags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT;
@@ -510,6 +513,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         sftpHandle = OpenSftpFileWithRetry(cs, remotePath.c_str(), flags, 0644);
         if (!sftpHandle)
             return SFTP_WRITEFAILED;
+        remoteSftp = std::make_unique<RemoteSftpFile>(std::move(sftpHandle));
 
         if (Resume) {
             // Get remote size and seek
@@ -518,7 +522,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             attr.flags = LIBSSH2_SFTP_ATTR_PERMISSIONS | LIBSSH2_SFTP_ATTR_SIZE;
             int rc;
             do {
-                rc = sftpHandle->fstat(&attr, 0);
+                rc = remoteSftp->get()->fstat(&attr, 0);
                 if (rc == LIBSSH2_ERROR_EAGAIN)
                     IsSocketReadable(cs->sock);
             } while (rc == LIBSSH2_ERROR_EAGAIN);
@@ -526,7 +530,7 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
             if (rc == 0 && (attr.flags & LIBSSH2_SFTP_ATTR_SIZE) && attr.filesize > 0) {
                  int64_t remoteSize = static_cast<int64_t>(attr.filesize);
                 if (remoteSize <= filesize) {
-                    sftpHandle->seek(static_cast<size_t>(remoteSize));
+                    remoteSftp->get()->seek(static_cast<size_t>(remoteSize));
                     if (!local.Seek(remoteSize))
                         return SFTP_READFAILED;
                     resumeOffset = remoteSize;
@@ -556,9 +560,9 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         while (written < toWrite) {
             int w = 0;
             if (useScp)
-                w = static_cast<int>(scpHandle->write(data + written, toWrite - written));
+                w = static_cast<int>(remoteScp->get()->write(data + written, toWrite - written));
             else
-                w = static_cast<int>(sftpHandle->write(data + written, toWrite - written));
+                w = static_cast<int>(remoteSftp->get()->write(data + written, toWrite - written));
 
             if (w > 0) {
                 written += w;
@@ -588,6 +592,20 @@ int SftpUploadFileW(pConnectSettings cs, LPCWSTR LocalName, LPCWSTR RemoteName,
         }
         if (ret != SFTP_OK) break;
     }
+
+    // Finalize the remote file before reporting upload completion. Destroying
+    // ISftpHandle/ISshChannel only deletes the C++ adapter; it does not close
+    // the underlying libssh2 handle. Leaving it open makes uploaded executables
+    // fail with ETXTBSY until the whole connection is disconnected.
+    if (remoteSftp) {
+        const int closeRc = remoteSftp->Close();
+        if (closeRc != 0 && ret == SFTP_OK) {
+            SftpLogLastError("SFTP upload close error: ", closeRc);
+            ret = SFTP_WRITEFAILED;
+        }
+    }
+    if (remoteScp)
+        remoteScp->Close();
 
     if (ret == SFTP_OK && setattr) {
         // Set timestamps/permissions
