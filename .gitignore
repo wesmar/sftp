@@ -36,8 +36,6 @@ tests/live/out/
 *.sdf
 *.opensdf
 .idea/
-.claude/
-CLAUDE.md
 TODO.md
 TODO.md.bak
 
