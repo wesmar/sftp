@@ -343,18 +343,6 @@ static void RestorePromptAndInput(ShellConsoleState* s, const std::string& curre
     SetSelectionColor(s->hwndTerminal, s->colorCommand);
 }
 
-static void ShowSuggestions(ShellConsoleState* s, const std::vector<std::string>& candidates, const std::string& currentInput)
-{
-    if (!s || !s->hwndTerminal)
-        return;
-    AppendTerminal(s->hwndTerminal, "\r\n", s->colorText);
-    for (const auto& c : candidates) {
-        AppendTerminal(s->hwndTerminal, c, s->colorText);
-        AppendTerminal(s->hwndTerminal, "\r\n", s->colorText);
-    }
-    RestorePromptAndInput(s, currentInput);
-}
-
 static void ShowSuggestionsInline(ShellConsoleState* s, std::vector<std::string> candidates, const std::string& currentInput)
 {
     if (!s || !s->hwndTerminal || candidates.empty())
@@ -822,7 +810,7 @@ static bool EnsureClassRegistered()
 
 } // namespace
 
-void ShowPhpShellConsole(HWND owner, tConnectSettings settings)
+void ShowPhpShellConsole(tConnectSettings settings)
 {
     if (!EnsureClassRegistered())
         return;

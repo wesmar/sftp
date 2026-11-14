@@ -37,3 +37,8 @@ EXPORTS
 	FsStartFileChecksumW
 	FsGetFileChecksumResult
 	FsGetFileChecksumResultW
+	FsContentGetSupportedField
+	FsContentGetValue
+	FsContentGetValueW
+	FsContentGetSupportedFieldFlags
+	FsContentGetDefaultView

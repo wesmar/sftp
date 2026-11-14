@@ -2,7 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by sftpplug.rc
 //
-#define IDD_WEBDAV                      101
+#define IDD_CONNECTION                      101
 #define IDI_ICON0                       102
 #define IDI_ICON1                       103
 #define IDD_PROPERTIES                  104
@@ -10,15 +10,11 @@
 #define IDI_ICON1SMALL                  105
 #define IDI_ICON2SMALL                  106
 #define IDD_PROXY                       110
-#define IDS_SERVERLIST_DEFOK            128
-#define IDS_SERVERLIST_DEFBAD           129
 #define IDS_F7NEW                       130
 #define IDS_HELPTEXT                    131
 #define IDS_QUICKCONNECT                132
 #define IDS_HELP_CAPTION                144
-#define IDS_HELP_THREESTEPUPLOAD        145
 #define IDS_HELP_UTF8                   146
-#define IDS_HELP_DELETEBEFOREUPLOAD     147
 #define IDS_HELP_PROXY                  148
 #define IDS_HELP_CERT                   149
 #define IDS_CONNECT_TO                  150
@@ -113,7 +109,6 @@
 #define IDS_850                         239
 #define IDS_20866                       240
 #define IDS_OTHER                       241
-#define IDS_SSH2_TOO_OLD                242
 #define IDS_AGENT_CONNECTERROR          243
 #define IDS_AGENT_REQUESTIDENTITIES     244
 #define IDS_AGENT_AUTHFAILED            245
@@ -151,7 +146,6 @@
 #define IDS_LAN_ERR_PEER_UNAVAILABLE    276
 #define IDS_LAN_ERR_PAIR_FAILED         277
 #define IDS_LAN_MSG_PAIR_OK             278
-#define IDS_LAN_PREVIEW_ONLY            279
 #define IDC_CONNECTTO                   1000
 #define IDC_USERNAME                    1001
 #define IDC_PASSWORD                    1002
@@ -212,8 +206,7 @@
 #define IDC_PROXYCOMBO                  1048
 #define IDC_PROXYBUTTON                 1049
 #define IDC_DELETELAST                  1050
-#define IDC_IMPORTSESSIONS              1051
-#define IDC_SESSIONCOMBO                1052
+#define IDC_SESSIONNAME                 1052
 #define IDC_SHELLTRANSFER               1053
 #define IDC_TRANSFERMODE                1054
 #define IDC_PHPSHELL                    1055
@@ -281,17 +274,6 @@
 #define IDS_STRING12053                 12053
 #define IDS_LAN_ROLE_PROMPT             12054
 #define IDS_LAN_SESSION_TIMEOUT         12055
-#define IDS_IMP_TITLE_PUTTY             12056
-#define IDS_IMP_TITLE_WINSCP            12057
-#define IDS_IMP_TITLE_PUTTY_PORT        12058
-#define IDS_IMP_FOUND_REG               12059
-#define IDS_IMP_FOUND_FILE              12060
-#define IDS_IMP_BTN_SELECT_ALL          12061
-#define IDS_IMP_BTN_DESELECT_ALL        12062
-#define IDS_IMP_BTN_IMPORT              12063
-#define IDS_IMP_BTN_CANCEL              12064
-#define IDS_IMP_MSG_NONE                12065
-#define IDS_IMP_MSG_NOT_FOUND           12066
 #define IDC_LANPAIR_GROUP               1061
 #define IDC_LAN_TIMEOUT                 1062
 #define IDC_PERMISSIONS_GROUP           1063
@@ -342,11 +324,6 @@
 // ---------------------------------------------------------------------------
 // Session picker dialog
 // ---------------------------------------------------------------------------
-#define IDD_SESSION_PICKER              116
-#define IDC_SESSION_LIST                1101
-#define IDC_SELECTALL                   1102
-#define IDC_DESELECTALL                 1103
-#define IDC_SESSION_SOURCE_LABEL        1104
 
 // Dialog label string IDs for runtime localization via LNG loader
 #define IDS_DLG_CAPTION                 284
@@ -372,8 +349,6 @@
 #define IDS_DLG_JUMPHOST_GRP            304
 #define IDS_DLG_USE_JUMPHOST            305
 #define IDS_DLG_PROXY_SETTINGS          306
-#define IDS_DLG_DELETELAST              307
-#define IDS_DLG_IMPORT                  308
 #define IDS_PROXY_DLG_CAPTION           309
 #define IDS_PROXY_DLG_GROUP             310
 #define IDS_PROXY_DLG_HOST              311
@@ -428,7 +403,6 @@
 #define IDS_LOG_AUTH_NO_PASSWORD        352
 #define IDS_LOG_KBD_AUTH_TIMEOUT        353
 #define IDS_LOG_PASS_AUTH_TIMEOUT       354
-#define IDS_LOG_LOADING_SSH_LIB         355
 #define IDS_LOG_LAN_DISCOVER            356
 #define IDS_LOG_LAN_CONNECTED           357
 #define IDS_LOG_PHP_AGENT_MODE          358
@@ -492,24 +466,12 @@
 #define IDS_LOG_TAR_UPLOAD_FAIL         416
 #define IDS_DLG_SELECT_PUBKEY           417
 #define IDS_DLG_SELECT_PRIVKEY          418
-#define IDS_IMP_BROWSE_PUTTY_FOLDER     419
-#define IDS_IMP_MENU_PUTTY              420
-#define IDS_IMP_MENU_WINSCP             421
-#define IDS_IMP_MSG_IMPORTED            422
-#define IDS_IMP_MSG_IMPORTED_SKIPPED    423
-#define IDS_IMP_MSG_SKIP_UNSUPPORTED    424
-#define IDS_IMP_MSG_SKIP_WINSCP         425
 #define IDS_PROXY_LABEL_SOCKS4A         426
 #define IDS_PROXY_LABEL_SOCKS5          427
 #define IDS_DLG_CODEPAGE_TITLE          428
 #define IDS_DLG_CODEPAGE_PROMPT         429
 
 #define IDC_PHP_TAR                     1105
-#define IDS_IMP_MENU_ALL                12067
-#define IDS_IMP_MENU_FROM_PUTTY_PORT    12068
-#define IDS_IMP_MENU_FROM_WINSCP        12069
-#define IDS_IMP_TITLE_KITTY_PORT        12070
-#define IDS_IMP_MENU_FROM_KITTY_PORT    12071
 #define IDS_SCP_PROTOCOL_ERROR          12072
 #define IDS_SCP_EXEC_FAILED             12073
 #define IDS_LAN_ERR_NO_PEER             12074
@@ -522,10 +484,6 @@
 #define IDS_ERR_LOAD_PROXY_PASS         12081
 #define IDS_ERR_INVALID_SERVER          12082
 #define IDS_ERR_OOM_CONN_SETTINGS       12083
-#define IDS_IMP_MSG_UNSUPPORTED_PROTO   12084
-#define IDS_IMP_ERR_NO_PUTTY_REG        12085
-#define IDS_IMP_ERR_PARSE_PUTTY_REG     12086
-#define IDS_IMP_ERR_NO_KITTY_SESSIONS   12087
 #define IDS_ERR_SESSION_EXISTS          12088
 #define IDS_TITLE_SFTP                  12089
 
@@ -543,18 +501,72 @@
 // LAN Pair — TrustedInstaller checkbox
 // ---------------------------------------------------------------------------
 #define IDC_LAN_TI                      1108
+#define IDC_JUMP_SESSION_PICK           1109   // dropdown: pick existing session as jump host (in IDD_CONNECTION)
+// File properties dialog: frames and labels, named so they can be translated
+#define IDC_PROP_GRP_FILE               1110
+#define IDC_PROP_LBL_NAME               1111
+#define IDC_PROP_LBL_OWNER              1112
+#define IDC_PROP_LBL_GROUP              1113
+#define IDC_PROP_LBL_PERMS              1114
+#define IDC_PROP_LBL_SIZE               1115
+#define IDC_PROP_LBL_MODIFIED           1116
+#define IDC_PROP_GRP_RAW                1117
 #define IDS_LAN_TI                      12093
 #define IDS_LAN_TI_ERR                  12094
 #define IDS_LAN_CONNECTING              12095
 #define IDS_LAN_ERR_CONN_FAILED         12096
-#define IDS_IMP_MENU_PUTTY_HDR          12097
-#define IDS_IMP_MENU_WINSCP_HDR         12098
-#define IDS_IMP_MENU_OTHER_HDR          12099
-#define IDS_IMP_BROWSE_WINSCP_FOLDER    12100
-#define IDS_IMP_ERR_NO_WINSCP_INI       12101
-#define IDS_IMP_BROWSE_KITTY_FOLDER     12102
 #define IDS_LAN_ERR_DONOR_NO_CONNECT    12103
+#define IDS_JUMP_SESSION_NONE           12104   // "(manual)" entry in jump-session dropdown
+#define IDS_JUMP_SESSION_MISSING_SUFFIX 12105   // " (missing)" appended to deleted ref'd session name
+#define IDS_JUMP_SESSION_NOT_FOUND      12106   // error: ref'd session not in INI
+#define IDS_JUMP_SESSION_CHAINED        12107   // error: ref'd session has its own jump host
+#define IDS_SIMPORT_TITLE               12109   // MessageBox title for session-INI import errors
+#define IDS_SIMPORT_ERR_OPEN            12110   // Cannot open source file
+#define IDS_SIMPORT_ERR_EMPTY           12111   // Source file empty
+#define IDS_SIMPORT_ERR_NO_SECTIONS     12112   // File has no INI sections
+#define IDS_SIMPORT_ERR_NO_SERVER       12113   // No section with server= key
+#define IDS_SIMPORT_ERR_EMPTY_DEST      12114   // Empty destination path
+#define IDS_SIMPORT_ERR_WRITE           12115   // Failed to write to sftpplug.ini
+#define IDS_DLG_JUMP_BUTTON             12116   // "Jump..." button in the connection dialog
+#define IDS_JUMP_NOT_CONFIGURED         12117   // error: jump host enabled but not configured
+#define IDS_IMPORTS_NO_EDIT             12118   // hint: imported sessions are read-only
+#define IDS_DLG_LANPAIR_GROUP           12119   // caption of the LAN Pair group box
+#define IDC_JUMP_FROM_SESSION           1088   // static: which session these settings come from
+#define IDS_JUMP_FROM_SESSION           12120  // static: settings taken from a session
+#define IDS_IMPORT_BLOCKED              12121  // refusal: session depends on something not imported
+#define IDS_SIMPORT_PROXY_LOST          12122  // imported session referenced a proxy that did not travel
+#define IDS_IMPORT_BLOCKED_COPY         12123  // refusal hint: F5 brings a rebuildable proxy along
+#define IDS_MOVE_KEPT_RESUMED           12124  // status: a resumed move keeps its source
+#define IDS_ERR_SAME_FILE               12125  // cross-session copy onto the same file
+#define IDS_ERR_NO_SFTP_HINT            12126  // SFTP subsystem failed: suggest SCP for everything
+#define IDS_ERR_KEY_ONLY_NO_KEY         12127  // key-only server, nothing to offer
+#define IDS_PROP_CAPTION                12128  // file properties dialog (Alt+Enter)
+#define IDS_PROP_GRP_FILE               12129
+#define IDS_PROP_LBL_NAME               12130
+#define IDS_PROP_LBL_OWNER              12131
+#define IDS_PROP_LBL_GROUP              12132
+#define IDS_PROP_LBL_PERMS              12133
+#define IDS_PROP_LBL_SIZE               12134
+#define IDS_PROP_LBL_MODIFIED           12135
+#define IDS_PROP_GRP_RAW                12136
+#define IDS_PROP_NO_STAT                12137  // raw box: no stat command, SFTP attributes shown instead
+#define IDS_DLG_LAN_TIMEOUT             12138
+#define IDS_DLG_LAN_TIMEOUT_HINT        12139
+#define IDS_DLG_PROTO_AUTO              12140
+#define IDS_LOG_PPK_ERR_LIMITS          12141
+#define IDS_LOG_PPK_ERR_INCONSISTENT    12142
 
+// Download error during a multi-file copy: Skip / Skip all / Cancel
+#define IDD_DOWNLOAD_ERROR              118
+#define IDC_DOWNLOAD_ERROR_TEXT         1118
+#define IDC_DOWNLOAD_ERROR_PATH         1119
+#define IDC_DOWNLOAD_SKIP               1120
+#define IDC_DOWNLOAD_SKIP_ALL           1121
+#define IDS_DOWNLOAD_ERROR_TITLE        12143
+#define IDS_DOWNLOAD_ERROR_TEXT         12144
+#define IDS_DOWNLOAD_SKIP               12145
+#define IDS_DOWNLOAD_SKIP_ALL           12146
+#define IDS_LOG_DOWNLOAD_SKIPPED        12147
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

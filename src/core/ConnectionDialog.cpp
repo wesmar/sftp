@@ -18,19 +18,19 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include <cstring>
 #include <format>
 #include <string_view>
+#include <span>
 #include <stdio.h>
+#include "DialogStrings.h"
+#include "DialogText.h"
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "fsplugin.h"
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 #include "SftpInternal.h"
 #include "WindowsUserFeedback.h"
-#include "SessionImport.h"
 #include "PhpAgentClient.h"
 #include "PhpShellConsole.h"
 #include "ConnectionDialog.h"
@@ -39,6 +39,7 @@ extern void LanFileServerSetTrustedInstaller(bool enabled);
 #include "ProfileSettings.h"
 #include "LngLoader.h"
 #include "DialogLayout.h"
+#include "PasswordCrypto.h"
 
 // Forward declaration - implemented in PluginHelp.cpp
 std::wstring GetPluginVersionW();
@@ -56,8 +57,10 @@ struct ProxyDialogContext {
 // Context for the Jump Host settings dialog.
 struct JumpDialogContext {
     pConnectSettings cs    = nullptr;   // main connection settings (in/out)
-    LPCSTR iniFileName     = nullptr;
     bool   hasCryptProc    = false;
+    // Set when the user repoints the jump host at a different machine, so the
+    // parent dialog knows to drop the fingerprint of the old one.
+    bool   fingerprintCleared = false;
 };
 
 // Helper: open a file browser for key file selection in jump dialog.
@@ -77,14 +80,19 @@ static void BrowseJumpKeyFile(HWND hWnd, int editCtrl)
 }
 
 // Enable/disable jump host controls based on the checkbox state.
-static void UpdateJumpControlStates(HWND hWnd)
+// A referenced session owns these settings, so the fields show its values and
+// refuse edits: typing into them used to look like it worked and was then
+// discarded at connect time, which is what made an agent problem here hard to
+// pin down. Without a reference the dialog is the only place they exist, so
+// everything is editable.
+static void UpdateJumpControlStates(HWND hWnd, bool fromSession)
 {
-    const bool enabled = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+    const bool editable = !fromSession;
     for (int id : { IDC_JUMP_HOST, IDC_JUMP_PORT, IDC_JUMP_USER,
                     IDC_JUMP_PASSWORD, IDC_JUMP_PUBKEY, IDC_JUMP_PRIVKEY,
                     IDC_JUMP_USEAGENT, IDC_JUMP_LOADPUBKEY, IDC_JUMP_LOADPRIVKEY,
                     IDC_JUMP_CRYPTPASS }) {
-        EnableWindow(GetDlgItem(hWnd, id), enabled);
+        EnableWindow(GetDlgItem(hWnd, id), editable);
     }
 }
 
@@ -92,107 +100,10 @@ static void UpdateMainJumpControlStates(HWND hWnd, bool sshMode)
 {
     const bool jumpChecked = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_ENABLE), sshMode ? TRUE : FALSE);
+    // The picker follows the mode, not the checkbox: picking a session is
+    // what turns the jump host on, so it has to work while the box is clear.
+    EnableWindow(GetDlgItem(hWnd, IDC_JUMP_SESSION_PICK), sshMode ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hWnd, IDC_JUMP_BUTTON), (sshMode && jumpChecked) ? TRUE : FALSE);
-}
-
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls);
-
-// Tighten and right-align the protocol radio buttons to maximize label width.
-static void ArrangeProtocolButtons(HWND hDlg)
-{
-    const int ids[] = { IDC_PROTOAUTO, IDC_PROTOV4, IDC_PROTOV6 };
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    RECT rBase = { 0, 0, 4, 4 };
-    MapDialogRect(hDlg, &rBase);
-    const int gap = rBase.right / 2;
-
-    int right = rDlg.right - gap;
-
-    for (int i = 2; i >= 0; --i) {
-        HWND hw = GetDlgItem(hDlg, ids[i]);
-        if (!hw) continue;
-        RECT r;
-        GetWindowRect(hw, &r);
-        MapWindowPoints(NULL, hDlg, (LPPOINT)&r, 2);
-        
-        const int textW = DlgLayout::MeasureText(hDlg, hw);
-        const int actualBoxW = r.bottom - r.top; 
-        const int w = textW + actualBoxW + gap;
-        
-        right -= w;
-        SetWindowPos(hw, NULL, right, r.top, w, r.bottom - r.top, SWP_NOZORDER);
-        right -= gap;
-    }
-}
-
-// Position the LAN Pair Session timeout and TrustedInstaller checkbox.
-static void ArrangeLanTimeoutRow(HWND hDlg)
-{
-    HWND hLabel   = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    HWND hEdit    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT);
-    HWND hHint    = GetDlgItem(hDlg, IDC_LAN_TIMEOUT_HINT);
-    HWND hTi      = GetDlgItem(hDlg, IDC_LAN_TI);
-    HWND hSystem  = GetDlgItem(hDlg, IDC_SYSTEM);
-
-    if (!hLabel || !hEdit || !hHint || !hTi || !hSystem)
-        return;
-
-    const RECT rLabel = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_LABEL);
-    const RECT rEdit  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT);
-    const RECT rHint  = DlgLayout::GetRect(hDlg, IDC_LAN_TIMEOUT_HINT);
-    const RECT rTi    = DlgLayout::GetRect(hDlg, IDC_LAN_TI);
-    const RECT rSystem= DlgLayout::GetRect(hDlg, IDC_SYSTEM);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-
-    const int szLabel = DlgLayout::MeasureText(hDlg, hLabel);
-    const int labelX  = rLabel.left;
-    const int labelW  = szLabel + gap;
-
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_LABEL, labelX, rLabel.top, labelW, rLabel.bottom - rLabel.top);
-
-    const int editX = labelX + labelW;
-    const int editW = rEdit.right - rEdit.left;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT, editX, rEdit.top, editW, rEdit.bottom - rEdit.top);
-
-    const int szHint = DlgLayout::MeasureText(hDlg, hHint);
-    const int hintX  = editX + editW + gap;
-    const int hintW  = szHint + gap;
-    DlgLayout::Move(hDlg, IDC_LAN_TIMEOUT_HINT, hintX, rHint.top, hintW, rHint.bottom - rHint.top);
-
-    const int tiX = rSystem.left;
-    const int tiW = rDlg.right - gap - tiX;
-    if (tiW > 0)
-        DlgLayout::Move(hDlg, IDC_LAN_TI, tiX, rTi.top, tiW, rTi.bottom - rTi.top);
-}
-
-// Position the PHP TAR checkbox 4px to the right of the permissions-row right edit.
-// Must be called after ArrangePermissionsRow so IDC_DIRMOD is already at its final position.
-static void ArrangePhpTarCheckbox(HWND hDlg)
-{
-    HWND hTar    = GetDlgItem(hDlg, IDC_PHP_TAR);
-    HWND hDirmod = GetDlgItem(hDlg, IDC_DIRMOD);
-    if (!hTar || !hDirmod)
-        return;
-
-    const RECT rTar    = DlgLayout::GetRect(hDlg, IDC_PHP_TAR);
-    const RECT rDirmod = DlgLayout::GetRect(hDlg, IDC_DIRMOD);
-    RECT rDlg{};
-    GetClientRect(hDlg, &rDlg);
-
-    const int gap = DlgLayout::kGap;
-    const int h   = rTar.bottom - rTar.top;
-    const int x   = rDirmod.right + gap * 3;
-    const int w   = rDlg.right - gap - x;
-    if (w <= 0)
-        return;
-
-    DlgLayout::Move(hDlg, IDC_PHP_TAR, x, rTar.top, w, h);
 }
 
 // Jump Host settings dialog procedure.
@@ -208,35 +119,53 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
         pConnectSettings cs = ctx->cs;
 
-        LocalizeDlgControls(hWnd, IDS_JUMP_DLG_CAPTION, {
-            { IDC_JUMP_GROUP,        IDS_JUMP_DLG_GROUP    },
-            { IDC_JUMP_ENABLE,       IDS_JUMP_DLG_USE      },
-            { IDC_JUMP_LABEL_HOST,   IDS_JUMP_DLG_HOST     },
-            { IDC_JUMP_LABEL_PORT,   IDS_JUMP_DLG_PORT     },
-            { IDC_JUMP_LABEL_USER,   IDS_JUMP_DLG_USER     },
-            { IDC_JUMP_LABEL_PASS,   IDS_JUMP_DLG_PASS     },
-            { IDC_JUMP_LABEL_PUBKEY, IDS_JUMP_DLG_PUBKEY   },
-            { IDC_JUMP_LABEL_PRIVKEY,IDS_JUMP_DLG_PRIVKEY  },
-            { IDC_JUMP_USEAGENT,     IDS_JUMP_DLG_USEAGENT },
-            { IDC_JUMP_CRYPTPASS,    IDS_DLG_CRYPTPASS     },
-            { IDC_JUMP_EDITPASS,     IDS_DLG_CHANGEPASS    },
-            { IDOK,                  IDS_BTN_OK            },
-            { IDCANCEL,              IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kJumpHostDialogCaption, kJumpHostDialogStrings);
 
-        CheckDlgButton(hWnd, IDC_JUMP_ENABLE, cs->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
-        SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
-        SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
-        SetDlgItemTextA(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
-        SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
-        CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
+        // With a reference the resolver decides what the jump host is, so show
+        // exactly that rather than the session's own unused jump_* fields.
+        const bool fromSession = !cs->jump_session_ref.empty();
+        const JumpConfig shown = (fromSession && !cs->IniFileName.empty())
+            ? ResolveJumpConfig(cs, cs->IniFileName.c_str())
+            : JumpConfig{};
+
+        if (fromSession && shown.status == JumpConfigStatus::Ready) {
+            const JumpHostSettings& j = shown.endpoint;
+            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, j.host.c_str());
+            SetDlgItemInt(hWnd, IDC_JUMP_PORT, j.port ? j.port : 22, FALSE);
+            SetDlgItemTextA(hWnd, IDC_JUMP_USER, j.user.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, "");
+            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, j.pubkeyfile.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, j.privkeyfile.c_str());
+            CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, j.useagent ? BST_CHECKED : BST_UNCHECKED);
+        } else {
+            SetDlgItemTextA(hWnd, IDC_JUMP_HOST, cs->jump_host.c_str());
+            SetDlgItemInt(hWnd, IDC_JUMP_PORT, cs->jump_port ? cs->jump_port : 22, FALSE);
+            SetDlgItemTextA(hWnd, IDC_JUMP_USER, cs->jump_user.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PASSWORD, cs->jump_password.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PUBKEY, cs->jump_pubkeyfile.c_str());
+            SetDlgItemTextA(hWnd, IDC_JUMP_PRIVKEY, cs->jump_privkeyfile.c_str());
+            CheckDlgButton(hWnd, IDC_JUMP_USEAGENT, cs->jump_useagent ? BST_CHECKED : BST_UNCHECKED);
+        }
+
+        // The row the removed duplicate checkbox used to occupy now carries
+        // the reason the fields are locked.
+        if (fromSession) {
+            std::string note = LngStrU8(IDS_JUMP_FROM_SESSION,
+                "These settings come from session '{}' and are shown read-only. "
+                "Pick (manual) in the jump-host list to configure a host here instead.");
+            const auto slot = note.find("{}");
+            if (slot != std::string::npos)
+                note.replace(slot, 2, cs->jump_session_ref);
+            SetDlgItemTextW(hWnd, IDC_JUMP_FROM_SESSION,
+                            unicode_util::utf8_to_wstring(note).c_str());
+        }
 
         if (!ctx->hasCryptProc)
             EnableWindow(GetDlgItem(hWnd, IDC_JUMP_CRYPTPASS), FALSE);
 
-        UpdateJumpControlStates(hWnd);
+        UpdateJumpControlStates(hWnd, fromSession);
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutJumpHostDialog(hWnd);
 
         // Center dialog over parent.
         RECT r1{}, r2{};
@@ -250,12 +179,32 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         return 1;
     }
 
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutJumpHostDialog(hWnd);
+        return 1;
+
     case WM_COMMAND:
         if (!ctx) break;
         switch (LOWORD(wParam)) {
         case IDOK: {
+            // Whether a jump host is used at all is the main dialog's
+            // question; this one only answers which host.
             pConnectSettings cs = ctx->cs;
-            cs->use_jump_host   = IsDlgButtonChecked(hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
+
+            // With a reference the fields hold the referenced session's
+            // values, shown for reading. Storing them here would copy that
+            // session's host into this one's own jump_* fields and leave a
+            // stale copy behind the moment the referenced session changes.
+            if (!cs->jump_session_ref.empty()) {
+                EndDialog(hWnd, IDOK);
+                return 1;
+            }
+
+            const std::string    previousHost = cs->jump_host;
+            const unsigned short previousPort = cs->jump_port;
 
             std::array<char, MAX_PATH> buf{};
             GetDlgItemTextA(hWnd, IDC_JUMP_HOST, buf.data(), static_cast<int>(buf.size()) - 1);
@@ -265,6 +214,17 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
             UINT port = GetDlgItemInt(hWnd, IDC_JUMP_PORT, &portOk, FALSE);
             cs->jump_port = (portOk && port > 0 && port < 65536)
                 ? static_cast<unsigned short>(port) : 22;
+
+            // The stored fingerprint identifies one machine. Pointing the
+            // session at a different one leaves it describing a host this
+            // session does not use, and the next connect reports the mismatch
+            // as the host key having changed — training the user to click
+            // through a warning that is meant to be rare.
+            if (_stricmp(cs->jump_host.c_str(), previousHost.c_str()) != 0 ||
+                cs->jump_port != previousPort) {
+                cs->jump_fingerprint.clear();
+                ctx->fingerprintCleared = true;
+            }
 
             GetDlgItemTextA(hWnd, IDC_JUMP_USER, buf.data(), static_cast<int>(buf.size()) - 1);
             cs->jump_user = buf.data();
@@ -280,28 +240,9 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
             cs->jump_useagent = IsDlgButtonChecked(hWnd, IDC_JUMP_USEAGENT) == BST_CHECKED;
 
-            // Persist jump host settings to INI.
-            if (ctx->iniFileName && cs->DisplayName[0]) {
-                LPCSTR sec = cs->DisplayName.c_str();
-                LPCSTR ini = ctx->iniFileName;
-                WritePrivateProfileString(sec, "usejumphost",  cs->use_jump_host ? "1" : "0", ini);
-                WritePrivateProfileString(sec, "jumphost",     cs->jump_host.c_str(), ini);
-                std::array<char, 16> portBuf{};
-                _itoa_s(cs->jump_port, portBuf.data(), portBuf.size(), 10);
-                WritePrivateProfileString(sec, "jumpport",     portBuf.data(), ini);
-                WritePrivateProfileString(sec, "jumpuser",     cs->jump_user.c_str(), ini);
-                WritePrivateProfileString(sec, "jumppubkeyfile",  cs->jump_pubkeyfile.c_str(), ini);
-                WritePrivateProfileString(sec, "jumpprivkeyfile", cs->jump_privkeyfile.c_str(), ini);
-                WritePrivateProfileString(sec, "jumpuseagent", cs->jump_useagent ? "1" : "0", ini);
-                // Password: encrypt like main password.
-                if (!cs->jump_password.empty()) {
-                    std::array<char, 1024> enc{};
-                    EncryptString(cs->jump_password.c_str(), enc.data(), static_cast<UINT>(enc.size()));
-                    WritePrivateProfileString(sec, "jumppassword", enc.data(), ini);
-                } else {
-                    WritePrivateProfileString(sec, "jumppassword", "", ini);
-                }
-            }
+            // Only the model is updated here; the connection dialog's OK is
+            // what persists it, against the session selected there. That keeps
+            // a Cancel in the parent from leaving these settings behind.
 
             EndDialog(hWnd, IDOK);
             return 1;
@@ -309,9 +250,6 @@ static INT_PTR CALLBACK JumpHostDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
         case IDCANCEL:
             EndDialog(hWnd, IDCANCEL);
             return 1;
-        case IDC_JUMP_ENABLE:
-            UpdateJumpControlStates(hWnd);
-            break;
         case IDC_JUMP_LOADPUBKEY:
             BrowseJumpKeyFile(hWnd, IDC_JUMP_PUBKEY);
             break;
@@ -372,7 +310,6 @@ private:
     INT_PTR OnLanPeerMessage(WPARAM wParam, LPARAM lParam);
     void    OnOk();
     void    OnCancel();
-    void    OnSessionChanged();
     void    OnTransferModeChanged();
     void    OnPhpShellBtn();
     void    OnBrowseKeyFile(bool isPublicKey);
@@ -382,19 +319,24 @@ private:
     void    OnJumpButton();
     void    OnProxyButton();
     void    OnProxyComboChanged();
-    void    OnDeleteLastProxy();
-    void    OnImportSessions();
     void    OnPluginHelp();
     void    OnCertHelp();
     void    OnPasswordHelp();
     void    OnUtf8Help();
     void    OnEditPass();
     void    OnConnectToChanged();
+    void    OnJumpSessionPicked();
 
     HWND                  m_hWnd;
     ConnectDialogContext*  m_ctx;
     pConnectSettings       m_settings;
     bool                   m_initialized;
+    // The jump host was repointed during this dialog, so OK must drop the
+    // stored fingerprint. Only a deliberate clear touches that key: it is
+    // written by the connect path, and a connection running while this dialog
+    // is open would otherwise have its accepted fingerprint overwritten by
+    // whatever the model held when the dialog opened.
+    bool                   m_jumpFingerprintCleared = false;
 };
 
 static BOOL SetDlgItemText(HWND hWnd, int nIDDlgItem, const std::string& text)
@@ -415,16 +357,6 @@ static UINT GetDlgItemText(HWND hWnd, int nIDDlgItem, std::string& out, size_t c
 static BOOL WritePrivateProfileString(const char* section, const char* key, const std::string& value, const char* fileName)
 {
     return ::WritePrivateProfileStringA(section, key, value.c_str(), fileName);
-}
-
-static BOOL WritePrivateProfileString(const std::string& section, const char* key, const char* value, const std::string& fileName)
-{
-    return ::WritePrivateProfileStringA(section.c_str(), key, value, fileName.c_str());
-}
-
-static BOOL WritePrivateProfileString(const std::string& section, const char* key, const std::string& value, const std::string& fileName)
-{
-    return ::WritePrivateProfileStringA(section.c_str(), key, value.c_str(), fileName.c_str());
 }
 
 static std::string WideToUtf8(const std::wstring& w)
@@ -455,39 +387,7 @@ static std::wstring Utf8ToWide(const std::string& s)
     return out;
 }
 
-static std::wstring LoadResStringW(UINT id)
-{
-    const char* lngStr = LngGetString(id);
-    if (lngStr)
-        return Utf8ToWide(std::string(lngStr));
-    std::array<wchar_t, 1024> buf{};
-    const int n = LoadStringW(hinst, id, buf.data(), static_cast<int>(buf.size() - 1));
-    if (n <= 0)
-        return {};
-    return std::wstring(buf.data(), static_cast<size_t>(n));
-}
-
-// Sets a dialog control's text from LNG/RC. No-op if no translation is found.
-static void LocalizeDlgControl(HWND hWnd, int ctrlId, UINT strId)
-{
-    std::wstring s = LoadResStringW(strId);
-    if (!s.empty())
-        SetDlgItemTextW(hWnd, ctrlId, s.c_str());
-}
-
-// Translates all named controls in a dialog from LNG/RC string table.
-// Call from WM_INITDIALOG after the dialog is fully initialized.
-static void LocalizeDlgControls(HWND hWnd, UINT captionStrId,
-    std::initializer_list<std::pair<int, UINT>> controls)
-{
-    std::wstring caption = LoadResStringW(captionStrId);
-    if (!caption.empty())
-        SetWindowTextW(hWnd, caption.c_str());
-    for (const auto& [ctrlId, strId] : controls)
-        LocalizeDlgControl(hWnd, ctrlId, strId);
-}
-
-// Repositions label + checkbox + button on one row based on actual text widths.
+// Fills "{}" placeholders in order.
 static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std::wstring_view> args)
 {
     size_t pos = 0;
@@ -505,7 +405,7 @@ static std::wstring FormatBracesW(std::wstring templ, std::initializer_list<std:
 static std::wstring GetSessionDisplayNameW(HWND hWnd)
 {
     std::array<wchar_t, MAX_PATH> sessionW{};
-    GetDlgItemTextW(hWnd, IDC_SESSIONCOMBO, sessionW.data(), static_cast<int>(sessionW.size() - 1));
+    GetDlgItemTextW(hWnd, IDC_SESSIONNAME, sessionW.data(), static_cast<int>(sessionW.size() - 1));
     std::wstring value = sessionW.data();
     while (!value.empty() && (value.back() == L' ' || value.back() == L'\t')) {
         value.pop_back();
@@ -708,14 +608,20 @@ static void RefreshLanPeerCombo(HWND hWnd, ConnectDialogContext* dlgCtx, const s
     }
 }
 
-static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
+static void EnsureLanDiscoveryRunning(HWND hWnd, ConnectDialogContext* dlgCtx)
 {
     if (!dlgCtx || dlgCtx->lanDiscoveryRunning) {
         return;
     }
 
+    // The Quick Connection entry is not a name to advertise on the LAN; it
+    // reads in English or in whichever language is loaded.
     const std::wstring sessionName = GetSessionDisplayNameW(hWnd);
-    if (!sessionName.empty() && _wcsicmp(sessionName.c_str(), L"Quick connect") != 0 && _wcsicmp(sessionName.c_str(), L"Szybkie połączenie") != 0) {
+    const std::wstring quickLocal = LoadResStringW(IDS_QUICKCONNECT);
+    const bool isQuickConnection =
+        _wcsicmp(sessionName.c_str(), L"Quick Connection") == 0 ||
+        (!quickLocal.empty() && _wcsicmp(sessionName.c_str(), quickLocal.c_str()) == 0);
+    if (!sessionName.empty() && !isQuickConnection) {
         dlgCtx->lanDisplayName = sessionName;
     }
 
@@ -792,6 +698,8 @@ static INT_PTR CALLBACK PairingProgressDlgProc(HWND hDlg, UINT msg, WPARAM wPara
             ? std::format(L"{} s", p->secondsLeft)
             : FormatBracesW(secsTemplW, { std::wstring_view(secsNumW) });
         SetDlgItemTextW(hDlg, IDC_PAIRING_COUNTDOWN, secsW.c_str());
+        DlgLayout::OnInitDialog(hDlg);
+        DlgLayout::FitToText(hDlg);
 
         SetTimer(hDlg, 1, 1000, nullptr);
         return TRUE;
@@ -834,7 +742,7 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
         return;
     }
 
-    EnsureLanDiscoveryRunning(hWnd, dlgCtx, s);
+    EnsureLanDiscoveryRunning(hWnd, dlgCtx);
 
     std::array<wchar_t, MAX_PATH> passW{};
     GetDlgItemTextW(hWnd, IDC_PASSWORD, passW.data(), static_cast<int>(passW.size() - 1));
@@ -1050,9 +958,9 @@ static void OnBrowseKeyFileCommand(HWND hWnd, bool isPublicKey)
     ofn.nMaxFile = static_cast<DWORD>(szFileName.size());
     
     if (isPublicKey) {
-        lstrcpy(szFileName.data(), TEXT("*.pub"));
-        ofn.lpstrFilter = TEXT("Public key files (*.pub)\0*.pub\0All Files\0*.*\0");
-        ofn.lpstrTitle = TEXT("Select public key file");
+        lstrcpy(szFileName.data(), TEXT("*-cert.pub"));
+        ofn.lpstrFilter = TEXT("Certificates (*-cert.pub)\0*-cert.pub\0Public keys (*.pub)\0*.pub\0All Files\0*.*\0");
+        ofn.lpstrTitle = TEXT("Select certificate file");
     } else {
         lstrcpy(szFileName.data(), TEXT("*.pem"));
         ofn.lpstrFilter = TEXT("Private key files (*.pem;*.ppk)\0*.pem;*.ppk\0OpenSSH private key (*.pem)\0*.pem\0PuTTY private key (*.ppk)\0*.ppk\0All Files\0*.*\0");
@@ -1134,7 +1042,7 @@ static void OnPhpShellCommand(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectS
         tempFeedback.ShowError(msg, lngU8(IDS_PHP_SHELL_TITLE, "PHP Shell"));
         return;
     }
-    ShowPhpShellConsole(hWnd, std::move(shellSettings));
+    ShowPhpShellConsole(std::move(shellSettings));
 }
 
 static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgCtx, pConnectSettings s)
@@ -1182,7 +1090,7 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
         SendDlgItemMessageW(hWnd, IDC_SYSTEM, CB_ADDSTRING, 0, (LPARAM)(roleDonor.empty() ? L"Donor" : roleDonor.c_str()));
         SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_SETCURSEL, max(0, min(2, s->lan_pair_role)), 0);
         RefreshLanPeerCombo(hWnd, dlgCtx, s->lan_pair_peer);
-        EnsureLanDiscoveryRunning(hWnd, dlgCtx, s);
+        EnsureLanDiscoveryRunning(hWnd, dlgCtx);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1281,6 +1189,7 @@ static void RebuildSystemAndEncodingCombos(HWND hWnd, ConnectDialogContext* dlgC
 
 static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dlgProc, LPARAM dlgParam) noexcept
 {
+    DlgLayout::PerMonitorDpiScope dpiScope;
     const LANGID langId = GetConfiguredUiLanguageId();
     if (langId != 0) {
         WORD bestLang = langId;
@@ -1322,12 +1231,6 @@ static INT_PTR ShowLocalizedDialogBoxParam(int dialogId, HWND parent, DLGPROC dl
 static ProxyDialogContext* GetProxyDialogContext(HWND hWnd)
 {
     return reinterpret_cast<ProxyDialogContext*>(GetWindowLongPtr(hWnd, DWLP_USER));
-}
-
-static ConnectDialogContext* GetConnectDialogContext(HWND hWnd)
-{
-    const auto* dlg = reinterpret_cast<const ConnectionDialog*>(GetWindowLongPtr(hWnd, DWLP_USER));
-    return dlg ? dlg->GetContext() : nullptr;
 }
 
 static tConnectSettings g_proxyDialogDummyData{};
@@ -1471,7 +1374,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         ShowWindow(GetDlgItem(hWnd, IDC_FILEMOD),           SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD_LABEL),      SW_HIDE);
         ShowWindow(GetDlgItem(hWnd, IDC_DIRMOD),            SW_HIDE);
-        ArrangeLanTimeoutRow(hWnd);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1517,6 +1420,7 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
         SetWindowTextW(phpShellBtn, shellBtn.empty() ? L"Shell..." : shellBtn.c_str());
         UpdateCertSectionState(hWnd);
         UpdateMainJumpControlStates(hWnd, false);
+        DlgLayout::LayoutConnectionDialog(hWnd);
         SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
         return;
@@ -1549,6 +1453,8 @@ void UpdateScpOnlyDependentControls(HWND hWnd)
     if (!scpOnly)
         CheckDlgButton(hWnd, IDC_SHELLTRANSFER, BST_UNCHECKED);
 
+    // Visibility and the Shell/Pair caption may have changed.
+    DlgLayout::LayoutConnectionDialog(hWnd);
     SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
@@ -1569,63 +1475,118 @@ static void TrimSessionName(char* s) noexcept
     s[end - start] = 0;
 }
 
-static void FillSessionCombo(HWND hWnd, LPCSTR currentSession)
+// The field holds the name this session is saved under. Typing a different
+// name renames it on OK; there is no list to pick from, because the panel is
+// where sessions are chosen and offering another one here only ever meant
+// editing a session under someone else's name.
+static void SetSessionNameField(HWND hWnd, LPCSTR currentSession)
 {
-    SendDlgItemMessage(hWnd, IDC_SESSIONCOMBO, CB_RESETCONTENT, 0, 0);
+    SetDlgItemText(hWnd, IDC_SESSIONNAME, currentSession ? currentSession : "");
+}
+
+// Populate the jump-host session-picker dropdown. First entry is "(manual)":
+// no reference, the session's own jump_* fields apply. Then all saved
+// sessions except the quickconnect pseudo-session and the session being
+// edited (self-exclusion to prevent direct A->A reference).
+//
+// If currentRef is non-empty but not in the saved list (referenced session
+// was deleted/renamed), it is appended as "[!] <name> (missing)" so the
+// user can see and recover from the broken reference.
+// "[!] " is a fixed visual indicator (not translated — same ASCII bang
+// across all locales). The "(manual)" entry text and the " (missing)" suffix
+// ARE localized via IDS_JUMP_SESSION_NONE and IDS_JUMP_SESSION_MISSING_SUFFIX.
+static constexpr const char* kJumpMissingMarkerPrefix = "[!] ";
+
+// Read the jump-session-ref combobox text and convert it back to the bare
+// session name. Returns empty string for "(manual)" or for the "[!] ... (missing)"
+// marker entry — both mean "no reference, use the manual jump_* fields".
+// Used by both the immediate selection handler (OnJumpSessionPicked) and the
+// save-time read in OnConnectDlgOk, so the model matches the dropdown even
+// when the dialog filled it without the user touching it.
+static std::string ReadJumpSessionRefFromDialog(HWND hWnd)
+{
+    // Read wide to match how the combobox was filled, then compare against
+    // the wide translations. Reading ANSI and comparing with the UTF-8
+    // .lng text never matches for a non-ASCII "(manual)" caption, which
+    // would turn the placeholder entry into a session name.
+    std::array<wchar_t, wdirtypemax> selW{};
+    GetDlgItemTextW(hWnd, IDC_JUMP_SESSION_PICK, selW.data(),
+                    static_cast<int>(selW.size()) - 1);
+    const std::wstring sW = selW.data();
+    if (sW.empty())
+        return {};
+
+    std::wstring noneW = LoadResStringW(IDS_JUMP_SESSION_NONE);
+    if (noneW.empty()) noneW = L"(manual)";
+    if (_wcsicmp(sW.c_str(), noneW.c_str()) == 0)
+        return {};
+
+    std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
+    if (suffixW.empty()) suffixW = L" (missing)";
+    const std::wstring prefixW = unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix);
+    const bool isMissingMarker =
+        sW.rfind(prefixW, 0) == 0 &&
+        sW.size() >= suffixW.size() &&
+        sW.compare(sW.size() - suffixW.size(), suffixW.size(), suffixW) == 0;
+    if (isMissingMarker)
+        return {};
+
+    return unicode_util::wide_to_narrow(sW);
+}
+
+static void FillJumpSessionCombo(HWND hWnd, LPCSTR currentSessionName, LPCSTR currentRef)
+{
+    // Wide throughout: translations arrive as UTF-8 from the .lng files,
+    // and the ANSI combobox messages would render those bytes through the
+    // system codepage. Session names come from the INI as ANSI, so they
+    // convert with CP_ACP while the translated entries convert as UTF-8.
+    SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_RESETCONTENT, 0, 0);
+    const std::wstring noneTextW = LoadResStringW(IDS_JUMP_SESSION_NONE);
+    SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                        (LPARAM)(noneTextW.empty() ? L"(manual)" : noneTextW.c_str()));
+
+    bool foundRef = false;
     std::array<char, wdirtypemax> name{};
     SERVERHANDLE hdl = FindFirstServer(name.data(), name.size() - 1);
     while (hdl) {
-        if (_stricmp(name.data(), s_quickconnect) != 0)
-            SendDlgItemMessage(hWnd, IDC_SESSIONCOMBO, CB_ADDSTRING, 0, (LPARAM)name.data());
+        const bool isQuick = _stricmp(name.data(), s_quickconnect) == 0;
+        const bool isSelf  = currentSessionName && currentSessionName[0] &&
+                             _stricmp(name.data(), currentSessionName) == 0;
+        if (!isQuick && !isSelf) {
+            const std::wstring nameW = unicode_util::narrow_to_wide(name.data());
+            SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                                (LPARAM)nameW.c_str());
+            if (currentRef && currentRef[0] &&
+                _stricmp(name.data(), currentRef) == 0)
+                foundRef = true;
+        }
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
     }
-    if (currentSession && currentSession[0])
-        SetDlgItemText(hWnd, IDC_SESSIONCOMBO, currentSession);
-    else
-        SetDlgItemText(hWnd, IDC_SESSIONCOMBO, "");
-}
 
-static void ApplyLoadedSessionToDialog(HWND hWnd, pConnectSettings s, LPCSTR iniFileName)
-{
-    if (!s || !iniFileName)
-        return;
-    ConnectDialogContext* dlgCtx = GetConnectDialogContext(hWnd);
-    SetDlgItemText(hWnd, IDC_CONNECTTO, s->server);
-    SetDlgItemText(hWnd, IDC_USERNAME, s->user);
-    SetDlgItemText(hWnd, IDC_PUBKEY, s->pubkeyfile);
-    SetDlgItemText(hWnd, IDC_PRIVKEY, s->privkeyfile);
-    SetDlgItemText(hWnd, IDC_PASSWORD, s->password);
-
-    switch (s->protocoltype) {
-    case 1:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV4); break;
-    case 2:  CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOV6); break;
-    default: CheckRadioButton(hWnd, IDC_PROTOAUTO, IDC_PROTOV6, IDC_PROTOAUTO); break;
+    // CBS_DROPDOWNLIST is read-only — SetDlgItemText doesn't pick an item.
+    // Use CB_SELECTSTRING to highlight the matching entry by text.
+    if (currentRef && currentRef[0] && !foundRef) {
+        // Referenced session disappeared — keep the marker visible so the
+        // user notices and can re-pick / clear it.
+        std::wstring suffixW = LoadResStringW(IDS_JUMP_SESSION_MISSING_SUFFIX);
+        if (suffixW.empty()) suffixW = L" (missing)";
+        const std::wstring markerW =
+            unicode_util::narrow_to_wide(kJumpMissingMarkerPrefix) +
+            unicode_util::narrow_to_wide(currentRef) + suffixW;
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_ADDSTRING, 0,
+                            (LPARAM)markerW.c_str());
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
+                            (LPARAM)markerW.c_str());
+    } else if (currentRef && currentRef[0]) {
+        const std::wstring refW = unicode_util::narrow_to_wide(currentRef);
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SELECTSTRING, (WPARAM)-1,
+                            (LPARAM)refW.c_str());
+    } else {
+        // Default: localized "(manual)" — first entry, index 0
+        SendDlgItemMessageW(hWnd, IDC_JUMP_SESSION_PICK, CB_SETCURSEL, 0, 0);
     }
-
-    CheckDlgButton(hWnd, IDC_USEAGENT, s->useagent ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_DETAILED_LOG, s->detailedlog ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_COMPRESS, s->compressed ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SCP_DATA, s->scpfordata ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SCP_ALL, s->scponly ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_SHELLTRANSFER, (s->shell_transfer_dd && s->shell_transfer_force) ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_JUMP_ENABLE, s->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_PHP_TAR, s->php_tar ? BST_CHECKED : BST_UNCHECKED);
-    CheckDlgButton(hWnd, IDC_LAN_TI, s->lan_pair_trusted_installer ? BST_CHECKED : BST_UNCHECKED);
-    SendDlgItemMessage(hWnd, IDC_TRANSFERMODE, CB_SETCURSEL, max(0, min(3, s->transfermode)), 0);
-    RebuildSystemAndEncodingCombos(hWnd, dlgCtx, s);
-    if (dlgCtx)
-        dlgCtx->lastTransferMode = max(0, min(3, s->transfermode));
-    UpdateScpOnlyDependentControls(hWnd);
-    SetLanTimeoutMinutes(hWnd, s->lan_pair_timeout_min);
-
-    std::array<char, 32> modbuf{};
-    _itoa_s(s->filemod, modbuf.data(), modbuf.size(), 8);
-    SetDlgItemText(hWnd, IDC_FILEMOD, modbuf.data());
-    _itoa_s(s->dirmod, modbuf.data(), modbuf.size(), 8);
-    SetDlgItemText(hWnd, IDC_DIRMOD, modbuf.data());
-
-    fillProxyCombobox(hWnd, s->proxynr, iniFileName);
 }
+
 
 INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
@@ -1642,20 +1603,7 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             return 1;
         }
         SetWindowLongPtr(hWnd, DWLP_USER, lParam);
-        LocalizeDlgControls(hWnd, IDS_PROXY_DLG_CAPTION, {
-            { IDC_PROXY_GROUP,      IDS_PROXY_DLG_GROUP   },
-            { IDC_NOPROXY,          IDS_PROXY_DLG_NOPROXY },
-            { IDC_OTHERPROXY,       IDS_PROXY_DLG_HTTP    },
-            { IDC_SOCKS4APROXY,     IDS_PROXY_DLG_SOCKS4A },
-            { IDC_SOCKS5PROXY,      IDS_PROXY_DLG_SOCKS5  },
-            { IDC_PROXY_LABEL_HOST, IDS_PROXY_DLG_HOST    },
-            { IDC_PROXY_LABEL_USER, IDS_PROXY_DLG_USER    },
-            { IDC_PROXY_LABEL_PASS, IDS_PROXY_DLG_PASS    },
-            { IDC_CRYPTPASS,        IDS_DLG_CRYPTPASS     },
-            { IDC_EDITPASS,         IDS_DLG_CHANGEPASS    },
-            { IDOK,                 IDS_BTN_OK            },
-            { IDCANCEL,             IDS_BTN_CANCEL        },
-        });
+        LocalizeDlgControls(hWnd, kProxyDialogCaption, kProxyDialogStrings);
         LoadProxySettingsFromNr(ctx->proxynr, &ctx->connectData, ctx->iniFileName);
 
         switch (ConnectData.proxytype) {
@@ -1699,7 +1647,8 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             else if (ConnectData.proxypassword.empty() && CryptCheckPass)
                 CheckDlgButton(hWnd, IDC_CRYPTPASS, BST_CHECKED);
         }
-        
+        DlgLayout::OnInitDialog(hWnd);
+        DlgLayout::LayoutProxyDialog(hWnd);
 
         // Center the dialog relative to its parent window.
         if (GetWindowRect(hWnd, &rt1) && GetWindowRect(GetParent(hWnd), &rt2)) {
@@ -1713,6 +1662,12 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
         }
         return 1;
     }
+    case DlgLayout::kDpiChangedMessage:
+        PostMessage(hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutProxyDialog(hWnd);
+        return 1;
     case WM_SHOWWINDOW: {
         if (ctx && ctx->focusset)
             SetFocus(GetDlgItem(hWnd, ctx->focusset));
@@ -1748,7 +1703,6 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
             LPSTR proxy_str = (ConnectData.proxytype == sftp::Proxy::notused) ? nullptr : buf.data();
             WritePrivateProfileString(proxyentry.data(), "proxytype", proxy_str, ctx->iniFileName);
 
-            std::array<char, 1024> szEncryptedPassword{};
             if (!IsWindowVisible(GetDlgItem(hWnd, IDC_EDITPASS))) {  // Edit button is hidden.
                 if (ConnectData.proxypassword.empty()) {
                     WritePrivateProfileString(proxyentry.data(), "proxypassword", nullptr, ctx->iniFileName);
@@ -1760,8 +1714,8 @@ INT_PTR WINAPI ProxyDlgProc(HWND hWnd, UINT Message, WPARAM wParam, LPARAM lPara
                     WritePrivateProfileString(proxyentry.data(), "proxypassword", ok? "!" : nullptr, ctx->iniFileName);
                     CryptCheckPass = true;
                 } else {
-                    EncryptString(ConnectData.proxypassword.c_str(), szEncryptedPassword.data(), static_cast<UINT>(szEncryptedPassword.size()));
-                    WritePrivateProfileString(proxyentry.data(), "proxypassword", szEncryptedPassword.data(), ctx->iniFileName);
+                    const std::string stored = password_crypto::Protect(ConnectData.proxypassword);
+                    WritePrivateProfileString(proxyentry.data(), "proxypassword", stored.c_str(), ctx->iniFileName);
                 }
             }
             
@@ -1844,47 +1798,60 @@ static int GetProxyNrFromCombo(HWND hWnd)
     return (data == CB_ERR || data < 0) ? 0 : static_cast<int>(data);
 }
 
+// How one proxy record reads in a list: its number, its kind and the server it
+// points at. The number leads because it is the record's identity — sessions,
+// exports and imports all refer to a record by it — and because it is what the
+// [Proxies] folder parses back out of a row name. Returns an empty string for
+// a slot that exists but is switched off, which no list should show.
+std::wstring DescribeProxyRecordW(int proxynr, LPCSTR iniFileName)
+{
+    tConnectSettings data;
+    if (!LoadProxySettingsFromNr(proxynr, &data, iniFileName))
+        return {};
+    if (data.proxytype == sftp::Proxy::notused)
+        return {};
+
+    std::wstring out = std::format(L"{}: ", proxynr);
+    switch (data.proxytype) {
+    case sftp::Proxy::http: {
+        std::array<WCHAR, 100> httpproxy{};
+        LngLoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
+        out += httpproxy.data();
+        break;
+    }
+    case sftp::Proxy::socks4: out += L"SOCKS4a: "; break;
+    case sftp::Proxy::socks5: out += L"SOCKS5: ";  break;
+    default: break;
+    }
+
+    std::array<WCHAR, 256> serverW{};
+    awlcopy(serverW.data(), data.proxyserver.c_str(), serverW.size() - 1);
+    out += serverW.data();
+    return out;
+}
+
 void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
 {
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_RESETCONTENT, 0, 0);
     std::array<WCHAR, 100> noproxy{};
     std::array<WCHAR, 100> addproxy{};
-    std::array<WCHAR, 100> httpproxy{};
     std::array<WCHAR, 256> buf{};
     LngLoadStringW(hinst, IDS_NO_PROXY,   noproxy.data(),   static_cast<int>(noproxy.size()));
-    LngLoadStringW(hinst, IDS_HTTP_PROXY, httpproxy.data(), static_cast<int>(httpproxy.size()));
     LngLoadStringW(hinst, IDS_ADD_PROXY,  addproxy.data(),  static_cast<int>(addproxy.size()));
 
     // Item 0: "No proxy" — itemdata=0
     LRESULT i0 = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)noproxy.data());
     SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, i0, 0);
 
-    tConnectSettings connectData;
-    int proxynr = 1;
-    while (LoadProxySettingsFromNr(proxynr, &connectData, iniFileName)) {
-        // Skip "notused" slots — they appear as duplicate "No proxy" and confuse users.
-        if (connectData.proxytype != sftp::Proxy::notused) {
-            wcslcpy(buf.data(), std::format(L"{}: ", proxynr).c_str(), buf.size() - 1);
-            switch (connectData.proxytype) {
-            case sftp::Proxy::http:
-                wcslcat(buf.data(), httpproxy.data(), buf.size()-1);
-                break;
-            case sftp::Proxy::socks4:
-                wcslcat(buf.data(), L"SOCKS4a: ", buf.size()-1);
-                break;
-            case sftp::Proxy::socks5:
-                wcslcat(buf.data(), L"SOCKS5: ", buf.size()-1);
-                break;
-            default:
-                break;
-            }
-            std::array<WCHAR, 256> proxyW{};
-            awlcopy(proxyW.data(), connectData.proxyserver.c_str(), proxyW.size() - 1);
-            wcslcat(buf.data(), proxyW.data(), buf.size()-1);
-            LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
-            SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
-        }
-        proxynr++;
+    // "notused" slots describe as empty and stay out of the list, where they
+    // would read as a second "No proxy".
+    for (const int proxynr : EnumerateProxyNumbers(iniFileName)) {
+        const std::wstring label = DescribeProxyRecordW(proxynr, iniFileName);
+        if (label.empty())
+            continue;
+        wcslcpy(buf.data(), label.c_str(), buf.size() - 1);
+        LRESULT iN = SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_ADDSTRING, 0, (LPARAM)buf.data());
+        SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETITEMDATA, iN, proxynr);
     }
 
     // Last item: "Add new proxy" — itemdata=-1 (sentinel, not a real proxy slot)
@@ -1905,9 +1872,15 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName)
         SendDlgItemMessageW(hWnd, IDC_PROXYCOMBO, CB_SETCURSEL, 0, 0);
 }
 
-bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
+// Remove the proxy the user picked. Records keep their numbers: the one above
+// the deleted slot is not moved down, and no session's `proxynr` is rewritten
+// to follow it. A number is therefore a stable identity, which is what lets a
+// session, an exported snippet or an import point at a record and still mean
+// the same one later. The hole it leaves costs nothing — records are found by
+// reading the sections, not by counting.
+bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName, LPSTR AppendToList, size_t maxlen)
 {
-    if (proxynrtodelete <= 1)
+    if (proxynrtodelete <= 0)
         return false;
 
     bool CanDelete = true;
@@ -1927,12 +1900,24 @@ bool DeleteLastProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileNam
         }
         hdl = FindNextServer(hdl, name.data(), name.size() - 1);
     }
-    if (CanDelete) {
-        std::array<char, 64> proxyentry{};
-        strlcpy(proxyentry.data(), std::format("proxy{}", proxynrtodelete), proxyentry.size() - 1);
-        WritePrivateProfileString(proxyentry.data(), nullptr, nullptr, iniFileName);
+    if (!CanDelete)
+        return false;
+
+    const std::string doomed = proxynrtodelete > 1
+        ? std::format("proxy{}", proxynrtodelete) : std::string("proxy");
+    WritePrivateProfileString(doomed.c_str(), nullptr, nullptr, iniFileName);
+
+    // Only the session being edited can still point here — any other one would
+    // have blocked the delete above. Leaving its number behind would aim it at
+    // a record that no longer exists, which reads as "no proxy" and connects
+    // straight to the host, so it is cleared where it can be seen.
+    if (ServerToSkip && ServerToSkip[0] &&
+        static_cast<int>(GetPrivateProfileInt(ServerToSkip, "proxynr", 0, iniFileName)) == proxynrtodelete)
+    {
+        WritePrivateProfileString(ServerToSkip, "proxynr", "0", iniFileName);
     }
-    return CanDelete;
+
+    return true;
 }
 
 static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
@@ -1951,84 +1936,35 @@ static void ShowHelpDialog(HWND hWnd, UINT bodyStringId)
 // WM_COMMAND handlers - additional refactored functions
 // ============================================================================
 
-static void OnDeleteLastProxyCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgIniFileName)
-{
-    // Get the proxynr stored in the last real proxy item (before "Add new proxy").
-    const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
-    const int lastRealIdx = count - 2;
-    int proxynr = (lastRealIdx > 0)
-        ? (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0)
-        : 0;
-    if (proxynr >= 2) {
-        std::wstring msgW = LoadResStringW(IDS_ERROR_INUSE);
-        std::string errorstr = WideToUtf8(msgW.empty() ? L"Proxy is in use by connection:" : msgW);
-        errorstr.resize(1024, '\0');
-        size_t actualLen = strlen(errorstr.c_str());
-        errorstr[actualLen] = '\n';
-        errorstr[actualLen + 1] = '\0';
 
-        if (DeleteLastProxy(proxynr, dlgConnectResults->DisplayName.c_str(), dlgIniFileName, errorstr.data(), errorstr.size() - 1)) {
-            int proxynrSel = GetProxyNrFromCombo(hWnd);
-            fillProxyCombobox(hWnd, proxynrSel, dlgIniFileName);
-        } else {
-            std::wstring werrorstr(1024, L'\0');
-            const int len = MultiByteToWideChar(CP_ACP, 0, errorstr.data(), -1, werrorstr.data(), static_cast<int>(werrorstr.size()));
-            werrorstr.resize(len > 0 ? len - 1 : 0);
-            
-            if (RequestProcW)
-                RequestProcW(PluginNumber, RT_MsgOK, L"SFTP", werrorstr.data(), nullptr, 0);
-            else
-                MessageBoxW(hWnd, werrorstr.data(), L"SFTP", MB_OK | MB_ICONSTOP);
-        }
-    } else {
-        MessageBeep(MB_ICONSTOP);
-    }
+
+// Open the editor for one proxy record with no session behind it. The
+// connection dialog passes the session it is editing so the password-manager
+// box can follow that session's own choice; the [Proxies] folder has no
+// session to speak for, and the dialog copes with that.
+bool ShowProxyRecordDialog(int proxynr, LPCSTR iniFileName)
+{
+    if (proxynr <= 0 || !iniFileName)
+        return false;
+
+    ProxyDialogContext proxyCtx;
+    proxyCtx.proxynr = proxynr;
+    proxyCtx.ownerConnectResults = nullptr;
+    proxyCtx.iniFileName = iniFileName;
+    return IDOK == ShowLocalizedDialogBoxParam(IDD_PROXY, GetActiveWindow(),
+                                               ProxyDlgProc, (LPARAM)&proxyCtx);
 }
 
-static void OnImportSessionsCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
+// Same editor on a number nothing uses yet. Returns the number the record was
+// created under, or 0 when the user backed out — the caller needs it to select
+// or refresh the row it just made.
+int CreateProxyRecordDialog(LPCSTR iniFileName)
 {
-    pConnectSettings importApplyTarget = dlgConnectResults->dialogforconnection ? nullptr : dlgConnectResults;
-    std::string importedSession(wdirtypemax, '\0');
-    
-    int importedCount = sftp::ShowExternalSessionImportMenu(
-        hWnd, dlgCtx->iniFileName, importApplyTarget, importedSession.data(), static_cast<int>(importedSession.size()));
-    
-    LoadServersFromIni(dlgCtx->iniFileName, s_quickconnect);
-    
-    std::string currentSession(wdirtypemax, '\0');
-    const UINT curLen = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, currentSession.data(), static_cast<int>(currentSession.size()));
-    currentSession.resize(curLen);
-    
-    if (importedCount > 0) {
-        HWND hTcMain = FindWindowA("TTOTAL_CMD", nullptr);
-        if (hTcMain) PostMessage(hTcMain, WM_USER + 51, 540, 0);
-    }
+    if (!iniFileName)
+        return 0;
 
-    if (importedCount > 0 && importedSession[0]) {
-        importedSession.resize(strlen(importedSession.data()));
-        FillSessionCombo(hWnd, importedSession.data());
-        tConnectSettings loaded{};
-        if (LoadServerSettings(importedSession.data(), &loaded, dlgCtx->iniFileName))
-            ApplyLoadedSessionToDialog(hWnd, &loaded, dlgCtx->iniFileName);
-    } else {
-        FillSessionCombo(hWnd, currentSession.data());
-    }
-    fillProxyCombobox(hWnd, dlgConnectResults->proxynr, dlgCtx->iniFileName);
-}
-
-static void OnSessionChangedCommand(HWND hWnd, ConnectDialogContext* dlgCtx, LPCSTR dlgIniFileName)
-{
-    std::string sessionName(wdirtypemax, '\0');
-    const UINT len = GetDlgItemTextA(hWnd, IDC_SESSIONCOMBO, sessionName.data(), static_cast<int>(sessionName.size()));
-    sessionName.resize(len);
-    
-    TrimSessionName(sessionName.data());
-    
-    if (sessionName[0] && _stricmp(sessionName.data(), s_quickconnect) != 0) {
-        tConnectSettings loaded{};
-        if (LoadServerSettings(sessionName.data(), &loaded, dlgIniFileName))
-            ApplyLoadedSessionToDialog(hWnd, &loaded, dlgIniFileName);
-    }
+    const int proxynr = NextFreeProxyNr(iniFileName);
+    return ShowProxyRecordDialog(proxynr, iniFileName) ? proxynr : 0;
 }
 
 static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, ConnectDialogContext* dlgCtx)
@@ -2038,12 +1974,11 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
 
     int proxynr;
     if (selData == (LRESULT)-1) {
-        // "Add new proxy" selected — determine next available slot
-        const int count = (int)SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETCOUNT, 0, 0);
-        const int lastRealIdx = count - 2;  // last item before "Add new proxy"
-        const LRESULT lastData = (lastRealIdx >= 1)
-            ? SendDlgItemMessage(hWnd, IDC_PROXYCOMBO, CB_GETITEMDATA, lastRealIdx, 0) : 0;
-        proxynr = (lastData > 0) ? (int)lastData + 1 : 2;
+        // "Add new proxy" selected. Numbers are never reused, so sessions,
+        // exports and imports that point at one keep meaning the same record.
+        // The combo cannot answer this: it hides "notused" records, and a
+        // hidden record's slot would be handed out and overwritten.
+        proxynr = NextFreeProxyNr(dlgCtx->iniFileName);
     } else {
         proxynr = GetProxyNrFromCombo(hWnd);
     }
@@ -2059,22 +1994,19 @@ static void OnProxyButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, 
     }
 }
 
-static void OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults, LPCSTR dlgDisplayName, LPCSTR dlgIniFileName)
+static bool OnJumpButtonCommand(HWND hWnd, pConnectSettings dlgConnectResults)
 {
-    if (!dlgConnectResults) return;
-    
+    if (!dlgConnectResults) return false;
+
     JumpDialogContext jumpCtx;
     jumpCtx.cs = dlgConnectResults;
-    jumpCtx.iniFileName = dlgIniFileName;
     jumpCtx.hasCryptProc = (CryptProc != nullptr);
-    
-    if (dlgDisplayName)
-        dlgConnectResults->DisplayName = dlgDisplayName;
-    
+
     ShowLocalizedDialogBoxParam(IDD_JUMPHOST, hWnd, JumpHostDlgProc, (LPARAM)&jumpCtx);
-    
+
     CheckDlgButton(hWnd, IDC_JUMP_ENABLE,
         dlgConnectResults->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
+    return jumpCtx.fingerprintCleared;
 }
 
 // ============================================================================
@@ -2123,6 +2055,14 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg) {
     case WM_INITDIALOG:   return OnInitDialog(lParam);
+    case DlgLayout::kDpiChangedMessage:
+        // The dialog manager rescales the dialog after this message; the
+        // text-driven layout runs once that is done.
+        PostMessage(m_hWnd, DlgLayout::kRelayoutMessage, 0, 0);
+        return 0;
+    case DlgLayout::kRelayoutMessage:
+        DlgLayout::LayoutConnectionDialog(m_hWnd);
+        return TRUE;
     case WM_SHOWWINDOW:   return OnShowWindow(LOWORD(wParam));
     case WM_COMMAND:      return OnCommand(wParam, lParam);
     case WM_APP_LAN_PEER: return OnLanPeerMessage(wParam, lParam);
@@ -2130,6 +2070,7 @@ INT_PTR ConnectionDialog::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     }
     return 0;
 }
+
 
 INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 {
@@ -2139,41 +2080,9 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
     LPCSTR dlgIniFileName = m_ctx->iniFileName;
     int* dlgFocusset = &m_ctx->focusset;
 
-    LocalizeDlgControls(m_hWnd, IDS_DLG_CAPTION, {
-        { IDC_LABEL_CONNECTTO,    IDS_DLG_CONNECTTO         },
-        { IDC_LABEL_USERNAME,     IDS_DLG_USERNAME          },
-        { IDC_PASSLABEL,          IDS_JUMP_DLG_PASS         },
-        { IDC_USEAGENT,           IDS_DLG_USEAGENT          },
-        { IDC_EDITPASS,           IDS_DLG_CHANGEPASS        },
-        { IDC_CRYPTPASS,          IDS_DLG_CRYPTPASS         },
-        { IDC_LABEL_CERTGROUP,    IDS_DLG_CERTGROUP         },
-        { IDC_STATICPUB,          IDS_DLG_PUBKEY            },
-        { IDC_STATICPEM,          IDS_DLG_PRIVKEY           },
-        { IDC_COMPRESS,           IDS_DLG_COMPRESS          },
-        { IDC_DETAILED_LOG,       IDS_DLG_DETAILED_LOG      },
-        { IDC_SHELLTRANSFER,      IDS_DLG_SHELLTRANSFER     },
-        { IDC_SCP_DATA,           IDS_DLG_SCP_DATA          },
-        { IDC_SCP_ALL,            IDS_DLG_SCP_ALL           },
-        { IDC_LABEL_TRANSFER,     IDS_DLG_TRANSFER          },
-        { IDC_SYSTEMLABEL,        IDS_DLG_SYSTEM            },
-        { IDC_CODEPAGELABEL,      IDS_DLG_ENCODING          },
-        { IDC_PERMISSIONS_GROUP,  IDS_DLG_PERMISSIONS_GROUP },
-        { IDC_FILEMOD_LABEL,      IDS_DLG_FILEMOD           },
-        { IDC_DIRMOD_LABEL,       IDS_DLG_DIRMOD            },
-        { IDC_LABEL_SESSION,      IDS_DLG_SESSION           },
-        { IDC_LABEL_JUMPHOST_GRP, IDS_DLG_JUMPHOST_GRP      },
-        { IDC_JUMP_ENABLE,        IDS_DLG_USE_JUMPHOST      },
-        { IDC_LABEL_PROXY_SETTINGS, IDS_DLG_PROXY_SETTINGS  },
-        { IDC_PHP_TAR,              IDS_DLG_PHP_TAR         },
-        { IDC_LAN_TI,               IDS_LAN_TI              },
-        { IDC_DELETELAST,         IDS_DLG_DELETELAST        },
-        { IDC_IMPORTSESSIONS,     IDS_DLG_IMPORT            },
-        { IDC_PLUGINHELP,         IDS_BTN_HELP              },
-        { IDOK,                   IDS_BTN_OK                },
-        { IDCANCEL,               IDS_BTN_CANCEL            },
-    });
+    LocalizeDlgControls(m_hWnd, kConnectionDialogCaption, kConnectionDialogStrings);
 
-    // Append version to dialog title: "Połącz z serwerem SFTP v1.0.0.x"
+    // Append the version to the dialog title: "Connect to SFTP server v10.3.0.0"
     {
         const std::wstring ver = GetPluginVersionW();
         if (!ver.empty()) {
@@ -2183,16 +2092,9 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
         }
     }
 
-    ArrangeInlineRow(m_hWnd, IDC_LABEL_JUMPHOST_GRP, IDC_JUMP_ENABLE, IDC_JUMP_BUTTON);
-    ArrangePasswordRow(m_hWnd, IDC_PASSLABEL, IDC_PASSWORDHELP, IDC_USEAGENT);
-    ArrangePermissionsRow(m_hWnd, IDC_FILEMOD_LABEL, IDC_FILEMOD, IDC_DIRMOD_LABEL, IDC_DIRMOD, IDC_PERMISSIONS_GROUP);
-    ArrangePhpTarCheckbox(m_hWnd);
-    ArrangeProtocolButtons(m_hWnd);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_CONNECTTO, IDC_PROTOAUTO);
-    ArrangeExpandLabel(m_hWnd, IDC_CODEPAGELABEL,   IDC_UTF8HELP);
-    ArrangeExpandLabel(m_hWnd, IDC_LABEL_TRANSFER,  IDC_TRANSFERMODE);
-    ArrangeExpandLabel(m_hWnd, IDC_SYSTEMLABEL,     IDC_SYSTEM);
-    ArrangeLabelFillButton(m_hWnd, IDC_LABEL_SESSION, IDC_SESSIONCOMBO, IDC_PHPSHELL);
+    DlgLayout::OnInitDialog(m_hWnd);
+    DlgLayout::LayoutConnectionDialog(m_hWnd);
+
 
     if (m_ctx->lanPeerId.empty())
         m_ctx->lanPeerId = MakeLanPeerId();
@@ -2211,7 +2113,19 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     SendDlgItemMessage(m_hWnd, IDC_DEFAULTCOMBO, CB_SETCURSEL, 0, 0);
     LoadServersFromIni(dlgIniFileName, s_quickconnect);
-    FillSessionCombo(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
+    SetSessionNameField(m_hWnd, strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "");
+    // Populate jump-host session-picker. Skip self (the session being edited)
+    // and the quickconnect pseudo-session.
+    FillJumpSessionCombo(
+        m_hWnd,
+        strcmp(dlgDisplayName, s_quickconnect) != 0 ? dlgDisplayName : "",
+        m_settings ? m_settings->jump_session_ref.c_str() : "");
+    // Jump button is disabled while a session reference is set
+    // (ref takes priority over manual configuration via the Jump dialog).
+    {
+        const bool buttonEnabled = m_settings && m_settings->use_jump_host;
+        EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
+    }
     serverfieldchangedbyuser = false;
 
     {
@@ -2297,7 +2211,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
                 std::array<char, MAX_PATH> storedPasswordRaw{};
                 GetPrivateProfileString(dlgDisplayName, "password", "",
                                         storedPasswordRaw.data(),
-                                        storedPasswordRaw.size() - 1,
+                                        static_cast<DWORD>(storedPasswordRaw.size()),
                                         dlgIniFileName);
                 CheckDlgButton(m_hWnd, IDC_CRYPTPASS,
                                strcmp(storedPasswordRaw.data(), "!") == 0 ? BST_CHECKED : BST_UNCHECKED);
@@ -2368,10 +2282,6 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
     case IDCANCEL:
         OnCancel();
         return 1;
-    case IDC_SESSIONCOMBO:
-        if (HIWORD(wParam) == CBN_SELCHANGE)
-            OnSessionChanged();
-        break;
     case IDC_TRANSFERMODE:
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnTransferModeChanged();
@@ -2396,18 +2306,16 @@ INT_PTR ConnectionDialog::OnCommand(WPARAM wParam, LPARAM /*lParam*/)
     case IDC_JUMP_BUTTON:
         OnJumpButton();
         break;
+    case IDC_JUMP_SESSION_PICK:
+        if (HIWORD(wParam) == CBN_SELCHANGE)
+            OnJumpSessionPicked();
+        break;
     case IDC_PROXYBUTTON:
         OnProxyButton();
         break;
     case IDC_PROXYCOMBO:
         if (HIWORD(wParam) == CBN_SELCHANGE)
             OnProxyComboChanged();
-        break;
-    case IDC_DELETELAST:
-        OnDeleteLastProxy();
-        break;
-    case IDC_IMPORTSESSIONS:
-        OnImportSessions();
         break;
     case IDC_PLUGINHELP:
         OnPluginHelp();
@@ -2463,7 +2371,7 @@ INT_PTR ConnectionDialog::OnLanPeerMessage(WPARAM /*wParam*/, LPARAM lParam)
                 const std::wstring msgW   = LoadResStringW(IDS_LAN_ROLE_PROMPT);
                 const int choice = MessageBoxW(
                     m_hWnd,
-                    msgW.empty() ? L"Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian" : msgW.c_str(),
+                    msgW.empty() ? L"LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change" : msgW.c_str(),
                     titleW.empty() ? L"LAN Pair" : titleW.c_str(),
                     MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
                 
@@ -2538,6 +2446,10 @@ void ConnectionDialog::OnOk()
     GetDlgItemText(m_hWnd, IDC_PRIVKEY, m_settings->privkeyfile);
     m_settings->useagent      = IsDlgButtonChecked(m_hWnd, IDC_USEAGENT)     == BST_CHECKED;
     m_settings->use_jump_host = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE)  == BST_CHECKED;
+    // Read jump_session_ref from the picker rather than trusting the
+    // CBN_SELCHANGE-driven update in OnJumpSessionPicked: the dialog also
+    // fills this dropdown itself, and the model has to match what is shown.
+    m_settings->jump_session_ref = ReadJumpSessionRefFromDialog(m_hWnd);
     m_settings->php_tar                  = IsDlgButtonChecked(m_hWnd, IDC_PHP_TAR) == BST_CHECKED;
     m_settings->lan_pair_trusted_installer = IsDlgButtonChecked(m_hWnd, IDC_LAN_TI)  == BST_CHECKED;
     m_settings->detailedlog   = IsDlgButtonChecked(m_hWnd, IDC_DETAILED_LOG) == BST_CHECKED;
@@ -2566,8 +2478,7 @@ void ConnectionDialog::OnOk()
                 if (cbline >= 0 && cbline < kCodepageListCount) {
                     cp = codepagelist[cbline];
                     if (cp == -3) {
-                        if (RequestProc(PluginNumber, RT_Other, "Code page", "Code page (e.g. 28591):",
-                                        strbuf.data(), strbuf.size() - 1))
+                        if (RequestInput(RT_Other, "Code page", "Code page (e.g. 28591):", strbuf))
                             cp = atoi(strbuf.data());
                     } else if (cp == -4) {
                         cp = m_settings->codepage;
@@ -2579,9 +2490,9 @@ void ConnectionDialog::OnOk()
         }
     }
 
-    GetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data(), modbuf.size() - 1);
+    GetDlgItemText(m_hWnd, IDC_FILEMOD, modbuf.data(), static_cast<int>(modbuf.size()));
     m_settings->filemod = modbuf[0] == 0 ? 0644 : strtol(modbuf.data(), nullptr, 8);
-    GetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data(), modbuf.size() - 1);
+    GetDlgItemText(m_hWnd, IDC_DIRMOD, modbuf.data(), static_cast<int>(modbuf.size()));
     m_settings->dirmod  = modbuf[0] == 0 ? 0755 : strtol(modbuf.data(), nullptr, 8);
 
     m_settings->proxynr = GetProxyNrFromCombo(m_hWnd);
@@ -2591,7 +2502,7 @@ void ConnectionDialog::OnOk()
     targetProfile[0] = 0;
     enteredProfile[0] = 0;
 
-    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, enteredProfile.data(), enteredProfile.size() - 1);
+    GetDlgItemText(m_hWnd, IDC_SESSIONNAME, enteredProfile.data(), static_cast<int>(enteredProfile.size()));
     TrimSessionName(enteredProfile.data());
     if (enteredProfile[0] && _stricmp(enteredProfile.data(), s_quickconnect) != 0) {
         strlcpy(targetProfile.data(), enteredProfile.data(), targetProfile.size() - 1);
@@ -2607,16 +2518,32 @@ void ConnectionDialog::OnOk()
                 m_settings->server = "lanpair://local";
         }
 
-        if (strcmp(dlgDisplayName, s_quickconnect) != 0 &&
-            _stricmp(targetProfile.data(), dlgDisplayName) != 0) {
+        const auto warnNameTaken = [this]() {
+            const std::wstring sessionExists = LoadResStringW(IDS_ERR_SESSION_EXISTS);
+            const std::wstring sftpTitle     = LoadResStringW(IDS_TITLE_SFTP);
+            MessageBoxW(m_hWnd,
+                        sessionExists.empty() ? L"Session with this name already exists.\nChoose a different session name." : sessionExists.c_str(),
+                        sftpTitle.empty() ? L"SFTP" : sftpTitle.c_str(),
+                        MB_OK | MB_ICONWARNING);
+        };
+
+        const bool isNewSession = strcmp(dlgDisplayName, s_quickconnect) == 0;
+        if (isNewSession) {
+            // Saving under a name that is taken would replace that session's
+            // settings with these, so refuse it the same way renaming onto an
+            // existing name does. A section with any key present means it
+            // exists.
+            std::array<char, 100> existing{};
+            GetPrivateProfileString(targetProfile.data(), nullptr, "",
+                                    existing.data(), static_cast<DWORD>(existing.size()), dlgIniFileName);
+            if (existing[0]) {
+                warnNameTaken();
+                return;
+            }
+        } else if (_stricmp(targetProfile.data(), dlgDisplayName) != 0) {
             int moveRc = CopyMoveServerInIni(dlgDisplayName, targetProfile.data(), true, false, dlgIniFileName);
             if (moveRc == FS_FILE_EXISTS) {
-                const std::wstring sessionExists = LoadResStringW(IDS_ERR_SESSION_EXISTS);
-                const std::wstring sftpTitle     = LoadResStringW(IDS_TITLE_SFTP);
-                MessageBoxW(m_hWnd, 
-                            sessionExists.empty() ? L"Session with this name already exists.\nChoose a different session name." : sessionExists.c_str(),
-                            sftpTitle.empty() ? L"SFTP" : sftpTitle.c_str(), 
-                            MB_OK | MB_ICONWARNING);
+                warnNameTaken();
                 return;
             }
         }
@@ -2663,24 +2590,41 @@ void ConnectionDialog::OnOk()
         WritePrivateProfileString(targetProfile.data(), "privkeyfile",  m_settings->privkeyfile.empty()  ? nullptr : m_settings->privkeyfile.c_str(),  dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "useagent",     m_settings->useagent             ? "1" : nullptr, dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "usejumphost",  m_settings->use_jump_host        ? "1" : nullptr, dlgIniFileName);
-        if (!m_settings->jump_host.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumphost", m_settings->jump_host.c_str(), dlgIniFileName);
+        // jumpsessionref: when non-empty, jump host params are resolved from the
+        // referenced session at connect time, ignoring the manual jump_* fields
+        // below (which are still preserved for switching back to manual mode).
+        WritePrivateProfileString(targetProfile.data(), "jumpsessionref",
+            m_settings->jump_session_ref.empty() ? nullptr : m_settings->jump_session_ref.c_str(), dlgIniFileName);
+        // Each jump field below is written unconditionally, an empty value
+        // removing the key, so that clearing a field in the dialog also clears
+        // it in the INI rather than leaving the session routed through a jump
+        // host the user believes they removed.
+        WritePrivateProfileString(targetProfile.data(), "jumphost",
+            m_settings->jump_host.empty() ? nullptr : m_settings->jump_host.c_str(), dlgIniFileName);
         if (m_settings->jump_port && m_settings->jump_port != 22) {
             std::array<char, 16> portBuf{};
             _itoa_s(m_settings->jump_port, portBuf.data(), portBuf.size(), 10);
             WritePrivateProfileString(targetProfile.data(), "jumpport", portBuf.data(), dlgIniFileName);
+        } else {
+            // 22 is the default the loader assumes, so drop the key instead of
+            // leaving a stale port behind.
+            WritePrivateProfileString(targetProfile.data(), "jumpport", nullptr, dlgIniFileName);
         }
-        if (!m_settings->jump_user.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpuser", m_settings->jump_user.c_str(), dlgIniFileName);
-        if (!m_settings->jump_pubkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile", m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
-        if (!m_settings->jump_privkeyfile.empty())
-            WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile", m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumpuser",
+            m_settings->jump_user.empty() ? nullptr : m_settings->jump_user.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumppubkeyfile",
+            m_settings->jump_pubkeyfile.empty() ? nullptr : m_settings->jump_pubkeyfile.c_str(), dlgIniFileName);
+        WritePrivateProfileString(targetProfile.data(), "jumpprivkeyfile",
+            m_settings->jump_privkeyfile.empty() ? nullptr : m_settings->jump_privkeyfile.c_str(), dlgIniFileName);
         WritePrivateProfileString(targetProfile.data(), "jumpuseagent", m_settings->jump_useagent ? "1" : nullptr, dlgIniFileName);
         if (!m_settings->jump_password.empty()) {
-            std::array<char, 1024> jumpEnc{};
-            EncryptString(m_settings->jump_password.c_str(), jumpEnc.data(), static_cast<UINT>(jumpEnc.size()));
-            WritePrivateProfileString(targetProfile.data(), "jumppassword", jumpEnc.data(), dlgIniFileName);
+            const std::string stored = password_crypto::Protect(m_settings->jump_password);
+            WritePrivateProfileString(targetProfile.data(), "jumppassword", stored.c_str(), dlgIniFileName);
+        } else {
+            WritePrivateProfileString(targetProfile.data(), "jumppassword", nullptr, dlgIniFileName);
+        }
+        if (m_jumpFingerprintCleared) {
+            WritePrivateProfileString(targetProfile.data(), "jumpfingerprint", nullptr, dlgIniFileName);
         }
         _itoa_s(m_settings->filemod, modbuf.data(), modbuf.size(), 8);
         WritePrivateProfileString(targetProfile.data(), "filemod", m_settings->filemod == 0644 ? nullptr : modbuf.data(), dlgIniFileName);
@@ -2689,7 +2633,6 @@ void ConnectionDialog::OnOk()
         _itoa_s(m_settings->proxynr, buf.data(), buf.size(), 10);
         WritePrivateProfileString(targetProfile.data(), TEXT("proxynr"), buf.data(), dlgIniFileName);
 
-        std::array<char, 1024> szEncryptedPassword{};
         if (!IsWindowVisible(GetDlgItem(m_hWnd, IDC_EDITPASS))) {
             if (m_settings->password.empty()) {
                 WritePrivateProfileString(targetProfile.data(), "password", nullptr, dlgIniFileName);
@@ -2700,14 +2643,12 @@ void ConnectionDialog::OnOk()
                 WritePrivateProfileString(targetProfile.data(), "password", ok ? "!" : nullptr, dlgIniFileName);
                 CryptCheckPass = true;
             } else {
-                EncryptString(m_settings->password.c_str(), szEncryptedPassword.data(),
-                              static_cast<UINT>(szEncryptedPassword.size()));
-                WritePrivateProfileString(targetProfile.data(), "password", szEncryptedPassword.data(), dlgIniFileName);
+                const std::string stored = password_crypto::Protect(m_settings->password);
+                WritePrivateProfileString(targetProfile.data(), "password", stored.c_str(), dlgIniFileName);
             }
         }
 
         // Refresh TC panel when a new session is created or an existing one is renamed
-        const bool isNewSession = (strcmp(dlgDisplayName, s_quickconnect) == 0);
         const bool wasRenamed   = !isNewSession &&
                                   (_stricmp(targetProfile.data(), dlgDisplayName) != 0);
         if (isNewSession || wasRenamed) {
@@ -2732,18 +2673,6 @@ void ConnectionDialog::OnCancel()
 {
     StopLanPairing(m_ctx);
     EndDialog(m_hWnd, IDCANCEL);
-}
-
-void ConnectionDialog::OnSessionChanged()
-{
-    std::array<char, wdirtypemax> sessionName{};
-    GetDlgItemText(m_hWnd, IDC_SESSIONCOMBO, sessionName.data(), sessionName.size() - 1);
-    TrimSessionName(sessionName.data());
-    if (sessionName[0] && _stricmp(sessionName.data(), s_quickconnect) != 0) {
-        tConnectSettings loaded{};
-        if (LoadServerSettings(sessionName.data(), &loaded, m_ctx->iniFileName))
-            ApplyLoadedSessionToDialog(m_hWnd, &loaded, m_ctx->iniFileName);
-    }
 }
 
 void ConnectionDialog::OnTransferModeChanged()
@@ -2815,14 +2744,33 @@ void ConnectionDialog::OnJumpEnableChanged()
     const bool checked = IsDlgButtonChecked(m_hWnd, IDC_JUMP_ENABLE) == BST_CHECKED;
     if (m_settings)
         m_settings->use_jump_host = checked;
-    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), checked ? TRUE : FALSE);
+    // The button stays available with a session reference too: the dialog then
+    // shows that session's settings read-only, which is how the user finds out
+    // where they come from instead of meeting a dead button.
+    const bool buttonEnabled = checked;
+    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
 void ConnectionDialog::OnJumpButton()
 {
-    OnJumpButtonCommand(m_hWnd, m_settings, m_ctx->displayName, m_ctx->iniFileName);
+    if (OnJumpButtonCommand(m_hWnd, m_settings))
+        m_jumpFingerprintCleared = true;
     CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE,
         m_settings->use_jump_host ? BST_CHECKED : BST_UNCHECKED);
+}
+
+void ConnectionDialog::OnJumpSessionPicked()
+{
+    if (!m_settings) return;
+
+    m_settings->jump_session_ref = ReadJumpSessionRefFromDialog(m_hWnd);
+    if (!m_settings->jump_session_ref.empty()) {
+        // Picking a real session implies "use jump host" — auto-check the box.
+        m_settings->use_jump_host = true;
+        CheckDlgButton(m_hWnd, IDC_JUMP_ENABLE, BST_CHECKED);
+    }
+    const bool buttonEnabled = m_settings->use_jump_host;
+    EnableWindow(GetDlgItem(m_hWnd, IDC_JUMP_BUTTON), buttonEnabled ? TRUE : FALSE);
 }
 
 void ConnectionDialog::OnProxyButton()
@@ -2837,15 +2785,6 @@ void ConnectionDialog::OnProxyComboChanged()
         PostMessage(m_hWnd, WM_COMMAND, IDC_PROXYBUTTON, 0);
 }
 
-void ConnectionDialog::OnDeleteLastProxy()
-{
-    OnDeleteLastProxyCommand(m_hWnd, m_settings, m_ctx->iniFileName);
-}
-
-void ConnectionDialog::OnImportSessions()
-{
-    OnImportSessionsCommand(m_hWnd, m_settings, m_ctx);
-}
 
 void ConnectionDialog::OnPluginHelp()
 {
@@ -2918,7 +2857,7 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
                 std::string titleStr = WideToUtf8(titleW.empty() ? L"Proxy password for " : titleW);
                 titleStr += ConnectSettings->proxyuser;
                 std::array<char, MAX_PATH> proxyPassword{};
-                if (!RequestProc(PluginNumber, RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword.data(), static_cast<int>(proxyPassword.size() - 1)))
+                if (!RequestInput(RT_PasswordFirewall, titleStr.c_str(), titleStr.c_str(), proxyPassword))
                     return false;
                 ConnectSettings->proxypassword = proxyPassword.data();
             }
@@ -2929,7 +2868,7 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
         dlgCtx.connectResults = ConnectSettings;
         dlgCtx.displayName = DisplayName;
         dlgCtx.iniFileName = inifilename;
-        return (IDOK == ShowLocalizedDialogBoxParam(IDD_WEBDAV, GetActiveWindow(), ConnectDlgProc, (LPARAM)&dlgCtx));
+        return (IDOK == ShowLocalizedDialogBoxParam(IDD_CONNECTION, GetActiveWindow(), ConnectDlgProc, (LPARAM)&dlgCtx));
     }
 }
 
@@ -2937,7 +2876,9 @@ bool ShowConnectDialog(pConnectSettings ConnectSettings, LPCSTR DisplayName, LPC
 #define HWND_MESSAGE ((HWND)(-3))
 #endif
 
-pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPCSTR overridepass)
+pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename,
+                                     LPCSTR overridepass, LPCSTR loggingAliasName,
+                                     const RuntimeSecrets* inherited)
 {
     tConnectSettings ConnectSettings{};
     ConnectSettings.sock = INVALID_SOCKET; // Zabezpieczenie przed zamykaniem gniazda 0 przez PHP Agent
@@ -2958,6 +2899,13 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
         }
         if (overridepass)
             ConnectSettings.password = overridepass;
+        // Carried from the connection that already answered these prompts.
+        // Authentication keeps whatever the stored profile does not supply.
+        if (inherited) {
+            ConnectSettings.account_password    = inherited->accountPassword;
+            ConnectSettings.key_passphrase      = inherited->keyPassphrase;
+            ConnectSettings.jump_key_passphrase = inherited->jumpKeyPassphrase;
+        }
         if (ConnectSettings.useagent || ConnectSettings.password.empty()) {
             ConnectSettings.passSaveMode = sftp::PassSaveMode::empty;
         } else {
@@ -3005,7 +2953,7 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             char* p = strchr(serverBuf.data(), '/');
             ConnectSettings.lastactivepath[0] = 0;
             if (p) {
-                awlcopy(ConnectSettings.lastactivepath, p, countof(ConnectSettings.lastactivepath)-1);
+                awlcopy(ConnectSettings.lastactivepath, p, std::size(ConnectSettings.lastactivepath)-1);
                 p[0] = 0;
                 // Remove trailing slash, including the root edge case.
             }
@@ -3022,19 +2970,55 @@ pConnectSettings SftpConnectToServer(LPCSTR DisplayName, LPCSTR inifilename, LPC
             return nullptr;
         }
 
+        // From here on every ShowStatus call in this thread (including all
+        // the "Connect to:", "Jump host:", "SFTP init complete" lines that
+        // SftpConnect emits) is prefixed with "[<session>] " so the user can
+        // tell which connection is logging when several are open at once.
+        SessionContextGuard _sessionGuard(&ConnectSettings);
+
         if (SftpConnect(&ConnectSettings) != SFTP_OK) {
             return nullptr;
         }
         {
-            // This will show ftp toolbar
-            std::array<char, MAX_PATH> connbuf{};
-            strlcpy(connbuf.data(), "CONNECT \\", connbuf.size() - 1);
-            strlcat(connbuf.data(), DisplayName, connbuf.size() - 1);
-            LogProc(PluginNumber, MSGTYPE_CONNECT, connbuf.data());
+            // Tell TC about the new connection so its per-panel FTP toolbar
+            // switches on. The path we report is what TC then feeds back
+            // through FsDisconnect and uses as the "root of connection"
+            // when the user clicks the toolbar Disconnect button — so it
+            // must be a clean, TC-parseable single-hierarchy path:
+            //   * forward slashes inside folder-nested DisplayNames like
+            //     "work/ha1" are converted to backslashes; TC sees
+            //     "\work\ha1" and treats it as a normal nested path (parent
+            //     "\work" is our implicit folder). Our own
+            //     GetDisplayNameFromPath goes through NormaliseTcPath which
+            //     converts `\` back to `/`, so registry lookup on disconnect
+            //     still finds the session.
+            //   * virtual (Imports-cache) sessions pass loggingAliasName —
+            //     a `__vimp_<sourceId>_<hash>` alias with no dots, brackets
+            //     or slashes, which TC also handles cleanly.
+            const char* announceName = loggingAliasName ? loggingAliasName : DisplayName;
+            std::string connbuf = "CONNECT \\";
+            connbuf.append(announceName);
+            if (!loggingAliasName)
+                std::replace(connbuf.begin(), connbuf.end(), '/', '\\');
+            LogProc(PluginNumber, MSGTYPE_CONNECT, connbuf.c_str());
 
             // Move the connected settings to the heap ? unique_ptrs transfer ownership.
+            // Critical: SftpConnect() called createSession() with the LOCAL
+            // ConnectSettings address as the libssh2 session's `abstract`
+            // pointer. Our transport_send/recv_cb dereference (*abstract) to
+            // reach cs->transport_stream. After the move, the stack address
+            // becomes invalid, so we MUST redirect the session's abstract to
+            // the heap-allocated copy or the next callback invocation reads
+            // dangling stack memory and crashes (NULL deref via the
+            // transport_stream unique_ptr that the stale memory now contains).
+            // Direct connections do not install custom send/recv callbacks
+            // and so survived this bug for years; ProxyJump installs them and
+            // hits the dangling pointer on the first SFTP listing call.
             try {
-                return new tConnectSettings(std::move(ConnectSettings));
+                auto* heap_cs = new tConnectSettings(std::move(ConnectSettings));
+                if (heap_cs->session)
+                    *heap_cs->session->abstractPtr() = heap_cs;
+                return heap_cs;
             } catch (const std::bad_alloc&) {
                 if (ConnectSettings.feedback) {
                     ConnectSettings.feedback->ShowError(LngStrU8(IDS_ERR_OOM_CONN_SETTINGS, "Out of memory while creating connection settings."));

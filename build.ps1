@@ -1,515 +1,219 @@
+#requires -Version 5.1
+<#
+.SYNOPSIS
+Builds SFTPplug (x64 and x86), the help page and the TC install package.
+
+.DESCRIPTION
+The toolchain is chosen on evidence by tools\Toolchain.psm1: the platform
+toolset, MSVC version, Windows SDK and host architecture passed to MSBuild
+are the ones whose compiler, assembler, libraries and headers exist on disk.
+Static libraries from build-deps.ps1 are linked only when the manifest proves
+they match the current pins and were not replaced since.
+
+.PARAMETER NoHelp      Skip the single-page help.
+.PARAMETER NoDeploy    Do not copy the result into Total Commander.
+.PARAMETER NoZip       Do not build bin\SFTPplug.zip.
+.PARAMETER X64Only     Build only the 64-bit plugin.
+#>
 param(
-    [switch]$chm,
-    [switch]$nochm,
-    [switch]$nodeploy,
-    [switch]$nozip,
-    [switch]$x64only
+    [switch]$NoHelp,
+    [switch]$NoDeploy,
+    [switch]$NoZip,
+    [switch]$X64Only
 )
 
-# ============================================================================
-# Configuration
-# ============================================================================
-$projectName = "SFTPplug"
-$projectRoot = $PSScriptRoot
-$binDir = Join-Path $projectRoot "bin"
-$buildDir = Join-Path $projectRoot "build"
-$buildOutputDir    = Join-Path $buildDir "bin\x64_Release"
-$buildOutputDirX86 = Join-Path $buildDir "bin\Win32_Release"
-$phpAgentSource = Join-Path $projectRoot "src\agent\sftp.php"
-$helpProject = Join-Path $projectRoot "src\help\sftpplug.hhp"
-$helpCompiled = Join-Path $projectRoot "src\help\sftpplug.chm"
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version 3.0
+Import-Module (Join-Path $PSScriptRoot 'tools\Toolchain.psm1') -Force
 
-# Read plugin version from version.h (single source of truth)
-$pluginVersion = "10.0.0.18"
-$verHPath = Join-Path $projectRoot "src\include\version.h"
-if (Test-Path $verHPath) {
-    $verHContent = Get-Content $verHPath -Raw
-    if ($verHContent -match '#define\s+VER_FILEVERSION_STR\s+"([^"]+)"') {
-        $pluginVersion = $matches[1]
+$ProjectName = 'SFTPplug'
+$Root        = $PSScriptRoot
+$BinDir      = Join-Path $Root 'bin'
+$BuildDir    = Join-Path $Root 'build'
+$Project     = Join-Path $BuildDir 'SFTPplug.vcxproj'
+$LibDir      = Join-Path $Root 'src\lib'
+$Manifest    = Join-Path $LibDir 'deps-manifest.json'
+$HelpBuilder = Join-Path $Root 'tools\build-help-page.py'
+$HelpPage    = Join-Path $BinDir "$ProjectName-help.html"
+$PhpAgent    = Join-Path $Root 'src\agent\sftp.php'
+$Template    = Join-Path $Root 'src\res\sftpplug.tpl'
+$LanguageDir = Join-Path $Root 'src\res\language'
+$Readme      = Join-Path $Root 'src\help\readme.txt'
+
+$Archs = if ($X64Only) { @('x64') } else { @('x64', 'x86') }
+$OutputDir = @{
+    x64 = Join-Path $BuildDir 'bin\x64_Release'
+    x86 = Join-Path $BuildDir 'bin\Win32_Release'
+}
+
+function Write-Section([string]$Title) { Write-Host ''; Write-Host "--- $Title ---" -ForegroundColor Cyan }
+function Write-Step([string]$Text)     { Write-Host "  $Text" -ForegroundColor Gray }
+function Write-Ok([string]$Text)       { Write-Host "  $Text" -ForegroundColor Green }
+
+$PluginVersion = '0.0.0.0'
+if ((Get-Content (Join-Path $Root 'src\include\version.h') -Raw) -match '#define\s+VER_FILEVERSION_STR\s+"([^"]+)"') {
+    $PluginVersion = $Matches[1]
+}
+Write-Host "--- $ProjectName $PluginVersion ---" -ForegroundColor Cyan
+
+# ============================================================================
+# Toolchain and dependencies
+# ============================================================================
+Write-Section 'Toolchain'
+$Toolchain = Get-SftpToolchain -Arch $Archs
+Write-SftpToolchainSummary $Toolchain
+
+Write-Section 'Dependencies'
+if (-not (Test-Path -LiteralPath $Manifest)) {
+    throw "src\lib\deps-manifest.json not found. Run .\build-deps.ps1 first."
+}
+$manifestTargets = (Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json).targets
+$expectedDigest = Get-SftpDependencyDigest
+foreach ($a in $Archs) {
+    $entry = $manifestTargets.PSObject.Properties[$a]
+    if (-not $entry) { throw "No $a libraries recorded. Run .\build-deps.ps1." }
+    if ($entry.Value.digest -ne $expectedDigest) {
+        throw "The $a libraries were built from different pins or patches. Run .\build-deps.ps1."
     }
+    foreach ($lib in $entry.Value.libraries.PSObject.Properties) {
+        $path = Join-Path $LibDir $lib.Name
+        if (-not (Test-Path -LiteralPath $path) -or
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant() -ne $lib.Value) {
+            throw "$($lib.Name) does not match the manifest. Run .\build-deps.ps1."
+        }
+    }
+    Write-Ok "$a : $($entry.Value.openssl.Split(' ')[0]) OpenSSL, $($entry.Value.libssh2.Split(' ')[0]) - verified"
 }
 
 # ============================================================================
-# Helper Functions
+# Build
 # ============================================================================
-
-function Get-TotalCommanderPath {
-    <#
-    .SYNOPSIS
-    Finds Total Commander installation path from registry or default locations.
-    #>
-    
-    # Try HKEY_CURRENT_USER first
-    $tcPath = $null
-    try {
-        $tcKey = Get-ItemProperty -Path "HKCU:\Software\Ghisler\Total Commander" -ErrorAction SilentlyContinue
-        if ($tcKey -and $tcKey.InstallDir) {
-            $tcPath = $tcKey.InstallDir
-            Write-Host "  Found TC in HKCU: $tcPath" -ForegroundColor Gray
-        }
-    } catch {
-        # Ignore
-    }
-    
-    # Try HKEY_LOCAL_MACHINE if not found in HKCU
-    if (-not $tcPath) {
-        try {
-            $tcKey = Get-ItemProperty -Path "HKLM:\Software\Ghisler\Total Commander" -ErrorAction SilentlyContinue
-            if ($tcKey -and $tcKey.InstallDir) {
-                $tcPath = $tcKey.InstallDir
-                Write-Host "  Found TC in HKLM: $tcPath" -ForegroundColor Gray
-            }
-        } catch {
-            # Ignore
-        }
-    }
-    
-    # Fallback to default locations
-    if (-not $tcPath) {
-        $defaultPaths = @(
-            "C:\totalcmd",
-            "${env:ProgramFiles}\totalcmd",
-            "${env:ProgramFiles(x86)}\totalcmd"
-        )
-        foreach ($path in $defaultPaths) {
-            if (Test-Path (Join-Path $path "TOTALCMD64.EXE")) {
-                $tcPath = $path
-                Write-Host "  Found TC in default location: $tcPath" -ForegroundColor Gray
-                break
-            }
-        }
-    }
-    
-    return $tcPath
-}
-
-function Stop-TotalCommander {
-    <#
-    .SYNOPSIS
-    Stops all running Total Commander processes.
-    #>
-    Write-Host "  Checking for running Total Commander instances..." -ForegroundColor Gray
-    
-    $tcProcesses = Get-Process -Name "TOTALCMD*", "TOTALCMD64" -ErrorAction SilentlyContinue
-    if ($tcProcesses) {
-        Write-Host "  Stopping $($tcProcesses.Count) Total Commander process(es)..." -ForegroundColor Yellow
-        foreach ($proc in $tcProcesses) {
-            try {
-                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
-                Write-Host "    Stopped: $($proc.Name) (PID: $($proc.Id))" -ForegroundColor Gray
-            } catch {
-                Write-Host "    Failed to stop $($proc.Name): $($_.Exception.Message)" -ForegroundColor Red
-            }
-        }
-        Start-Sleep -Milliseconds 500  # Wait for processes to fully terminate
-    } else {
-        Write-Host "  No running Total Commander instances found" -ForegroundColor Gray
-    }
-}
-
-
-
-function Remove-PathSafe {
-    param([Parameter(Mandatory = $true)][string]$PathToRemove
+New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+foreach ($a in $Archs) {
+    $t = $Toolchain.Targets[$a]
+    Write-Section "Release $a"
+    if (Test-Path -LiteralPath $OutputDir[$a]) { Remove-Item -LiteralPath $OutputDir[$a] -Recurse -Force }
+    $msbuildArgs = @(
+        $Project, '/t:Rebuild', '/m', '/nologo', '/v:m',
+        '/p:Configuration=Release',
+        "/p:Platform=$($t.MSBuildPlatform)",
+        "/p:PlatformToolset=$($t.PlatformToolset)",
+        "/p:VCToolsVersion=$($t.MsvcVersion)",
+        "/p:WindowsTargetPlatformVersion=$($Toolchain.WindowsSdk.Version)",
+        "/p:PreferredToolArchitecture=$($t.HostArch)"
     )
-    if (-not (Test-Path $PathToRemove)) {
-        return $true
-    }
-    try {
-        Remove-Item $PathToRemove -Recurse -Force -ErrorAction Stop
-        return $true
-    } catch {
-        Write-Host "  Warning: could not remove $PathToRemove" -ForegroundColor Yellow
-        Write-Host "  $($_.Exception.Message)" -ForegroundColor DarkGray
-        return $false
-    }
-}
-
-function Compile-CHM {
-    <#
-    .SYNOPSIS
-    Compiles the CHM help file using HTML Help Workshop.
-    #>
-    Write-Host ""
-    Write-Host "--- Compiling CHM Help ---" -ForegroundColor Cyan
-    
-    $hhcPaths = @(
-        (Join-Path ${env:ProgramFiles(x86)} "HTML Help Workshop\hhc.exe"),
-        (Join-Path $env:ProgramFiles "HTML Help Workshop\hhc.exe")
-    )
-    
-    $hhcExe = $null
-    foreach ($path in $hhcPaths) {
-        if (Test-Path $path) {
-            $hhcExe = $path
-            break
-        }
-    }
-    
-    if (-not $hhcExe) {
-        Write-Host "  HTML Help Workshop not found - CHM compilation skipped" -ForegroundColor Yellow
-        Write-Host "  Download from: https://www.microsoft.com/en-us/download/details.aspx?id=21138" -ForegroundColor Gray
-        return $false
-    }
-    
-    if (-not (Test-Path $helpProject)) {
-        Write-Host "  Help project not found: $helpProject" -ForegroundColor Yellow
-        return $false
-    }
-    
-    # Remove old compiled CHM
-    if (Test-Path $helpCompiled) {
-        Remove-Item $helpCompiled -Force -ErrorAction SilentlyContinue
-    }
-
-    # Inject version into HHP title
-    if (Test-Path $helpProject) {
-        $hhpContent = Get-Content $helpProject -Raw
-        $hhpContent = $hhpContent -replace '(?m)^Title=.*', "Title=SFTPplug Help v$pluginVersion - Comprehensive Guide"
-        Set-Content $helpProject $hhpContent -NoNewline -Encoding UTF8
-    }
-
-    # Compile CHM
-    Push-Location (Split-Path $helpProject)
-    try {
-        Write-Host "  Compiling: $helpProject" -ForegroundColor Gray
-        $output = & $hhcExe $helpProject 2>&1
-        # hhc.exe always returns exit code 1, even on success.
-        # Determine success by checking whether the output .chm was created.
-        if (Test-Path $helpCompiled) {
-            Write-Host "  CHM compiled successfully" -ForegroundColor Green
-            return $true
-        } else {
-            Write-Host "  CHM compilation failed (output file not created)" -ForegroundColor Red
-            if ($output) {
-                Write-Host "  $output" -ForegroundColor DarkGray
-            }
-            return $false
-        }
-    } finally {
-        Pop-Location
-    }
-}
-
-function Clean-BuildOutput {
-    <#
-    .SYNOPSIS
-    Removes all intermediate build files, leaving only the final wfx.
-    #>
-    Write-Host "  Cleaning intermediate files..." -ForegroundColor Gray
-    
-    foreach ($outDir in @($buildOutputDir, $buildOutputDirX86)) {
-        if (Test-Path $outDir) {
-            Get-ChildItem -Path $outDir | Where-Object {
-                $_.Name -notlike "*.wfx"
-            } | Remove-Item -Recurse -Force
-        }
-    }
-    $intermediatesDir = Join-Path $buildDir ".intermediates"
-    if (Test-Path $intermediatesDir) {
-        Remove-Item $intermediatesDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    & $Toolchain.MSBuild @msbuildArgs
+    if ($LASTEXITCODE -ne 0) { throw "MSBuild failed for $a (exit $LASTEXITCODE)" }
+    $wfx = Join-Path $OutputDir[$a] "$ProjectName.wfx"
+    if (-not (Test-Path -LiteralPath $wfx)) { throw "MSBuild reported success but $wfx is missing" }
+    Write-Ok ("$ProjectName.wfx ($a) {0:N0} KB" -f ((Get-Item -LiteralPath $wfx).Length / 1KB))
 }
 
 # ============================================================================
-# Main Build Script
+# Help page (one self-contained HTML file; needs only Python)
 # ============================================================================
-
-
-
-# Determine CHM build mode
-$buildCHM = (-not $nochm) -or $chm
-
-Write-Host "--- SFTP Plugin Build Script ---" -ForegroundColor Cyan
-Write-Host "Project Root: $projectRoot" -ForegroundColor Gray
-Write-Host "Build CHM: $($(if ($buildCHM) { 'Yes' } else { 'No' }))" -ForegroundColor Gray
-Write-Host ""
-
-# ============================================================================
-# Step 1: Find MSBuild
-# ============================================================================
-Write-Host "--- Finding Visual Studio Build Tools ---" -ForegroundColor Cyan
-
-$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (-not (Test-Path $vswhere)) {
-    Write-Error "vswhere.exe not found. Install Visual Studio 2022 or later."
-    exit 1
-}
-
-$vsPath = &$vswhere -latest -prerelease -requires Microsoft.Component.MSBuild -property installationPath
-if (-not $vsPath) {
-    Write-Error "Visual Studio Build Tools not found."
-    exit 1
-}
-
-$msbuild = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
-$vcToolsRoot = Join-Path $vsPath "VC\Tools\MSVC"
-
-Write-Host "  MSBuild: $msbuild" -ForegroundColor Gray
-
-# Get VC tools version
-$vcToolsVersion = $null
-if (Test-Path $vcToolsRoot) {
-    $vcToolsVersion = Get-ChildItem $vcToolsRoot -Directory |
-        Sort-Object Name -Descending |
-        Select-Object -First 1 -ExpandProperty Name
-    Write-Host "  VC Tools Version: $vcToolsVersion" -ForegroundColor Gray
-}
-
-# Validate VC tools version
-if ($vcToolsVersion) {
-    $minimumVcToolsVersion = [version]"14.50.0.0"
-    $currentVcToolsVersion = [version]("$vcToolsVersion.0")
-    if ($currentVcToolsVersion -lt $minimumVcToolsVersion) {
-        Write-Error "VC tools $vcToolsVersion detected. Version 14.50 or later required."
-        exit 1
+if (-not $NoHelp) {
+    Write-Section 'Help page'
+    $python = Find-SftpBuildTool -Name 'Python' -Executable 'python.exe' -Candidates @() -Validate {
+        param($p) (& $p -c 'import sys; print(sys.version_info[0])' 2>$null) -eq '3'
     }
+    if (-not $python) { throw 'Python 3 not found (needed for the help page). Install it or pass -NoHelp.' }
+    & $python $HelpBuilder $HelpPage
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $HelpPage)) { throw 'Help page build failed' }
+    Write-Ok ("$ProjectName-help.html {0:N0} KB" -f ((Get-Item -LiteralPath $HelpPage).Length / 1KB))
 }
 
 # ============================================================================
-# Step 2: Prepare directories
+# Package
 # ============================================================================
-Write-Host ""
-Write-Host "--- Preparing Build Directories ---" -ForegroundColor Cyan
-
-# Clean bin directory (only final output)
-if (-not (Remove-PathSafe -PathToRemove $binDir)) {
-    Write-Host "  Continuing with existing bin directory" -ForegroundColor Yellow
-}
-New-Item -ItemType Directory -Path $binDir -Force | Out-Null
-
-# Clean build output directory
-if (-not (Remove-PathSafe -PathToRemove $buildOutputDir)) {
-    Write-Host "  Continuing with existing build output" -ForegroundColor Yellow
+function Get-PackageFiles {
+    $files = [ordered]@{}
+    $files["$ProjectName.wfx64"] = Join-Path $OutputDir['x64'] "$ProjectName.wfx"
+    if (-not $X64Only) { $files["$ProjectName.wfx"] = Join-Path $OutputDir['x86'] "$ProjectName.wfx" }
+    $files['sftp.php'] = $PhpAgent
+    $files['sftpplug.tpl'] = $Template
+    $files['readme.txt'] = $Readme
+    if (Test-Path -LiteralPath $HelpPage) { $files["$ProjectName-help.html"] = $HelpPage }
+    foreach ($lng in Get-ChildItem -LiteralPath $LanguageDir -Filter '*.lng') { $files["language\$($lng.Name)"] = $lng.FullName }
+    return $files
 }
 
-Write-Host "  Directories ready" -ForegroundColor Gray
-
-# ============================================================================
-# Step 3: Build
-# ============================================================================
-$vcxprojPath = Join-Path $buildDir "SFTPplug.vcxproj"
-if (-not (Test-Path $vcxprojPath)) {
-    Write-Error "Project file not found: $vcxprojPath"
-    exit 1
-}
-
-$msBuildBase = @(
-    $vcxprojPath,
-    "/t:Rebuild",
-    "/p:Configuration=Release",
-    "/p:PlatformToolset=v145",
-    "/p:WindowsTargetPlatformVersion=10.0",
-    "/p:DebugSymbols=false",
-    "/p:DebugType=none",
-    "/m",
-    "/nologo",
-    "/v:m"
-)
-if ($vcToolsVersion) { $msBuildBase += "/p:VCToolsVersion=$vcToolsVersion" }
-
-# --- x64 ---
-Write-Host ""
-Write-Host "--- Building Release x64 ---" -ForegroundColor Cyan
-
-$msbuildExitCode = 0
-Write-Host "  Building: $vcxprojPath (x64)" -ForegroundColor Gray
-&$msbuild ($msBuildBase + @("/p:Platform=x64"))
-$msbuildExitCode = $LASTEXITCODE
-if ($msbuildExitCode -ne 0) {
-    Write-Host "!!! BUILD FAILED (x64) !!!" -ForegroundColor Red
-    exit $msbuildExitCode
-}
-Write-Host "  x64 build completed" -ForegroundColor Green
-
-# --- x86 ---
-if (-not $x64only) {
-    Write-Host ""
-    Write-Host "--- Building Release x86 ---" -ForegroundColor Cyan
-
-    $msbuildExitCode = 0
-    Write-Host "  Building: $vcxprojPath (x86)" -ForegroundColor Gray
-    &$msbuild ($msBuildBase + @("/p:Platform=Win32"))
-    $msbuildExitCode = $LASTEXITCODE
-    if ($msbuildExitCode -ne 0) {
-        Write-Host "!!! BUILD FAILED (x86) !!!" -ForegroundColor Red
-        exit $msbuildExitCode
-    }
-    Write-Host "  x86 build completed" -ForegroundColor Green
-} else {
-    Write-Host "  Skipping x86 build (-x64only)" -ForegroundColor Gray
-}
-
-# Clean intermediate files
-Clean-BuildOutput
-
-# ============================================================================
-# Step 4: Compile CHM (if requested)
-# ============================================================================
-if ($buildCHM) {
-    Compile-CHM | Out-Null
-}
-
-# ============================================================================
-# Step 5: Create ZIP package (ONLY output in bin\)
-# ============================================================================
-if (-not $nozip) {
-    Write-Host ""
-    Write-Host "--- Creating ZIP Package ---" -ForegroundColor Cyan
-    
-    $zipPath = Join-Path $binDir "$projectName.zip"
-    $pluginstInf = @"
-[plugininstall]
-description=Secure FTP plugin (x64+x86) - static build, no external DLL required
-type=wfx
-file=$projectName.wfx
-file64=$projectName.wfx64
-defaultdir=$projectName
-version=10.0.0.18
-"@
+if (-not $NoZip) {
+    Write-Section 'Package'
+    $zipPath = Join-Path $BinDir "$ProjectName.zip"
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    $pluginstInf = "[plugininstall]`r`ndescription=Secure FTP plugin (x64+x86) - static build, no external DLL required`r`n" +
+                   "type=wfx`r`nfile=$ProjectName.wfx`r`nfile64=$ProjectName.wfx64`r`ndefaultdir=$ProjectName`r`nversion=$PluginVersion`r`n"
 
     Add-Type -AssemblyName System.IO.Compression
-
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-
-    $outStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
-    $zip = [System.IO.Compression.ZipArchive]::new($outStream, [System.IO.Compression.ZipArchiveMode]::Create)
-
-    function Add-ZipFile([string]$src, [string]$entryName) {
-        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
-        $dst = $entry.Open()
-        $fs  = [System.IO.File]::OpenRead($src)
-        try   { $fs.CopyTo($dst) }
-        finally { $fs.Dispose(); $dst.Dispose() }
-    }
-
-    function Add-ZipString([string]$text, [string]$entryName) {
-        $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
-        $dst = $entry.Open()
-        $bytes = [System.Text.Encoding]::ASCII.GetBytes($text)
-        try   { $dst.Write($bytes, 0, $bytes.Length) }
-        finally { $dst.Dispose() }
-    }
-
+    $stream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::CreateNew)
+    $zip = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
-        Add-ZipFile  (Join-Path $buildOutputDir    "$projectName.wfx") "$projectName.wfx64"
-        Add-ZipFile  (Join-Path $buildOutputDirX86 "$projectName.wfx") "$projectName.wfx"
-        Add-ZipString $pluginstInf "pluginst.inf"
-
-        if (Test-Path $phpAgentSource) { Add-ZipFile $phpAgentSource "sftp.php" }
-        if (Test-Path $helpCompiled)   { Add-ZipFile $helpCompiled   "$projectName.chm" }
-
-        $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
-        if (Test-Path $tplSource)      { Add-ZipFile $tplSource      "sftpplug.tpl" }
-
-        # Pack all external language files
-        $lngDir = Join-Path $projectRoot "src\res\language"
-        foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
-            Add-ZipFile $lngFile.FullName "language\$($lngFile.Name)"
+        $inf = $zip.CreateEntry('pluginst.inf', [System.IO.Compression.CompressionLevel]::Optimal).Open()
+        $bytes = [System.Text.Encoding]::ASCII.GetBytes($pluginstInf)
+        try { $inf.Write($bytes, 0, $bytes.Length) } finally { $inf.Dispose() }
+        foreach ($item in (Get-PackageFiles).GetEnumerator()) {
+            if (-not (Test-Path -LiteralPath $item.Value)) { throw "package input missing: $($item.Value)" }
+            $dst = $zip.CreateEntry($item.Key, [System.IO.Compression.CompressionLevel]::Optimal).Open()
+            $src = [System.IO.File]::OpenRead($item.Value)
+            try { $src.CopyTo($dst) } finally { $src.Dispose(); $dst.Dispose() }
         }
-
-        $readmeSource = Join-Path $projectRoot "src\help\readme.txt"
-        if (Test-Path $readmeSource)   { Add-ZipFile $readmeSource   "readme.txt" }
-
-        # Set a future timestamp on the ZIP — signature of a static, dependency-free build
-        $futureDate = [DateTime]"2030-01-01 00:00:00"
-        (Get-Item $zipPath).LastWriteTime   = $futureDate
-        (Get-Item $zipPath).CreationTime    = $futureDate
-        (Get-Item $zipPath).LastAccessTime  = $futureDate
-        Write-Host "  Created: $projectName.zip (dated $($futureDate.ToString('yyyy-MM-dd')))" -ForegroundColor Green
-    } catch {
-        Write-Host "  Failed to create ZIP: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
         $zip.Dispose()
-        $outStream.Dispose()
+        $stream.Dispose()
     }
+    Write-Ok ("$ProjectName.zip {0:N0} KB" -f ((Get-Item -LiteralPath $zipPath).Length / 1KB))
 }
 
 # ============================================================================
-# Step 6: Deploy to Total Commander
+# Deploy into Total Commander
 # ============================================================================
-$deploySuccess = $false
-if (-not $nodeploy) {
-    Write-Host ""
-    Write-Host "--- Deploying to Total Commander ---" -ForegroundColor Cyan
-    
-    $tcPath = Get-TotalCommanderPath
-    
-    if ($tcPath) {
-        # Stop Total Commander
-        Stop-TotalCommander
-        
-        # Deploy files
-        $pluginDir = Join-Path $tcPath "plugins\wfx\$projectName"
-        try {
-            New-Item -ItemType Directory -Path $pluginDir -Force | Out-Null
-            
-            Copy-Item -Path (Join-Path $buildOutputDir    "$projectName.wfx") -Destination (Join-Path $pluginDir "$projectName.wfx64") -Force
-            Write-Host "  Deployed: $projectName.wfx64" -ForegroundColor Green
-            Copy-Item -Path (Join-Path $buildOutputDirX86 "$projectName.wfx") -Destination (Join-Path $pluginDir "$projectName.wfx") -Force
-            Write-Host "  Deployed: $projectName.wfx (x86)" -ForegroundColor Green
-            
-            if (Test-Path $helpCompiled) {
-                Copy-Item -Path $helpCompiled -Destination (Join-Path $pluginDir "$projectName.chm") -Force
-                Write-Host "  Deployed: $projectName.chm" -ForegroundColor Green
-            }
-            
-            if (Test-Path $phpAgentSource) {
-                Copy-Item -Path $phpAgentSource -Destination (Join-Path $pluginDir "sftp.php") -Force
-                Write-Host "  Deployed: sftp.php" -ForegroundColor Green
-            }
+function Get-TotalCommanderPath {
+    foreach ($hive in 'HKCU:', 'HKLM:') {
+        $dir = (Get-ItemProperty -Path "$hive\Software\Ghisler\Total Commander" -ErrorAction SilentlyContinue).InstallDir
+        if ($dir -and (Test-Path -LiteralPath $dir)) { return $dir }
+    }
+    foreach ($dir in 'C:\totalcmd', "$env:ProgramFiles\totalcmd", "${env:ProgramFiles(x86)}\totalcmd") {
+        if (Test-Path -LiteralPath (Join-Path $dir 'TOTALCMD64.EXE')) { return $dir }
+    }
+    return $null
+}
 
-            $tplSource = Join-Path $projectRoot "src\res\sftpplug.tpl"
-            if (Test-Path $tplSource) {
-                Copy-Item -Path $tplSource -Destination (Join-Path $pluginDir "sftpplug.tpl") -Force
-                Write-Host "  Deployed: sftpplug.tpl" -ForegroundColor Green
-            }
-
-            # Deploy external language files
-            $lngDir = Join-Path $projectRoot "src\res\language"
-            $lngDestDir = Join-Path $pluginDir "language"
-            New-Item -ItemType Directory -Path $lngDestDir -Force | Out-Null
-            foreach ($lngFile in Get-ChildItem -Path $lngDir -Filter "*.lng" -ErrorAction SilentlyContinue) {
-                Copy-Item -Path $lngFile.FullName -Destination (Join-Path $lngDestDir $lngFile.Name) -Force
-                Write-Host "  Deployed: language\$($lngFile.Name)" -ForegroundColor Green
-            }
-            
-            $deploySuccess = $true
-        } catch {
-            Write-Host "  Deploy failed: $($_.Exception.Message)" -ForegroundColor Red
-        }
+if (-not $NoDeploy) {
+    Write-Section 'Deploy'
+    $tc = Get-TotalCommanderPath
+    if (-not $tc) {
+        Write-Host '  Total Commander not found - deploy skipped' -ForegroundColor Yellow
     } else {
-        Write-Host "  Total Commander not found - skipping deploy" -ForegroundColor Yellow
-        Write-Host "  Install TC or set registry key: HKCU\Software\Ghisler\Total Commander\InstallDir" -ForegroundColor Gray
+        # The plugin DLLs are locked while Total Commander runs. It is asked to
+        # close, never killed: a dialog or a running copy may be holding it,
+        # and those are the user's to finish.
+        $running = @(Get-Process -Name 'TOTALCMD', 'TOTALCMD64' -ErrorAction SilentlyContinue)
+        $restart = @($running | ForEach-Object { $_.Path } | Where-Object { $_ } | Select-Object -Unique)
+        if ($running.Count) {
+            Write-Step "closing $($running.Count) Total Commander process(es)"
+            $running | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+            $stillOpen = @($running | Where-Object { -not $_.WaitForExit(20000) })
+            if ($stillOpen.Count) {
+                Write-Host '  Total Commander did not close (a dialog or a copy may be open) - deploy skipped.' -ForegroundColor Yellow
+                Write-Host '  The build is complete; close Total Commander and run .\build.ps1 again to deploy.' -ForegroundColor Yellow
+                $tc = $null
+            }
+        }
+        if ($tc) {
+            $pluginDir = Join-Path $tc "plugins\wfx\$ProjectName"
+            New-Item -ItemType Directory -Path (Join-Path $pluginDir 'language') -Force | Out-Null
+            foreach ($item in (Get-PackageFiles).GetEnumerator()) {
+                Copy-Item -LiteralPath $item.Value -Destination (Join-Path $pluginDir $item.Key) -Force
+            }
+            Write-Ok "deployed to $pluginDir"
+            foreach ($exe in $restart) {
+                Start-Process -FilePath $exe
+                Write-Ok "restarted $(Split-Path $exe -Leaf)"
+            }
+        }
     }
 }
 
-# ============================================================================
-# Step 7: Clean up intermediate build directory
-# ============================================================================
-$buildBinDir = Join-Path $buildDir "bin"
-if (Test-Path $buildBinDir) {
-    Remove-Item $buildBinDir -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-# ============================================================================
-# Step 8: Final Summary
-# ============================================================================
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "BUILD COMPLETED SUCCESSFULLY" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Output directory: $binDir" -ForegroundColor White
-if (Test-Path (Join-Path $binDir "$projectName.zip")) {
-    Write-Host "  - $projectName.zip (TC auto-install)" -ForegroundColor Gray
-}
-
-if ($deploySuccess) {
-    Write-Host ""
-    Write-Host "Deployed to: $tcPath\plugins\wfx\$projectName" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Restart Total Commander to load the plugin." -ForegroundColor Cyan
-}
-
-Write-Host ""
+Write-Host ''
+Write-Host "BUILD COMPLETED - $ProjectName $PluginVersion" -ForegroundColor Green

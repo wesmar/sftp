@@ -19,6 +19,8 @@ int PhpAgentUploadFileW(pConnectSettings cs,
 int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW);
 int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNameW, bool overwrite);
 int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir);
+// False only when the agent answers that the path does not exist.
+bool PhpAgentPathMayExist(pConnectSettings cs, LPCWSTR remoteNameW);
 int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR localDirW, bool overwrite);
 
 struct TarUploadEntry {

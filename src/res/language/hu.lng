@@ -55,8 +55,8 @@
 12051=Ismeretlen
 12052=HTTPS küldés átirányítása HTTP-re
 12053=Helyezze be a CD-ROM-ot
-130=F7 - help.txt
-131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nAlt+Enter:\tBeállítások módosítása\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
+130=F7 - súgó.txt
+131=Beépülő modul súgója:\r\nF7:\tÚj kapcsolat létrehozása (a TC megjeleníti az Új mappát – adja meg a kapcsolat nevét)\r\nF8/Del:\tKapcsolat törlése\r\nEnter:\tCsatlakozás\r\nBontás:\tA munkamenetből, vagy F8 a során az [Active Sessions] alatt. Az eszköztár gombja a bővítmény gyökeréből nyitva hagyja.\r\nAlt+Enter:\tBeállítások módosítása\r\nF3/F4:\tBeállítások megjelenítése INI-ként (szerkesztés: Alt+Enter)\r\n\r\nMunkamenetek mappákban:\r\nF7 mappán belül:\tA munkamenetet abban a mappában hozza létre\r\nF7 folder/x névvel:\tA munkamenetet a megadott mappában hozza létre\r\nF6 \\mappa\\név alakra:\tMappába helyezi a munkamenetet\r\nF6 mappán:\tAz összes munkamenetet átnevezi; a jump-host hivatkozások követik\r\nF5 vagy húzás:\tMásolja a munkamenetet vagy mappát\r\nF8 mappán:\tTörli a mappát és a benne lévő munkameneteket\r\n\r\nÁtviteli módok:\r\nSSH (SFTP/SCP):\tAlapértelmezett és leggyorsabb, ha az SSH-hozzáférés működik\r\nSCP használata adatokhoz:\tHa az SFTP blokkolva vagy instabil\r\nCsak SCP:\tTeljesen letiltja az SFTP-t (régi kiszolgálók)\r\nShell-átvitel kényszerítése:\tShellen keresztüli átvitelt kényszerít (dd/base64)\r\nPHP ügynök (HTTP):\tSSH-fiók nélkül; feltöltött sftp.php-t használ\r\nPHP Shell (HTTP):\tHTTP pszeudo-terminál sftp.php-n keresztül
 132=Gyors csatlakozás
 144=Súgó
 146=Itt állíthatja be, hogyan küldje a kiszolgáló az ékezetes karaktereket tartalmazó fájlneveket. Ha az 'automatikus észlelés' lehetőséget választja, a beépülő modul beolvassa a környezeti változókat (pl. LANG) és kiadja a 'locale' parancsot, hogy meghatározza a kiszolgáló által használt karakterkódolást. Ez nem feltétlenül működik minden kiszolgálón, ezért ha tudja, hogy a kiszolgáló UTF-8-at használ, vagy a fájlnevek ékezetek helyett rossz karakterekkel jelennek meg, manuálisan válassza az 'igen' lehetőséget.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cirill KOI8-R (20866)
 241=Egyéb (kézi megadás)
-242=A libssh2.dll könyvtár túl régi a Pageant funkcióhoz!\nA minimálisan szükséges verzió: %s.
 243=Hiba az SSH-ügynökhöz (Pageant) való csatlakozáskor!\nElhelyezhet egy pageant.lnk nevű parancsikont a beépülő modul könyvtárában a Pageant elindításához, pl. a következőre mutatva:\nc:\\path\\pageant.exe keyfilename
 244=Hiba az SSH-ügynöktől való azonosság lekérésekor!
 245=Az ügynökön keresztüli hitelesítés sikertelen!
@@ -206,7 +205,7 @@
 288=Jelszó módosítása...
 289=Jelszó védelme jelszókezelővel (TC>=7.5)
 290=Ügyféltanúsítvány &hitelesítéshez:
-291=Nyilvános kulcs fájlja (*.pub):
+291=Tanúsítvány (*-cert.pub), nem kötelező:
 292=Titkos kulcs fájlja (*.pem;*.ppk):
 293=Tömörítés &ZLIB-bel (egyes kiszolgálókon nem működhet)
 294=Teljes könyvtárlistázás naplózása (&debug)
@@ -222,8 +221,6 @@
 304=Közvetítő gazdagép:
 305=&Közvetítő gazdagép használata
 306=Proxy beállításai:
-307=Proxy törlése
-308=Importálás...
 309=Proxy beállításai
 310=Proxy beállításai
 311=Proxy gazdagép:
@@ -240,28 +237,12 @@
 318=Port:
 319=Felhasználónév:
 320=&Jelszó:
-321=Nyilvános kulcs fájlja (*.pub):
+321=Tanúsítvány (*-cert.pub), nem kötelező:
 322=Titkos kulcs fájlja (*.pem;*.ppk):
 323=SSH-ügynök &(Pageant) használata a közvetítő gazdagép hitelesítéséhez
-12056=PuTTY munkamenetek importálása
-12057=WinSCP munkamenetek importálása
-12058=Hordozható PuTTY munkamenetek importálása
-12059={} {} munkamenet találva (rendszerleíró):
-12060={} munkamenet találva a következőben: {}:
-12061=&Mindet kijelöl
-12062=&Kijelölés törlése
-12063=&Importálás
-12064=Mégse
-12065=Nem importáltak munkameneteket.
-12066=Nem találhatók munkamenetek a következőben: {}.
 324=Súgó
 325=Mégse
 326=TAR adatfolyam
-12067=Összes importálása ({})
-12068=Importálás PuTTY Portable mappából...
-12069=Importálás WinSCP hordozható mappájából...
-12070=Hordozható KiTTY munkamenetek importálása
-12071=Importálás KiTTY Portable mappából...
 
 327=Rendszer:
 328=Módszer:
@@ -274,7 +255,7 @@
 335=A PHP Agent végpont nem található (HTTP 404).\nEllenőrizze az URL-t, a fájlnevet és töltse fel a sftp.php-t a szerverre.
 336=A PHP Agent nincs konfigurálva a szerveren (HTTP 503).\nÁllítsa be az AGENT_PSK / AGENT_PSK_SHA256 értékeket a sftp.php-ban és töltse fel újra.
 337=Helytelen hitelesítő adatok a PHP Agentnek (HTTP {}).
-338=HTTP {} kérési hiba a PHP Agentnél.
+338=A PHP Agent kérése sikertelen: {} (HTTP {}).
 339=A PHP Agent elutasította a kapcsolatot: {}
 340=A PHP Agent érvényesítése sikertelen: {}
 341=Helytelen hitelesítő adatok a PHP Agentnek.
@@ -291,7 +272,6 @@
 352=A felhasználó jelszó nélkül hitelesített.
 353=A billentyűzetes interaktív hitelesítés túllépte az időkorlátot.
 354=A jelszavas hitelesítés túllépte az időkorlátot.
-355=SSH-könyvtár betöltése...
 356=LAN Pair: partner keresése felderítéssel...
 357=LAN Pair: kapcsolódva.
 358=PHP Agent mód
@@ -353,16 +333,8 @@
 414=PHP Agent: helyi sftp.php frissítés kihagyva (hiányzó vagy írásvédett fájl).
 415=TAR feltöltés:
 416=TAR feltöltés sikertelen
-417=Nyilvános kulcsfájl kiválasztása
+417=Tanúsítványfájl kiválasztása
 418=Privát kulcsfájl kiválasztása
-419=PuTTY Portable mappa kiválasztása
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} munkamenet importálva.
-423={} munkamenet importálva.
-{} {} kihagyva.
-424=nem támogatott munkamenet(ek)
-425=nem támogatott WinSCP munkamenet(ek)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Kódlap
@@ -374,12 +346,6 @@
 12094=LAN Pair: a TrustedInstaller megszemélyesítése sikertelen. A folyamat esetleg nem fut rendszergazdaként.
 12095=LAN Pair: csatlakozás: {}...
 12096=LAN Pair: kapcsolódás sikertelen
-12097=PuTTY
-12098=WinSCP
-12099=Egyéb
-12100=WinSCP hordozható mappa kiválasztása
-12101=A WinSCP.ini nem található a kiválasztott mappában.
-12102=KiTTY hordozható mappa kiválasztása
 12103=LAN Pair: ez a számítógép Adóként van konfigurálva. A távoli Vevőnek ide kell csatlakoznia.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +361,48 @@
 12081=A proxy jelszó betöltése sikertelen!
 12082=Érvénytelen szerver cím.
 12083=Nincs elég memória a kapcsolat beállításainak létrehozásakor.
-12084=Nem importáltak munkameneteket (nem támogatott protokoll).
-12085=A putty.reg nem található a kiválasztott mappában vagy almappáiban.
-12086=A putty.reg beolvasása vagy feldolgozása sikertelen.
-12087=A Sessions mappa nem található a kiválasztott KiTTY Portable könyvtárban.
 12088=Már létezik ilyen nevű munkamenet.\nKérjük, válasszon másik nevet.
+12118=Ez a munkamenet egy másik programhoz tartozik, itt nem szerkeszthető.\nAz F3 megmutatja a beállításait, az F5 a saját listájába másolja.
+12119= LAN Pair munkamenet: 
+12120=Ezek a beállítások a(z) '{}' munkamenetből származnak, és csak olvashatók. Válassza a (kézi) elemet a jump-host listában, ha itt szeretne megadni egyet.
+12121=Ez a munkamenet olyasmin keresztül éri el a kiszolgálót, ami nem került vele együtt importálásra: proxy, jump host vagy alagút. A csatlakozás most közvetlenül a célhoz menne, megkerülve azt, amit az útba állítottak, ezért elutasításra kerül.
+12122=A munkamenet proxyn keresztül csatlakozott volna, de a fájl nem írja le azt. A munkamenet a proxy nélkül lett importálva és közvetlenül fog csatlakozni, ezért használat előtt ellenőrizze a proxy beállítását.
+12123=Ezt a proxyt a bővítmény újra tudja hozni: másolja a munkamenetet a saját listájába az F5 billentyűvel, és a proxy vele együtt átkerül. A jelszót, ha szükséges, az első csatlakozáskor kéri.
+12124=Áthelyezés: a forrás megmaradt, mert a másolás egy már meglévő fájlra folytatódott
+12125=A forrás és a cél ugyanaz a fájl: mindkét munkamenet ugyanarra a fiókra mutat ugyanazon a kiszolgálón, ugyanazon az útvonalon. Egy fájl önmagára másolása csonkítaná azt, ezért a művelet elutasítva.
+12126=A kiszolgáló nem indított SFTP-munkamenetet. Ha csak shellt kínál – például dropbear egy kamerán vagy routeren –, kapcsolja be ennél a munkamenetnél ezt: „SCP használata mindenhez (SFTP nélkül)”.
+12127=A kiszolgáló csak kulccsal történő bejelentkezést fogad el, ennek a munkamenetnek pedig nincs mit felkínálnia. Adjon meg privát kulcsfájlt a munkamenethez, vagy használja a Pageantet betöltött kulccsal.
+12128=Tulajdonságok
+12129=Fájl tulajdonságai
+12130=Név:
+12131=Tulajdonos:
+12132=Csoport:
+12133=Jogosultságok:
+12134=Méret:
+12135=Utolsó módosítás:
+12136=A stat parancs válasza a szerveren
+12137=A szerver nem futtatott stat parancsot. Az SFTP protokoll adatai:
 12089=SFTP
-
+12104=(kézi)
+12105= (hiányzik)
+12106=A(z) '{}' ugrómenet nem található a mentett munkamenetek között
+12107=A(z) '{}' ugrómenetnek saját ugróállomás-beállítása van — a láncolt vagy körkörös ugróállomások nem támogatottak. Válasszon olyan munkamenetet, amely közvetlenül csatlakozik a bástyagéphez.
+12109=SFTP bővítmény - munkamenet importálása
+12110=A forrásfájl nem nyitható meg olvasásra.
+12111=A munkamenet nem importálható: a forrásfájl üres.
+12112=A munkamenet nem importálható: a forrásfájl nem tartalmaz INI szakaszokat.\r\nLegalább egy [szakasz] és egy `server=` kulcs szükséges.
+12113=A munkamenet nem importálható: nem található INI szakasz nem üres `server=` kulccsal.
+12114=A munkamenet nem importálható: a célútvonal üres.
+12115=A munkamenet nem importálható: az sftpplug.ini írása sikertelen.
+12116=Ugrás...
+12117=Az ugróállomás engedélyezve van ehhez a munkamenethez, de nincs beállítva. Válasszon ugrómenetet, vagy adja meg az ugróállomás adatait.
+12138=Munkamenet időkorlátja (perc):
+12139=(0 = korlátlan)
+12140=Auto
+12141=A .ppk fájl a biztonságos határokon túli Argon2-paramétereket kér.
+12142=A .ppk fájlban lévő kulcs részei nem tartoznak össze.
+12143=Letöltési hiba
+12144=A fájlt nem sikerült letölteni:
+12145=Kihagyás
+12146=Összes kihagyása
+12147=Letöltési hiba miatt kihagyva:

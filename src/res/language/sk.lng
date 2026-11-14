@@ -55,8 +55,8 @@
 12051=Neznámy
 12052=Presmerovanie odosielania HTTPS na HTTP
 12053=Vložte CD-ROM
-130=F7 - help.txt
-131=Pomocník modulu plug-in:\r\nF7:\tVytvoriť nové pripojenie (TC zobrazí Nový adresár – zadajte názov pripojenia)\r\nF8/Del:\tOdstrániť pripojenie\r\nEnter:\tPripojiť\r\nAlt+Enter:\tZmeniť možnosti\r\n\r\nRežimy prenosu:\r\nSSH (SFTP/SCP):\tVýchozí a najrýchlejší, ak funguje prístup SSH\r\nPoužiť SCP pre dáta:\tKeď je SFTP blokované alebo nestabilné\r\nLen SCP:\tÚplne zakáže SFTP (staré hostiteľe)\r\nVynútiť prenos shelom:\tVynúti prenos cez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používa nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP cez sftp.php
+130=F7 - pomocník.txt
+131=Pomocník modulu plug-in:\r\nF7:\tVytvoriť nové pripojenie (TC zobrazí Nový adresár – zadajte názov pripojenia)\r\nF8/Del:\tOdstrániť pripojenie\r\nEnter:\tPripojiť\r\nOdpojiť:\tZvnútra relácie, alebo F8 na jej riadku v [Active Sessions]. Tlačidlo na lište ju z koreňa pluginu nechá otvorenú.\r\nAlt+Enter:\tZmeniť možnosti\r\nF3/F4:\tZobraziť nastavenia ako INI (upraviť cez Alt+Enter)\r\n\r\nRelácie v priečinkoch:\r\nF7 v priečinku:\tVytvorí reláciu v tomto priečinku\r\nF7 s menom folder/x:\tVytvorí reláciu v uvedenom priečinku\r\nF6 na \\priečinok\\meno:\tPresunie reláciu do priečinka\r\nF6 na priečinku:\tPremenuje všetky relácie vnútri; odkazy na jump-hosta tiež\r\nF5 alebo potiahnutie:\tSkopíruje reláciu alebo priečinok (duplikát)\r\nF8 na priečinku:\tOdstráni priečinok a všetky relácie v ňom\r\n\r\nRežimy prenosu:\r\nSSH (SFTP/SCP):\tVýchozí a najrýchlejší, ak funguje prístup SSH\r\nPoužiť SCP pre dáta:\tKeď je SFTP blokované alebo nestabilné\r\nLen SCP:\tÚplne zakáže SFTP (staré hostiteľe)\r\nVynútiť prenos shelom:\tVynúti prenos cez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez účtu SSH; používa nahraný sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminál HTTP cez sftp.php
 132=Rýchle pripojenie
 144=Pomocník
 146=Tu môžete nastaviť spôsob, akým server odosiela názvy súborov s diakritikou. Ak zvolíte 'automaticky zistiť', modul načíta premenné prostredia (napr. LANG) a odošle príkaz 'locale', aby zistil kódovanie znakov používané serverom. Toto nemusí fungovať pri všetkých serveroch, takže ak viete, že server používa UTF-8, alebo sa názvy súborov zobrazujú so zlými znakmi namiesto diakritiky, vyberte 'áno' ručne.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrilika KOI8-R (20866)
 241=Iné (zadať ručne)
-242=Knižnica libssh2.dll je príliš stará pre funkciu Pageant!\nMinimálna požadovaná verzia je %s.
 243=Chyba pripojenia k agentovi SSH (Pageant)!\nMôžete umiestniť súbor odkazu s názvom pageant.lnk do adresára modulu, aby ste spustili Pageant, napr. odkazujúci na\nc:\\path\\pageant.exe keyfilename
 244=Chyba pri načítaní identity od agenta SSH!
 245=Overovanie agentom zlyhalo!
@@ -206,7 +205,7 @@
 288=Zmeniť heslo...
 289=Chrániť heslo správcom hesiel (TC>=7.5)
 290=Klientský certifikát na &overovanie:
-291=Súbor verejného kľúča (*.pub):
+291=Certifikát (*-cert.pub), voliteľné:
 292=Súbor súkromného kľúča (*.pem;*.ppk):
 293=Komprimovať pomocou &ZLIB (nemusí fungovať na niektorých serveroch)
 294=Zaznamenávať úplný výpis adresárov (&debug)
@@ -222,8 +221,6 @@
 304=Prechodový hostiteľ:
 305=Použiť &prechodový hostiteľ
 306=Nastavenia proxy:
-307=Odstrániť proxy
-308=Importovať...
 309=Nastavenia proxy
 310=Nastavenia proxy
 311=Hostiteľ proxy:
@@ -240,28 +237,12 @@
 318=Port:
 319=Meno používateľa:
 320=&Heslo:
-321=Súbor verejného kľúča (*.pub):
+321=Certifikát (*-cert.pub), voliteľné:
 322=Súbor súkromného kľúča (*.pem;*.ppk):
 323=Použiť agenta SSH &(Pageant) na overenie prechodového hostiteľa
-12056=Importovať relácie PuTTY
-12057=Importovať relácie WinSCP
-12058=Importovať prenosné relácie PuTTY
-12059=Nájdené {} relácie {} (register):
-12060=Nájdené {} relácie v {}:
-12061=Vybrať &všetko
-12062=&Zrušiť výber
-12063=&Importovať
-12064=Zrušiť
-12065=Žiadne relácie neboli importované.
-12066=Žiadne relácie neboli nájdené v {}.
 324=Pomocník
 325=Zrušiť
 326=TAR prúd
-12067=Importovať všetko ({})
-12068=Importovať z priečinka PuTTY Portable...
-12069=Importovať z prenosného priečinka WinSCP...
-12070=Importovať prenosné relácie KiTTY
-12071=Importovať z prenosného priečinka KiTTY...
 
 327=Systém:
 328=Metóda:
@@ -274,7 +255,7 @@
 335=Endpoint PHP agenta nebol nájdený (HTTP 404).\nSkontrolujte URL, názov súboru a nahrajte sftp.php na server.
 336=PHP agent nie je nakonfigurovaný na serveri (HTTP 503).\nNastavte AGENT_PSK / AGENT_PSK_SHA256 v sftp.php a nahrajte znova.
 337=Nesprávne prihlasovacie údaje pre PHP Agent (HTTP {}).
-338=Chyba HTTP požiadavky {} pre PHP Agent.
+338=Požiadavka PHP Agenta zlyhala pre {} (HTTP {}).
 339=PHP Agent odmietol pripojenie: {}
 340=Overenie PHP Agenta zlyhalo: {}
 341=Nesprávne prihlasovacie údaje pre PHP Agent.
@@ -291,7 +272,6 @@
 352=Používateľ bol overený bez hesla.
 353=Vypršal časový limit interaktívneho overovania klávesnicou.
 354=Vypršal časový limit overovania heslom.
-355=Načítava sa knižnica SSH...
 356=LAN Pair: vyhľadávanie partnera cez zisťovanie...
 357=LAN Pair: pripojené.
 358=Režim PHP Agent
@@ -353,16 +333,8 @@
 414=PHP Agent: aktualizácia lokálneho sftp.php preskočená (súbor chýba alebo je len na čítanie).
 415=Nahrávanie TAR:
 416=Nahrávanie TAR zlyhalo
-417=Vyberte súbor verejného kľúča
+417=Vybrať súbor certifikátu
 418=Vyberte súbor privátneho kľúča
-419=Vyberte priečinok PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422=Importovaných {} relácií.
-423=Importovaných {} relácií.
-Preskočených {} {}.
-424=nepodporovaná relácia/relácie
-425=nepodporovaná relácia/relácie WinSCP
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Kódová stránka
@@ -374,12 +346,6 @@ Preskočených {} {}.
 12094=LAN Pair: zosobnenie TrustedInstaller zlyhalo. Proces nemusí byť spustený ako správca.
 12095=LAN Pair: pripájam sa k {}...
 12096=LAN Pair: pripojenie zlyhalo
-12097=PuTTY
-12098=WinSCP
-12099=Ostatné
-12100=Vybrať prenosný priečinok WinSCP
-12101=Súbor WinSCP.ini nebol nájdený vo vybranom priečinku.
-12102=Vybrať prenosný priečinok KiTTY
 12103=LAN Pair: tento počítač je nakonfigurovaný ako Darca. Vzdialený Príjemca sa musí pripojiť sem.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +361,48 @@ Preskočených {} {}.
 12081=Nepodarilo sa načítať heslo servera proxy!
 12082=Neplatná adresa servera.
 12083=Nedostatok pamäte pri vytváraní nastavení pripojenia.
-12084=Žiadne relácie sa neimportovali (nepodporovaný typ protokolu).
-12085=Súbor putty.reg sa nenašiel vo vybratom priečinku ani v jeho podpriečinkoch.
-12086=Nepodarilo sa prečítať alebo analyzovať súbor putty.reg.
-12087=Priečinok Sessions sa nenašiel vo vybratom adresári KiTTY Portable.
 12088=Spojenie s týmto názvom už existuje.\nZvoľte iný názov spojenia.
+12118=Táto relácia patrí inému programu a nedá sa tu upraviť.\nStlačte F3 pre zobrazenie nastavení alebo F5 pre skopírovanie do vlastného zoznamu.
+12119= Relácia LAN Pair: 
+12120=Tieto nastavenia pochádzajú z relácie '{}' a sú iba na čítanie. Vyberte (ručne) v zozname jump-hostov, ak chcete hostiteľa zadať tu.
+12121=Táto relácia sa k hostiteľovi dostáva cez niečo, čo s ňou nebolo naimportované: proxy, jump host alebo tunel. Pripojenie by teraz šlo priamo k cieľu, mimo toho, čo bolo postavené do cesty, preto je odmietnuté.
+12122=Relácia sa mala pripájať cez proxy, ale súbor jeho popis neobsahuje. Relácia bola naimportovaná bez proxy a bude sa pripájať priamo, preto pred použitím skontrolujte jej nastavenie proxy.
+12123=Tento proxy server dokáže plugin znovu vytvoriť: skopírujte reláciu do vlastného zoznamu klávesom F5 a proxy sa prenesie spolu s ňou. Heslo, ak je potrebné, bude vyžiadané pri prvom pripojení.
+12124=Presun: zdroj bol ponechaný, pretože kopírovanie pokračovalo do už existujúceho súboru
+12125=Zdroj a cieľ sú ten istý súbor: obe relácie ukazujú na rovnaký účet na rovnakom serveri a na rovnakú cestu. Kopírovanie súboru na seba samého by ho skrátilo, preto je operácia odmietnutá.
+12126=Server nespustil reláciu SFTP. Ak ponúka iba shell — napríklad dropbear na kamere alebo routeri —, zapnite pre túto reláciu „Použiť SCP pre všetko (bez SFTP)“.
+12127=Server prijíma iba prihlásenie kľúčom a táto relácia žiadny neponúka. Nastavte pre reláciu súbor súkromného kľúča alebo použite Pageant s načítaným kľúčom.
+12128=Vlastnosti
+12129=Vlastnosti súboru
+12130=Názov:
+12131=Vlastník:
+12132=Skupina:
+12133=Oprávnenia:
+12134=Veľkosť:
+12135=Posledná zmena:
+12136=Odpoveď príkazu stat na serveri
+12137=Server nespustil príkaz stat. Čo hlási protokol SFTP:
 12089=SFTP
-
+12104=(ručne)
+12105= (chýba)
+12106=Prechodová relácia '{}' sa nenašla medzi uloženými reláciami
+12107=Prechodová relácia '{}' má vlastnú konfiguráciu prechodového hostiteľa — reťazené ani cyklické prechodové hostitele nie sú podporované. Vyberte reláciu, ktorá sa pripája priamo k bastionu.
+12109=SFTP modul - import relácie
+12110=Zdrojový súbor sa nedá otvoriť na čítanie.
+12111=Reláciu nie je možné importovať: zdrojový súbor je prázdny.
+12112=Reláciu nie je možné importovať: zdrojový súbor neobsahuje žiadne INI sekcie.\r\nOčakáva sa súbor aspoň s jednou [sekciou] a kľúčom `server=`.
+12113=Reláciu nie je možné importovať: nenašla sa INI sekcia s neprázdnym kľúčom `server=`.
+12114=Reláciu nie je možné importovať: cieľová cesta je prázdna.
+12115=Reláciu nie je možné importovať: zápis do sftpplug.ini zlyhal.
+12116=Prechod...
+12117=Prechodový hostiteľ je pre túto reláciu zapnutý, ale žiadny nie je nastavený. Vyberte prechodovú reláciu alebo vyplňte údaje o hostiteľovi.
+12138=Časový limit relácie (min):
+12139=(0 = bez obmedzenia)
+12140=Auto
+12141=Súbor .ppk požaduje parametre Argon2 nad bezpečné limity.
+12142=Súbor .ppk obsahuje kľúč, ktorého časti k sebe nepatria.
+12143=Chyba sťahovania
+12144=Súbor sa nepodarilo stiahnuť:
+12145=Preskočiť
+12146=Preskočiť všetko
+12147=Preskočené po chybe sťahovania:

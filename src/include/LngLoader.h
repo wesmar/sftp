@@ -18,3 +18,7 @@ const char* LngGetString(UINT id) noexcept;
 
 // Load a wide string: tries .lng (UTF-8) first, falls back to LoadStringW.
 bool LngLoadStringW(HINSTANCE hInst, UINT id, WCHAR* buf, int bufLen) noexcept;
+
+// The whole string, .lng (UTF-8) first, then the string table; empty when
+// neither holds it.
+std::wstring LngLoadString(HINSTANCE hInst, UINT id);

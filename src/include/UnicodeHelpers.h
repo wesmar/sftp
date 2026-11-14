@@ -3,7 +3,6 @@
 #include <windows.h>
 #include "fsplugin.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 
 // C++ Standard Library headers
 #include <string>
@@ -25,22 +24,22 @@ constexpr size_t WDRTYPEMAX = 1024;
 extern "C" {
 
 // Safe string copy for wide characters
-[[nodiscard]] LPWSTR wcslcpy(LPWSTR str1, LPCWSTR str2, size_t imaxlen) noexcept;
+LPWSTR wcslcpy(LPWSTR str1, LPCWSTR str2, size_t imaxlen) noexcept;
 
 // Safe string concatenation for wide characters
-[[nodiscard]] LPWSTR wcslcat(LPWSTR str1, LPCWSTR str2, size_t imaxlen) noexcept;
+LPWSTR wcslcat(LPWSTR str1, LPCWSTR str2, size_t imaxlen) noexcept;
 
 // Wide ANSI to Wide Unicode copy (ANSI -> WCHAR)
-[[nodiscard]] LPWSTR awlcopy(LPWSTR outname, LPCSTR inname, size_t maxlen) noexcept;
+LPWSTR awlcopy(LPWSTR outname, LPCSTR inname, size_t maxlen) noexcept;
 
 // Wide ANSI to Wide Unicode copy with codepage
-[[nodiscard]] LPWSTR awlcopyCP(int codepage, LPWSTR outname, LPCSTR inname, size_t maxlen) noexcept;
+LPWSTR awlcopyCP(int codepage, LPWSTR outname, LPCSTR inname, size_t maxlen) noexcept;
 
 // Wide Unicode to ANSI copy (WCHAR -> ANSI)
-[[nodiscard]] LPSTR walcopy(LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept;
+LPSTR walcopy(LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept;
 
 // Wide Unicode to ANSI copy with codepage
-[[nodiscard]] LPSTR walcopyCP(int codepage, LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept;
+LPSTR walcopyCP(int codepage, LPSTR outname, LPCWSTR inname, size_t maxlen) noexcept;
 
 // UTF-16 to UTF-8 conversion
 [[nodiscard]] int ConvUTF16toUTF8(

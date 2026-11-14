@@ -28,12 +28,52 @@ struct JumpHostSettings {
     std::string host;
     unsigned short port     = 22;
     std::string user;
+    // Resolved out of the stored secret: the password is offered to the jump
+    // host, the passphrase only unlocks privkeyfile.
     std::string password;
+    std::string keyPassphrase;
     std::string pubkeyfile;
     std::string privkeyfile;
     bool        useagent    = false;
     std::string fingerprint;   // saved MD5 hex fingerprint (empty = first-time)
+
+    // Where `fingerprint` was read from, and therefore where an accepted one
+    // must be written back. A referenced session owns the host, so its own
+    // `fingerprint` key is the right home; a manually configured jump host
+    // is described only by the current session, under `jumpfingerprint`.
+    // Keeping read and write in one place stops the "accept the fingerprint
+    // on every connect" loop that happens when they disagree.
+    std::string fingerprintSection;
+    std::string fingerprintKey;
 };
+
+// ---------------------------------------------------------------------------
+// Resolving the jump-host configuration
+//
+// A session describes its jump host either by naming another saved session
+// (`jumpsessionref`) or through its own `jump_*` fields. One function decides
+// which applies, so the connect path, the dialog and anything else agree on
+// what a given profile actually does.
+// ---------------------------------------------------------------------------
+enum class JumpConfigStatus {
+    Disabled,        // no jump host wanted
+    Ready,           // endpoint below is usable
+    NotConfigured,   // wanted, but neither a reference nor a host is set
+    RefNotFound,     // referenced session no longer exists
+    RefChained,      // referenced session has a jump host of its own
+};
+
+struct JumpConfig {
+    JumpConfigStatus status = JumpConfigStatus::Disabled;
+    JumpHostSettings endpoint;
+    std::string      error;   // ready-to-show text for the failure states
+};
+
+// `cs` supplies use_jump_host, jump_session_ref and the manual jump_* fields.
+// Never returns Ready with an empty host — a profile that asks for a jump
+// host but does not say which one is reported as NotConfigured rather than
+// silently letting the caller connect straight to the target.
+JumpConfig ResolveJumpConfig(pConnectSettings cs, LPCSTR iniFileName);
 
 // ---------------------------------------------------------------------------
 // ConnectViaJumpHost

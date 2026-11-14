@@ -4,7 +4,28 @@
 <body>
 <h1>Proxy Configuration</h1>
 
-<p>The plugin supports various proxy types for SSH connections. Configure proxy settings via the <b>Proxy...</b> button in the main connection dialog.</p>
+<p>The plugin supports various proxy types for SSH connections. A proxy is a
+record of its own, kept once and pointed at by as many sessions as you like.</p>
+
+<h2>Managing Proxies</h2>
+
+<p>Proxies live in the <b>[Proxies]</b> folder in the plugin root, beside
+<b>[Imports]</b>. Each row is one record, named by its number and what it
+points at:</p>
+
+<ul>
+  <li><b>F7</b> creates a record and opens its settings.</li>
+  <li><b>Enter</b> opens the settings of the record under the cursor.</li>
+  <li><b>F8</b> deletes it. A record still used by a session is not deleted;
+      the sessions using it are named instead.</li>
+</ul>
+
+<p>The connection dialog carries the list only: pick a record for the session,
+or pick <b>Add new proxy</b> to make one without leaving the dialog.</p>
+
+<p>Numbers are stable. Deleting record 2 leaves 1 and 3 where they are, so
+every session keeps the proxy it was pointed at, and the next record created
+takes a number no session is using.</p>
 
 <h2>Supported Proxy Types</h2>
 

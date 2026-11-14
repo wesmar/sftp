@@ -55,8 +55,8 @@
 12051=Nieznany
 12052=Przekierowanie wysyłania HTTPS na HTTP
 12053=Włóż CD-ROM
-130=F7 - help.txt
-131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nAlt+Enter:\tZmień opcje\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
+130=F7 - pomoc.txt
+131=Pomoc wtyczki:\r\nF7:\tUtwórz nowe połączenie (TC pokazuje Nowy katalog - wpisz nazwę połączenia)\r\nF8/Del:\tUsuń połączenie\r\nEnter:\tPołącz\r\nRozłącz:\tZ wnętrza sesji albo F8 na jej wierszu w [Active Sessions]. Przycisk paska pozostawia ją otwartą z katalogu głównego wtyczki.\r\nAlt+Enter:\tZmień opcje\r\nF3/F4:\tPokaż ustawienia jako INI (edycja przez Alt+Enter)\r\n\r\nSesje w folderach:\r\nF7 w folderze:\tTworzy sesję w tym folderze\r\nF7 z nazwą folder/x:\tTworzy sesję we wskazanym folderze\r\nF6 na \\folder\\nazwa:\tPrzenosi sesję do folderu\r\nF6 na folderze:\tZmienia nazwy wszystkich sesji; odwołania jump-host również\r\nF5 lub przeciągnięcie:\tKopiuje sesję lub folder (duplikat)\r\nF8 na folderze:\tUsuwa folder i wszystkie sesje w nim\r\n\r\nTryby transferu:\r\nSSH (SFTP/SCP):\tDomyślny i najszybszy, gdy działa dostęp SSH\r\nUżyj SCP do danych:\tGdy SFTP jest blokowane lub niestabilne\r\nTylko SCP:\tCałkowicie wyłącza SFTP (stare hosty)\r\nWymuś transfer shell:\tWymusza transfer przez shell (dd/base64)\r\nPHP Agent (HTTP):\tBez konta SSH; używa wgranego sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP przez sftp.php
 132=Szybkie połączenie
 144=Pomoc
 146=Tutaj możesz skonfigurować sposób, w jaki serwer wysyła nazwy plików z akcentami. Gdy wybierzesz 'wykryj automatycznie', wtyczka pobierze zmienne środowiskowe (np. LANG) i wyśle polecenie 'locale', aby określić kodowanie znaków używane przez serwer. Może to nie działać ze wszystkimi serwerami, więc jeśli wiesz, że serwer używa UTF-8, lub nazwy plików wyświetlają się ze złymi znakami zamiast akcentów, wybierz 'tak' ręcznie.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrylica KOI8-R (20866)
 241=Inne (wpisz ręcznie)
-242=Biblioteka libssh2.dll jest zbyt stara dla funkcji Pageant!\nMinimalna wymagana wersja to %s.
 243=Błąd połączenia z agentem SSH (Pageant)!\nMożesz umieścić plik dowiązania o nazwie pageant.lnk w katalogu wtyczki, aby uruchomić Pageant, np. wskazujący na\nc:\\path\\pageant.exe keyfilename
 244=Błąd przy pobieraniu tożsamości od agenta SSH!
 245=Uwierzytelnianie przez agenta nie powiodło się!
@@ -194,22 +193,6 @@
 12054=Znaleziono peera LAN Pair.\nWybierz rolę:\n\nTak = Dawca\nNie = Biorca\nAnuluj = bez zmian
 280=Hasło parowania:
 12055=Czas sesji: [__] min (0=bez limitu)
-12056=Importuj sesje PuTTY
-12057=Importuj sesje WinSCP
-12058=Importuj przenośne sesje PuTTY
-12059=Znaleziono {} sesji {} (rejestr):
-12060=Znaleziono {} sesji w {}:
-12061=Zaznacz &wszystko
-12062=&Odznacz wszystko
-12063=&Importuj
-12064=Anuluj
-12065=Nie zaimportowano żadnych sesji.
-12066=Nie znaleziono sesji w {}.
-12067=Importuj wszystko ({})
-12068=Importuj z przenośnego folderu PuTTY...
-12069=Importuj z przenośnego folderu WinSCP...
-12070=Importuj przenośne sesje KiTTY
-12071=Importuj z przenośnego folderu KiTTY...
 324=Pomoc
 325=Anuluj
 326=Strumień TAR
@@ -225,7 +208,7 @@
 288=Zmień hasło...
 289=Chroń hasło menedżerem haseł (TC>=7.5)
 290=Certyfikat klienta do &uwierzytelniania:
-291=Plik klucza publicznego (*.pub):
+291=Certyfikat (*-cert.pub), opcjonalnie:
 292=Plik klucza prywatnego (*.pem;*.ppk):
 293=Kompresuj z &ZLIB (może nie działać na niektórych serwerach)
 294=Rejestruj pełne listowanie katalogów (&debug)
@@ -241,8 +224,6 @@
 304=Host pośredni:
 305=Użyj &hosta pośredniego
 306=Ustawienia proxy:
-307=Usuń proxy
-308=Importuj...
 309=Ustawienia proxy
 310=Ustawienia proxy
 311=Host proxy:
@@ -259,7 +240,7 @@
 318=Port:
 319=Nazwa użytkownika:
 320=&Hasło:
-321=Plik klucza publicznego (*.pub):
+321=Certyfikat (*-cert.pub), opcjonalnie:
 322=Plik klucza prywatnego (*.pem;*.ppk):
 323=Użyj agenta SSH &(Pageant) do uwierzytelniania hosta pośredniego
 327=System:
@@ -273,7 +254,7 @@
 335=Punkt końcowy PHP Agent nie został znaleziony (HTTP 404).\nSprawdź URL, nazwę pliku i wgraj sftp.php na serwer.
 336=PHP Agent nie jest skonfigurowany na serwerze (HTTP 503).\nUstaw AGENT_PSK / AGENT_PSK_SHA256 w sftp.php i wgraj ponownie.
 337=Błędne dane logowania dla PHP Agent (HTTP {}).
-338=Błąd żądania HTTP {} dla PHP Agent.
+338=Żądanie PHP Agent nie powiodło się dla {} (HTTP {}).
 339=PHP Agent odrzucił połączenie: {}
 340=Weryfikacja PHP Agent nie powiodła się: {}
 341=Błędne dane logowania dla PHP Agent.
@@ -290,7 +271,6 @@
 352=Użytkownik uwierzytelniony bez hasła.
 353=Przekroczono czas uwierzytelniania interaktywnego klawiatury.
 354=Przekroczono czas uwierzytelniania hasłem.
-355=Ładowanie biblioteki SSH...
 356=LAN Pair: lokalizowanie partnera przez odkrywanie...
 357=LAN Pair: połączono.
 358=Tryb PHP Agent
@@ -352,15 +332,8 @@
 414=PHP Agent: pominięto aktualizację lokalnego sftp.php (brak pliku lub tylko do odczytu).
 415=Przesyłanie TAR:
 416=Przesyłanie TAR nieudane
-417=Wybierz plik klucza publicznego
+417=Wybierz plik certyfikatu
 418=Wybierz plik klucza prywatnego
-419=Wybierz folder PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422=Zaimportowano {} sesji.
-423=Zaimportowano {} sesji.\nPominięto {} {}.
-424=nieobsługiwana sesja/sesje
-425=nieobsługiwana sesja/sesje WinSCP
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Strona kodowa
@@ -377,11 +350,27 @@
 12081=Nie udało się załadować hasła proxy!
 12082=Nieprawidłowy adres serwera.
 12083=Brak pamięci podczas tworzenia ustawień połączenia.
-12084=Nie zaimportowano żadnych sesji (nieobsługiwany typ protokołu).
-12085=Nie znaleziono pliku putty.reg w wybranym folderze lub jego podfolderach.
-12086=Nie udało się odczytać lub przetworzyć pliku putty.reg.
-12087=Nie znaleziono folderu Sessions w wybranym katalogu KiTTY Portable.
 12088=Sesja o tej nazwie już istnieje.\nWybierz inną nazwę sesji.
+12118=Ta sesja należy do innego programu i nie można jej tutaj edytować.\nNaciśnij F3, aby zobaczyć jej ustawienia, lub F5, aby skopiować ją do własnej listy.
+12119= Sesja LAN Pair: 
+12120=Te ustawienia pochodzą z sesji '{}' i są tylko do odczytu. Wybierz (ręcznie) na liście jump-hostów, aby skonfigurować hosta tutaj.
+12121=Ta sesja łączy się z hostem przez coś, co nie zostało zaimportowane razem z nią: serwer proxy, jump host albo tunel. Połączenie poszłoby teraz prosto do celu, z pominięciem tego, co ustawiono po drodze, dlatego zostało odrzucone.
+12122=Sesja miała łączyć się przez serwer proxy, ale plik nie zawiera jego opisu. Sesję zaimportowano bez proxy i będzie łączyć się bezpośrednio, więc przed użyciem sprawdź jej ustawienie proxy.
+12123=Ten serwer proxy wtyczka potrafi odtworzyć: skopiuj sesję do własnej listy klawiszem F5, a proxy zostanie przeniesione razem z nią. Hasło, jeśli jest potrzebne, zostanie zapytane przy pierwszym połączeniu.
+12124=Przenoszenie: źródło zostało zachowane, ponieważ kopiowanie wznowiono na już istniejącym pliku
+12125=Źródło i cel to ten sam plik: obie sesje wskazują to samo konto na tym samym serwerze i tę samą ścieżkę. Skopiowanie pliku na samego siebie obcięłoby go, dlatego operacja została odrzucona.
+12126=Serwer nie uruchomił sesji SFTP. Jeśli udostępnia tylko powłokę — jak dropbear na kamerze lub routerze — włącz dla tej sesji „Użyj SCP do wszystkiego (bez SFTP)”.
+12127=Serwer akceptuje tylko logowanie kluczem, a ta sesja nie ma żadnego do zaoferowania. Ustaw dla sesji plik klucza prywatnego albo użyj Pageant z załadowanym kluczem.
+12128=Właściwości
+12129=Właściwości pliku
+12130=Nazwa:
+12131=Właściciel:
+12132=Grupa:
+12133=Uprawnienia:
+12134=Rozmiar:
+12135=Ostatnia modyfikacja:
+12136=Odpowiedź polecenia stat na serwerze
+12137=Serwer nie wykonał polecenia stat. Dane z protokołu SFTP:
 12089=SFTP
 12090=Szukam peera LAN Pair w sieci lokalnej...
 12091={} s
@@ -390,12 +379,29 @@
 12094=LAN Pair: nie udało się podszyć pod TrustedInstaller. Proces może nie być uruchomiony jako Administrator.
 12095=LAN Pair: łączę z {}...
 12096=LAN Pair: błąd połączenia
-12097=PuTTY
-12098=WinSCP
-12099=Inne
-12100=Wybierz przenośny folder WinSCP
-12101=Plik WinSCP.ini nie został znaleziony w wybranym folderze.
-12102=Wybierz przenośny folder KiTTY
 12103=LAN Pair: ten komputer jest skonfigurowany jako Dawca. Zdalny Biorca musi się tutaj połączyć.
 450=Windows (CR/LF)
 451=Unix (LF)
+12104=(ręcznie)
+12105= (brakuje)
+12106=Nie znaleziono sesji pośredniczącej '{}' wśród zapisanych sesji
+12107=Sesja pośrednicząca '{}' ma własną konfigurację hosta pośredniczącego — łańcuchowe ani cykliczne hosty pośredniczące nie są obsługiwane. Wybierz sesję łączącą się bezpośrednio z bastionem.
+12109=Wtyczka SFTP - import sesji
+12110=Nie można otworzyć pliku źródłowego do odczytu.
+12111=Nie można zaimportować sesji: plik źródłowy jest pusty.
+12112=Nie można zaimportować sesji: plik źródłowy nie zawiera sekcji INI.\r\nOczekiwano pliku z co najmniej jedną [sekcją] i kluczem `server=`.
+12113=Nie można zaimportować sesji: nie znaleziono sekcji INI z niepustym kluczem `server=`.
+12114=Nie można zaimportować sesji: ścieżka docelowa jest pusta.
+12115=Nie można zaimportować sesji: zapis do sftpplug.ini nie powiódł się.
+12116=Pośredni...
+12117=Host pośredni jest włączony dla tej sesji, ale żaden nie został skonfigurowany. Wybierz sesję pośredniczącą lub wypełnij dane hosta.
+12138=Limit czasu sesji (min):
+12139=(0 = bez limitu)
+12140=Auto
+12141=Plik .ppk żąda parametrów Argon2 powyżej bezpiecznych limitów.
+12142=Plik .ppk zawiera klucz, którego części do siebie nie pasują.
+12143=Błąd pobierania
+12144=Nie udało się pobrać pliku:
+12145=Pomiń
+12146=Pomiń wszystkie
+12147=Pominięto po błędzie pobierania:

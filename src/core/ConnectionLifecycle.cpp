@@ -63,7 +63,7 @@ bool EnsureUserNameIfMissing(pConnectSettings cs)
     LoadStr(titleLoaded, IDS_USERNAME_FOR);
     const std::string title = std::string(titleLoaded.data()) + cs->server;
     std::array<char, MAX_PATH> userBuf{};
-    if (!RequestProc(PluginNumber, RT_UserName, title.c_str(), nullptr, userBuf.data(), static_cast<int>(userBuf.size() - 1)))
+    if (!RequestInput(RT_UserName, title.c_str(), nullptr, userBuf))
         return false;
     cs->user = userBuf.data();
     return true;
@@ -81,32 +81,37 @@ int CleanupFailedConnect(
 
     std::array<char, 512> progressTextBuf{};
     LoadStr(progressTextBuf, IDS_DISCONNECTING);
-    int rc = 0;
-    if (cs->sftpsession) {
-        do {
-            rc = cs->sftpsession->shutdown();
-            if (ProgressLoop(progressTextBuf.data(), *ioProgress, 90, ioLoop, ioLastTime))
-                break;
-            WaitForTransportReadable(cs);
-        } while (rc == LIBSSH2_ERROR_EAGAIN);
-        cs->sftpsession.reset();
-        *ioProgress = 90;
-    }
+
+    // SFTP subsystem — destructor sends FXP_SHUTDOWN with bounded retry.
+    cs->sftpsession.reset();
+    *ioProgress = 90;
+
+    // SSH session — fire-and-forget DISCONNECT (no ack expected per RFC 4253);
+    // brief EAGAIN retry only to push the packet into the OS send buffer.
     if (cs->session) {
-        int rc2 = 0;
+        SYSTICKS t0 = get_sys_ticks();
+        int rc;
         do {
-            rc2 = cs->session->disconnect("Shutdown");
-            if (ProgressLoop(progressTextBuf.data(), *ioProgress, 100, ioLoop, ioLastTime))
+            rc = cs->session->disconnect("Shutdown");
+            if (rc != LIBSSH2_ERROR_EAGAIN)
                 break;
-            WaitForTransportReadable(cs);
-        } while (rc2 == LIBSSH2_ERROR_EAGAIN);
-        cs->session->free();
-        cs->session.reset();
+            if (get_ticks_between(t0) > 200)
+                break;
+            if (cs->sock != INVALID_SOCKET) {
+                fd_set wfds;
+                FD_ZERO(&wfds);
+                FD_SET(cs->sock, &wfds);
+                timeval tv = { 0, 20000 };  // 20 ms
+                select(0, nullptr, &wfds, nullptr, &tv);
+            }
+        } while (true);
+        cs->session.reset();   // ~Libssh2Session() frees the struct.
     }
-    // Release transport stream AFTER the target session is already freed
-    // (above) but BEFORE the jump socket closes.
+    *ioProgress = 100;
+    ProgressLoop(progressTextBuf.data(), *ioProgress, 100, ioLoop, ioLastTime);
+
+    // Release transport stream (jump channel + jump session) before socket close.
     cs->transport_stream.reset();
-    Sleep(RECONNECT_SLEEP_MS);
     if (cs->sock != INVALID_SOCKET) {
         closesocket(cs->sock);
         cs->sock = INVALID_SOCKET;

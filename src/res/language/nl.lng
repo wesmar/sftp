@@ -56,7 +56,7 @@
 12052=HTTPS-verzending omleiden naar HTTP
 12053=Plaats de cd-rom
 130=F7 - help.txt
-131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nAlt+Enter:\tOpties wijzigen\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
+131=Help plug-in:\r\nF7:\tNieuwe verbinding maken (TC toont Nieuwe map – typ de naam van de verbinding)\r\nF8/Del:\tVerbinding verwijderen\r\nEnter:\tVerbinden\r\nVerbreken:\tVanuit de sessie, of F8 op de regel in [Active Sessions]. De knop op de werkbalk laat hem open vanaf de plug-inhoofdmap.\r\nAlt+Enter:\tOpties wijzigen\r\nF3/F4:\tInstellingen als INI tonen (bewerken met Alt+Enter)\r\n\r\nSessies in mappen:\r\nF7 in een map:\tMaakt de sessie in die map\r\nF7 met naam folder/x:\tMaakt de sessie in de opgegeven map\r\nF6 naar \\map\\naam:\tVerplaatst een sessie naar een map\r\nF6 op een map:\tHernoemt alle sessies erin; jump-hostverwijzingen volgen\r\nF5 of slepen:\tKopieert sessie of map (duplicaat)\r\nF8 op een map:\tVerwijdert de map en alle sessies erin\r\n\r\nOverdrachtswijzen:\r\nSSH (SFTP/SCP):\tStandaard en snelst wanneer SSH-toegang werkt\r\nSCP gebruiken voor gegevens:\tWanneer SFTP geblokkeerd of instabiel is\r\nAlleen SCP:\tSFTP volledig uitschakelen (oude hosts)\r\nShell-overdracht forceren:\tOverdracht via shell forceren (dd/base64)\r\nPHP-agent (HTTP):\tZonder SSH-account; gebruikt geüploade sftp.php\r\nPHP Shell (HTTP):\tHTTP-pseudoterminal via sftp.php
 132=Snelle verbinding
 144=Help
 146=Hier kunt u instellen hoe de server bestandsnamen met accenttekens verzendt. Als u 'automatisch detecteren' kiest, leest de plug-in omgevingsvariabelen (bijv. LANG) en stuurt het commando 'locale' om de tekencodering van de server te bepalen. Dit werkt mogelijk niet bij alle servers. Als u weet dat de server UTF-8 gebruikt, of als bestandsnamen verkeerde tekens tonen in plaats van accenten, selecteer dan handmatig 'ja'.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrillisch KOI8-R (20866)
 241=Overige (handmatig invoeren)
-242=De bibliotheek libssh2.dll is te oud voor de Pageant-functie!\nDe minimaal vereiste versie is %s.
 243=Fout bij verbinden met SSH-agent (Pageant)!\nU kunt een snelkoppelingsbestand met de naam pageant.lnk in de plug-inmap plaatsen om Pageant te starten, bijv. verwijzend naar\nc:\\path\\pageant.exe keyfilename
 244=Fout bij ophalen van identiteit van SSH-agent!
 245=Verificatie via agent mislukt!
@@ -206,7 +205,7 @@
 288=Wachtwoord wijzigen...
 289=Wachtwoord beveiligen met wachtwoordbeheerder (TC>=7.5)
 290=Clientcertificaat voor &verificatie:
-291=Bestand met publieke sleutel (*.pub):
+291=Certificaat (*-cert.pub), optioneel:
 292=Bestand met privésleutel (*.pem;*.ppk):
 293=Comprimeren met &ZLIB (werkt mogelijk niet op sommige servers)
 294=Volledige maplijst vastleggen (&debug)
@@ -222,8 +221,6 @@
 304=Tussenliggende host:
 305=&Tussenliggende host gebruiken
 306=Proxy-instellingen:
-307=Proxy verwijderen
-308=Importeren...
 309=Proxy-instellingen
 310=Proxy-instellingen
 311=Proxyhost:
@@ -240,28 +237,12 @@
 318=Poort:
 319=Gebruikersnaam:
 320=&Wachtwoord:
-321=Bestand met publieke sleutel (*.pub):
+321=Certificaat (*-cert.pub), optioneel:
 322=Bestand met privésleutel (*.pem;*.ppk):
 323=SSH-agent &(Pageant) gebruiken voor verificatie van de tussenliggende host
-12056=PuTTY-sessies importeren
-12057=WinSCP-sessies importeren
-12058=Draagbare PuTTY-sessies importeren
-12059={} {}-sessies gevonden (register):
-12060={} sessies gevonden in {}:
-12061=&Alles selecteren
-12062=&Alles deselecteren
-12063=&Importeren
-12064=Annuleren
-12065=Geen sessies geïmporteerd.
-12066=Geen sessies gevonden in {}.
 324=Help
 325=Annuleren
 326=TAR-stroom
-12067=Alles importeren ({})
-12068=Importeren uit PuTTY Portable-map...
-12069=Importeren uit draagbare WinSCP-map...
-12070=Draagbare KiTTY-sessies importeren
-12071=Importeren uit KiTTY Portable-map...
 
 327=Systeem:
 328=Methode:
@@ -274,7 +255,7 @@
 335=PHP Agent-eindpunt niet gevonden (HTTP 404).\nControleer URL, bestandsnaam en upload sftp.php naar de server.
 336=PHP Agent is niet geconfigureerd op de server (HTTP 503).\nStel AGENT_PSK / AGENT_PSK_SHA256 in sftp.php in en upload opnieuw.
 337=Onjuiste inloggegevens voor PHP Agent (HTTP {}).
-338=HTTP-verzoekfout {} voor PHP Agent.
+338=PHP Agent-verzoek mislukt voor {} (HTTP {}).
 339=PHP Agent heeft de verbinding geweigerd: {}
 340=PHP Agent validatie mislukt: {}
 341=Onjuiste inloggegevens voor PHP Agent.
@@ -291,7 +272,6 @@
 352=Gebruiker zonder wachtwoord geverifieerd.
 353=Time-out bij interactieve toetsenbordverificatie.
 354=Time-out bij wachtwoordverificatie.
-355=SSH-bibliotheek laden...
 356=LAN Pair: zoeken naar peer via detectie...
 357=LAN Pair: verbonden.
 358=PHP Agent-modus
@@ -353,16 +333,8 @@
 414=PHP Agent: lokale sftp.php-update overgeslagen (bestand ontbreekt of is alleen-lezen).
 415=TAR-upload:
 416=TAR-upload mislukt
-417=Selecteer bestand met publieke sleutel
+417=Certificaatbestand selecteren
 418=Selecteer bestand met privésleutel
-419=Selecteer PuTTY Portable-map
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} sessie(s) geïmporteerd.
-423={} sessie(s) geïmporteerd.
-{} {} overgeslagen.
-424=niet-ondersteunde sessie(s)
-425=niet-ondersteunde WinSCP-sessie(s)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Codepagina
@@ -374,12 +346,6 @@
 12094=LAN Pair: imitatie van TrustedInstaller mislukt. Het proces wordt mogelijk niet als Administrator uitgevoerd.
 12095=LAN Pair: verbinding maken met {}...
 12096=LAN Pair: verbinding mislukt
-12097=PuTTY
-12098=WinSCP
-12099=Overig
-12100=Draagbare WinSCP-map selecteren
-12101=WinSCP.ini niet gevonden in de geselecteerde map.
-12102=Draagbare KiTTY-map selecteren
 12103=LAN Pair: deze computer is geconfigureerd als Donor. De externe Ontvanger moet hier verbinding maken.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +361,48 @@
 12081=Kan proxywachtwoord niet laden!
 12082=Ongeldig serveradres.
 12083=Onvoldoende geheugen bij het maken van verbindingsinstellingen.
-12084=Geen sessies geïmporteerd (niet-ondersteund protocoltype).
-12085=putty.reg niet gevonden in de geselecteerde map of de submappen ervan.
-12086=Kan putty.reg niet lezen of parseren.
-12087=Map Sessions niet gevonden in de geselecteerde KiTTY Portable-map.
 12088=Er bestaat al een sessie met deze naam.\nKies een andere sessienaam.
+12118=Deze sessie hoort bij een ander programma en kan hier niet worden bewerkt.\nDruk op F3 om de instellingen te zien of F5 om ze naar uw eigen lijst te kopiëren.
+12119= LAN Pair-sessie: 
+12120=Deze instellingen komen uit sessie '{}' en zijn alleen-lezen. Kies (handmatig) in de jump-hostlijst om hier een host in te stellen.
+12121=Deze sessie bereikt zijn host via iets dat niet is meegeïmporteerd: een proxy, een jump host of een tunnel. Nu verbinden zou rechtstreeks naar het doel gaan, langs precies datgene wat ertussen was gezet, en wordt daarom geweigerd.
+12122=De sessie was ingesteld om via een proxy te verbinden, maar het bestand bevat er geen beschrijving van. De sessie is zonder de proxy geïmporteerd en zal rechtstreeks verbinden; controleer daarom de proxy-instelling voordat u haar gebruikt.
+12123=Deze proxy kan de plug-in opnieuw aanmaken: kopieer de sessie met F5 naar uw eigen lijst en de proxy gaat mee. Het wachtwoord wordt, indien nodig, bij de eerste verbinding gevraagd.
+12124=Verplaatsen: de bron is behouden, omdat het kopiëren werd hervat op een bestand dat er al was
+12125=Bron en doel zijn hetzelfde bestand: beide sessies wijzen naar hetzelfde account op dezelfde server, op hetzelfde pad. Een bestand naar zichzelf kopiëren zou het inkorten, dus dit wordt geweigerd.
+12126=De server heeft geen SFTP-sessie gestart. Biedt hij alleen een shell — zoals dropbear op een camera of router —, schakel dan voor deze sessie "SCP voor alles gebruiken (zonder SFTP)" in.
+12127=De server accepteert alleen aanmelden met een sleutel, en deze sessie heeft er geen aan te bieden. Stel een privésleutelbestand in voor de sessie, of gebruik Pageant met de sleutel geladen.
+12128=Eigenschappen
+12129=Bestandseigenschappen
+12130=Naam:
+12131=Eigenaar:
+12132=Groep:
+12133=Rechten:
+12134=Grootte:
+12135=Laatst gewijzigd:
+12136=Antwoord van stat op de server
+12137=De server heeft geen stat-opdracht uitgevoerd. Wat het SFTP-protocol meldt:
 12089=SFTP
-
+12104=(handmatig)
+12105= (ontbreekt)
+12106=Sprongsessie '{}' niet gevonden in de opgeslagen sessies
+12107=Sprongsessie '{}' heeft een eigen sprongbastion-configuratie — geketende of cyclische sprongbastions worden niet ondersteund. Kies een sessie die rechtstreeks verbinding maakt met het bastion.
+12109=SFTP-plug-in - sessie-import
+12110=Kan het bronbestand niet openen om te lezen.
+12111=Kan sessie niet importeren: het bronbestand is leeg.
+12112=Kan sessie niet importeren: het bronbestand bevat geen INI-secties.\r\nEen bestand met ten minste één [sectie] en een `server=`-sleutel wordt verwacht.
+12113=Kan sessie niet importeren: geen INI-sectie met een niet-lege `server=`-sleutel gevonden.
+12114=Kan sessie niet importeren: het doelpad is leeg.
+12115=Kan sessie niet importeren: schrijven naar sftpplug.ini is mislukt.
+12116=Sprong...
+12117=Sprongbastion is ingeschakeld voor deze sessie maar er is geen ingesteld. Kies een sprongsessie of vul de gegevens van het bastion in.
+12138=Sessietime-out (min):
+12139=(0 = geen limiet)
+12140=Auto
+12141=Het .ppk-bestand vraagt Argon2-parameters boven de veilige grenzen.
+12142=Het .ppk-bestand bevat een sleutel waarvan de delen niet bij elkaar horen.
+12143=Downloadfout
+12144=Het bestand kon niet worden gedownload:
+12145=Overslaan
+12146=Alles overslaan
+12147=Overgeslagen na een downloadfout:

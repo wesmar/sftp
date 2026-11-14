@@ -56,7 +56,7 @@
 12052=Redirección de envío de HTTPS a HTTP
 12053=Insertar CD-ROM
 130=F7 - ayuda.txt
-131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nAlt+Intro:\tCambiar opciones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
+131=Ayuda del plugin:\r\nF7:\tCrear nueva conexión (TC muestra Nueva Carpeta – introducir nombre de conexión)\r\nF8/Supr:\tEliminar conexión\r\nIntro:\tConectar\r\nDesconectar:\tDesde dentro de la sesión, o F8 en su fila de [Active Sessions]. El botón de la barra la deja abierta desde la raíz del plugin.\r\nAlt+Intro:\tCambiar opciones\r\nF3/F4:\tMostrar ajustes como INI (editar con Alt+Intro)\r\n\r\nSesiones en carpetas:\r\nF7 dentro de una carpeta:\tCrea la sesión en esa carpeta\r\nF7 con nombre folder/x:\tCrea la sesión en la carpeta indicada\r\nF6 a \\carpeta\\nombre:\tMueve una sesión a una carpeta\r\nF6 en una carpeta:\tRenombra todas las sesiones; las referencias de salto se actualizan\r\nF5 o arrastrar:\tCopia la sesión o la carpeta (duplicado)\r\nF8 en una carpeta:\tElimina la carpeta y todas sus sesiones\r\n\r\nModos de transferencia:\r\nSSH (SFTP/SCP):\tPredeterminado, más rápido cuando SSH está disponible\r\nUsar SCP para datos:\tUsar cuando SFTP está bloqueado/inestable\r\nUsar solo SCP:\tDesactivar SFTP completamente (hosts heredados)\r\nForzar transferencia shell:\tForzar transferencia basada en shell (dd/base64)\r\nAgente PHP (HTTP):\tNo se necesita cuenta SSH; usar sftp.php subido\r\nShell PHP (HTTP):\tPseudoterminal sobre HTTP via sftp.php
 132=Conexión rápida
 144=Ayuda
 146=Aquí puede configurar cómo el servidor envía nombres de archivo con acentos. Al elegir 'detección automática', el plugin obtendrá variables de entorno (como LANG) y enviará el comando 'locale' para determinar la codificación de caracteres del servidor. Esto puede no funcionar con todos los servidores, por lo que si sabe que su servidor usa UTF-8, o los nombres de archivo aparecen con caracteres extraños en lugar de acentos, seleccione 'sí' manualmente.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cirílico KOI8-R (20866)
 241=Otro (introducir manualmente)
-242=¡La biblioteca libssh2.dll es demasiado antigua para las funciones de Pageant!\nLa versión mínima requerida es %s.
 243=¡Error al conectar con el agente SSH (Pageant)!\nPuede colocar un archivo de acceso directo llamado pageant.lnk en el directorio del plugin para iniciar Pageant, p. ej. apuntando a\nc:\\ruta\\pageant.exe archivoclave
 244=¡Error al solicitar identidades al agente SSH!
 245=¡Autenticación por agente fallida!
@@ -194,17 +193,6 @@
 280=Contrasena pairado:
 12054=Peer LAN Pair encontrado.\nElija rol:\n\nSí = Donante\nNo = Receptor\nCancelar = sin cambios
 12055=Tiempo sesión: [__] min (0=sin límite)
-12056=Importar sesiones de PuTTY
-12057=Importar sesiones de WinSCP
-12058=Importar sesiones portátiles de PuTTY
-12059=Se encontraron {} sesiones de {} (registro):
-12060=Se encontraron {} sesiones en {}:
-12061=&Seleccionar todo
-12062=&Deseleccionar todo
-12063=&Importar
-12064=Cancelar
-12065=No se importaron sesiones.
-12066=No se encontraron sesiones en {}.
 281=Receptor LAN Pair ya en ejecucion.
 282=LAN Pair aceptado: {} ({})
 283=LAN Pair: escuchando. Dialogo de rol al detectar peer.
@@ -217,7 +205,7 @@
 288=Cambiar contraseña...
 289=Proteger contraseña con gestor de contraseñas (TC>=7.5)
 290=Certificado de cliente para &autenticación:
-291=Archivo de clave pública (*.pub):
+291=Certificado (*-cert.pub), opcional:
 292=Archivo de clave privada (*.pem;*.ppk):
 293=Comprimir con &ZLIB (puede fallar en algunos servidores)
 294=Registrar listados completos de directorio (&depuración)
@@ -233,8 +221,6 @@
 304=Host intermediario:
 305=Usar &host intermediario
 306=Configuración del proxy:
-307=Eliminar proxy
-308=Importar...
 309=Configuración del proxy
 310=Configuración del proxy
 311=Host proxy:
@@ -251,18 +237,13 @@
 318=Puerto:
 319=Nombre de usuario:
 320=&Contraseña:
-321=Archivo de clave pública (*.pub):
+321=Certificado (*-cert.pub), opcional:
 322=Archivo de clave privada (*.pem;*.ppk):
 323=Usar &agente SSH (Pageant) para autenticación del host intermediario
 
 324=Ayuda
 325=Cancelar
 326=Flujo TAR
-12067=Importar todo ({})
-12068=Importar desde carpeta PuTTY Portable...
-12069=Importar desde carpeta portátil de WinSCP...
-12070=Importar sesiones portátiles de KiTTY
-12071=Importar desde carpeta KiTTY Portable...
 
 327=Sistema:
 328=Método:
@@ -275,7 +256,7 @@
 335=Endpoint del Agente PHP no encontrado (HTTP 404).\nVerifique la URL, el nombre del archivo y suba sftp.php al servidor.
 336=PHP Agent no está configurado en el servidor (HTTP 503).\nEstablezca AGENT_PSK / AGENT_PSK_SHA256 en sftp.php y vuelva a subir.
 337=Credenciales incorrectas para PHP Agent (HTTP {}).
-338=Error de solicitud HTTP {} para PHP Agent.
+338=La solicitud del Agente PHP falló para {} (HTTP {}).
 339=PHP Agent rechazó la conexión: {}
 340=La validación de PHP Agent falló: {}
 341=Credenciales incorrectas para PHP Agent.
@@ -292,7 +273,6 @@
 352=Usuario autenticado sin contraseña.
 353=Tiempo de espera agotado en auth interactiva de teclado.
 354=Tiempo de espera agotado en auth por contraseña.
-355=Cargando biblioteca SSH...
 356=LAN Pair: localizando par mediante descubrimiento...
 357=LAN Pair: conectado.
 358=Modo PHP Agent
@@ -354,16 +334,8 @@
 414=PHP Agent: actualización local de sftp.php omitida (archivo ausente o de solo lectura).
 415=Subida TAR:
 416=Subida TAR fallida
-417=Seleccionar archivo de clave pública
+417=Seleccionar archivo de certificado
 418=Seleccionar archivo de clave privada
-419=Seleccione la carpeta de PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422=Importadas {} sesión/sesiones.
-423=Importadas {} sesión/sesiones.
-Omitidas {} {}.
-424=sesión/sesiones no compatible(s)
-425=sesión/sesiones WinSCP no compatible(s)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Página de código
@@ -375,12 +347,6 @@ Omitidas {} {}.
 12094=LAN Pair: error al suplantar TrustedInstaller. El proceso puede no estar ejecutandose como Administrador.
 12095=LAN Pair: conectando con {}...
 12096=LAN Pair: error de conexión
-12097=PuTTY
-12098=WinSCP
-12099=Otros
-12100=Seleccionar carpeta portátil de WinSCP
-12101=WinSCP.ini no encontrado en la carpeta seleccionada.
-12102=Seleccionar carpeta portátil de KiTTY
 12103=LAN Pair: este equipo está configurado como Donante. El Receptor remoto debe conectarse aquí.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -396,10 +362,48 @@ Omitidas {} {}.
 12081=¡Error al cargar la contraseña del proxy!
 12082=Dirección del servidor no válida.
 12083=Memoria insuficiente al crear la configuración de conexión.
-12084=No se importaron sesiones (tipo de protocolo no compatible).
-12085=No se encontró putty.reg en la carpeta seleccionada ni en sus subcarpetas.
-12086=Error al leer o analizar putty.reg.
-12087=No se encontró la carpeta Sessions en el directorio seleccionado de KiTTY Portable.
 12088=Ya existe una sesión con este nombre.\nElija un nombre de sesión diferente.
+12118=Esta sesión pertenece a otro programa y no se puede editar aquí.\nPulse F3 para ver sus ajustes o F5 para copiarla a su propia lista.
+12119= Sesión LAN Pair: 
+12120=Estos ajustes provienen de la sesión '{}' y son de solo lectura. Elija (manual) en la lista de jump host para configurar uno aquí.
+12121=Esta sesión llega a su host a través de algo que no se importó con ella: un proxy, un jump host o un túnel. Conectar ahora iría directo al destino, esquivando precisamente lo que se puso en medio, así que se rechaza.
+12122=La sesión estaba configurada para conectarse a través de un proxy, pero el archivo no lo describe. La sesión se importó sin el proxy y conectará directamente, así que revise su ajuste de proxy antes de usarla.
+12123=El plugin puede recrear este proxy: copie la sesión a su propia lista con F5 y el proxy se copiará con ella. Su contraseña, si la necesita, se pedirá en la primera conexión.
+12124=Mover: se conservó el origen, porque la copia se reanudó sobre un archivo ya existente
+12125=El origen y el destino son el mismo archivo: ambas sesiones apuntan a la misma cuenta en el mismo servidor, en la misma ruta. Copiar un archivo sobre sí mismo lo truncaría, así que se rechaza.
+12126=El servidor no inició una sesión SFTP. Si solo ofrece un shell —como dropbear en una cámara o un router—, active «Usar SCP para todo (sin SFTP)» para esta sesión.
+12127=El servidor solo acepta el inicio de sesión con clave, y esta sesión no tiene ninguna que ofrecer. Indique un archivo de clave privada para la sesión o use Pageant con la clave cargada.
+12128=Propiedades
+12129=Propiedades del archivo
+12130=Nombre:
+12131=Propietario:
+12132=Grupo:
+12133=Permisos:
+12134=Tamaño:
+12135=Última modificación:
+12136=Respuesta de stat en el servidor
+12137=El servidor no ejecutó ningún comando stat. Lo que informa el protocolo SFTP:
 12089=SFTP
-
+12104=(manual)
+12105= (no encontrada)
+12106=La sesión de salto '{}' no se encuentra entre las sesiones guardadas
+12107=La sesión de salto '{}' tiene su propia configuración de host de salto — no se admiten hosts de salto encadenados ni cíclicos. Elija una sesión que conecte directamente con el bastión.
+12109=Complemento SFTP - importación de sesión
+12110=No se puede abrir el archivo de origen para lectura.
+12111=No se puede importar la sesión: el archivo de origen está vacío.
+12112=No se puede importar la sesión: el archivo de origen no tiene secciones INI.\r\nSe esperaba un archivo con al menos una [sección] y una clave `server=`.
+12113=No se puede importar la sesión: no se encontró ninguna sección INI con una clave `server=` no vacía.
+12114=No se puede importar la sesión: la ruta de destino está vacía.
+12115=No se puede importar la sesión: error al escribir en sftpplug.ini.
+12116=Salto...
+12117=El host de salto está habilitado para esta sesión pero no se ha configurado ninguno. Elija una sesión de salto o rellene los datos del host.
+12138=Tiempo límite de sesión (min):
+12139=(0 = sin límite)
+12140=Auto
+12141=El archivo .ppk pide parámetros Argon2 por encima de los límites seguros.
+12142=El archivo .ppk contiene una clave cuyas partes no corresponden entre sí.
+12143=Error de descarga
+12144=No se pudo descargar el archivo:
+12145=Omitir
+12146=Omitir todo
+12147=Omitido tras un error de descarga:

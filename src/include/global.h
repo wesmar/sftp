@@ -3,17 +3,16 @@
 // Modern C++ SFTP Plugin for Total Commander
 // Compatible with Visual Studio 2026 (v145 toolset)
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 
 // Force static linking for libssh2 (removes __imp__ prefix)
 #ifndef LIBSSH2_STATIC
     #define LIBSSH2_STATIC
 #endif
 
-/* Disable legacy WinSock.h and wsock32.lib */
-#define _WINSOCKAPI_
-
-// Modern Windows SDK headers
+// Windows headers; WIN32_LEAN_AND_MEAN keeps the old winsock.h out.
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -29,32 +28,9 @@
 #include <cstring>
 #include <cwchar>
 #include <cstdarg>
-
-// Verify SDK requirements
-#ifndef RESOURCE_ENUM_VALIDATE
-#error "Please, update Microsoft SDKs to 6.1 or later"
-#endif
-
-// Type definitions for compatibility
-#ifndef _LPCBYTE_DEFINED
-#define _LPCBYTE_DEFINED
-typedef const BYTE *LPCBYTE;
-#endif
-
-#ifndef _LPCVOID_DEFINED
-#define _LPCVOID_DEFINED
-typedef const VOID *LPCVOID;
-#endif
-
-// Modern replacement for countof macro
-#ifndef countof
-#define countof(array) (sizeof(array) / sizeof(array[0]))
-#endif
-
-// Safe string copy for legacy code compatibility
-#ifndef _itoa_s
-#define _itoa_s(nr,buf,sz,rdx)  _itoa((nr),(buf),(rdx))
-#endif
+#include <atomic>
+#include <iterator>
+#include <mutex>
 
 // Modern C++ namespace for plugin internals
 #ifdef __cplusplus
@@ -62,7 +38,6 @@ typedef const VOID *LPCVOID;
 #include "fsplugin.h"
 
 // Modern type aliases
-using PluginId = int;
 using ServerId = void*;
 using ServerHandle = void*;
 
@@ -70,61 +45,68 @@ using ServerHandle = void*;
 constexpr size_t wdirtypemax = 1024;
 
 // ============================================================================
-// Logging Configuration
+// Diagnostic log
 // ============================================================================
-// Set LOG_TO_FILE to 1 to enable file logging, 0 to disable.
-// When enabled, output goes to LOG_FILE_PATH (created automatically).
-// OutputDebugString is always used when logging is active.
-// WARNING: File logging is slow — enable only during active investigation.
+// Off by default. [Configuration] DebugLog=1 in sftpplug.ini, or the
+// environment variable SFTPPLUG_DEBUGLOG=1, turns it on. Lines go to
+// OutputDebugString and to %LOCALAPPDATA%\SFTPplug\sftpplug.log - a per-user
+// folder, never a shared one such as C:\temp. Crash reports (tag "CRASH")
+// are written even while the log is off. Never log a secret.
 
-#define LOG_ENABLED  0                              // Master switch: 0 = off, 1 = on
-#define LOG_TO_FILE  0                              // 0 = OutputDebugString only, 1 = + file
-#define LOG_FILE_PATH "C:\\temp\\sftpplug.log"     // Log file path (directory created automatically)
+namespace sftp_log {
 
-// Internal aliases — do not edit below this line.
-#define SFTP_DEBUG_ENABLED  LOG_ENABLED
-#define SFTP_DEBUG_TO_FILE  LOG_TO_FILE
-#define SFTP_DEBUG_FILE_PATH LOG_FILE_PATH
-#define SFTP_DEBUG_LEVEL    (LOG_ENABLED ? 2 : 0)
+inline std::atomic<bool>& EnabledFlag() noexcept
+{
+    static std::atomic<bool> enabled{[] {
+        char value[8] = {};
+        return GetEnvironmentVariableA("SFTPPLUG_DEBUGLOG", value, sizeof(value)) > 0 && value[0] == '1';
+    }()};
+    return enabled;
+}
 
-#if SFTP_DEBUG_ENABLED
+inline bool Enabled() noexcept { return EnabledFlag().load(std::memory_order_relaxed); }
+inline void SetEnabled(bool on) noexcept { EnabledFlag().store(on, std::memory_order_relaxed); }
+
+inline const wchar_t* FilePath() noexcept
+{
+    static wchar_t path[MAX_PATH] = {};
+    static std::once_flag once;
+    std::call_once(once, [] {
+        wchar_t base[MAX_PATH] = {};
+        const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);
+        if (n == 0 || n >= MAX_PATH - 32)
+            return;
+        wcscat_s(base, L"\\SFTPplug");
+        CreateDirectoryW(base, nullptr);
+        swprintf_s(path, L"%s\\sftpplug.log", base);
+    });
+    return path;
+}
+
+} // namespace sftp_log
+
 inline void sftp_debug_emit_line(const char* line) noexcept
 {
     if (!line) return;
     OutputDebugStringA(line);
     OutputDebugStringA("\n");
-#if SFTP_DEBUG_TO_FILE
-    char logPath[MAX_PATH] = SFTP_DEBUG_FILE_PATH;
-    char dirPath[MAX_PATH] = {};
-    strncpy_s(dirPath, logPath, _TRUNCATE);
-    char* slash = strrchr(dirPath, '\\');
-    if (slash) {
-        *slash = 0;
-        if (dirPath[0])
-            CreateDirectoryA(dirPath, nullptr);
-    }
-
-    HANDLE hf = CreateFileA(logPath, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hf == INVALID_HANDLE_VALUE) {
-        char tmpDir[MAX_PATH] = {};
-        DWORD n = GetTempPathA((DWORD)countof(tmpDir), tmpDir);
-        if (n > 0 && n < countof(tmpDir) - 20) {
-            strncat_s(tmpDir, "sftpplug_debug.log", _TRUNCATE);
-            hf = CreateFileA(tmpDir, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        }
-    }
+    const wchar_t* path = sftp_log::FilePath();
+    if (!path[0])
+        return;
+    HANDLE hf = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf != INVALID_HANDLE_VALUE) {
-        SetFilePointer(hf, 0, nullptr, FILE_END);
         DWORD written = 0;
-        WriteFile(hf, line, (DWORD)strlen(line), &written, nullptr);
+        WriteFile(hf, line, static_cast<DWORD>(strlen(line)), &written, nullptr);
         WriteFile(hf, "\r\n", 2, &written, nullptr);
         CloseHandle(hf);
     }
-#endif
 }
 
 inline void sftp_debug_logf(const char* tag, const char* fmt, ...) noexcept
 {
+    if (!sftp_log::Enabled() && !(tag && strcmp(tag, "CRASH") == 0))
+        return;
     char msg[1024];
     msg[0] = 0;
     va_list args;
@@ -132,30 +114,26 @@ inline void sftp_debug_logf(const char* tag, const char* fmt, ...) noexcept
     _vsnprintf_s(msg, sizeof(msg), _TRUNCATE, fmt ? fmt : "", args);
     va_end(args);
 
+    // Local time to the millisecond, so a slow step shows as a gap between lines.
+    SYSTEMTIME st;
+    GetLocalTime(&st);
     char line[1200];
     if (tag && tag[0]) {
-        _snprintf_s(line, sizeof(line), _TRUNCATE, "[%s] %s", tag, msg);
+        _snprintf_s(line, sizeof(line), _TRUNCATE, "%02u:%02u:%02u.%03u [%s] %s",
+                    st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, tag, msg);
     } else {
-        _snprintf_s(line, sizeof(line), _TRUNCATE, "%s", msg);
+        _snprintf_s(line, sizeof(line), _TRUNCATE, "%02u:%02u:%02u.%03u %s",
+                    st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, msg);
     }
     sftp_debug_emit_line(line);
 }
 
-    #define SFTP_LOG(tag, fmt, ...) do { \
-        sftp_debug_logf(tag, fmt, ##__VA_ARGS__); \
+// The flag is tested before any argument is formatted.
+#define SFTP_LOG(tag, fmt, ...) do { \
+        if (sftp_log::Enabled() || strcmp(tag, "CRASH") == 0) \
+            sftp_debug_logf(tag, fmt, ##__VA_ARGS__); \
     } while(0)
-    #define DEBUG_LOG(fmt, ...) SFTP_LOG("DBG", fmt, ##__VA_ARGS__)
-    #define ENABLE_SCP_DEBUG
-#else
-    #define SFTP_LOG(tag, fmt, ...) do {} while(0)
-    #define DEBUG_LOG(fmt, ...) do {} while(0)
-#endif
-
-// Inline helper for safe string operations
-namespace detail {
-    template<typename T, size_t N>
-    constexpr size_t array_size(T (&)[N]) noexcept { return N; }
-}
+#define DEBUG_LOG(fmt, ...) SFTP_LOG("DBG", fmt, ##__VA_ARGS__)
 
 #endif // __cplusplus
 

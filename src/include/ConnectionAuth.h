@@ -14,5 +14,4 @@ int PerformAuthentication(
     int& progress,
     int& loop,
     SYSTICKS& lasttime,
-    char* progressbuf,
-    bool agentAvailable);
+    char* progressbuf);

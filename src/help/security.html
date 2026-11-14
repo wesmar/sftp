@@ -27,7 +27,7 @@
 
 <h2>SSH host identity verification</h2>
 <ul>
-  <li>The server's MD5 fingerprint is stored in <code>sftpplug.ini</code> on first connection.</li>
+  <li>The server's fingerprint is stored in <code>sftpplug.ini</code> on first connection, as SHA256 in the form OpenSSH prints it (<code>SHA256:…</code>), so it can be checked on the server with <code>ssh-keygen -lf</code>. The confirmation shows the MD5 as well. An MD5 stored by an earlier version still matches and is rewritten as SHA256 on that connection, without a prompt.</li>
   <li>On every subsequent connection the fingerprint is compared. A mismatch raises an explicit warning dialog — you must confirm before connecting.</li>
   <li>Jump Host (bastion) keeps a separate stored fingerprint from the final target host.</li>
   <li>Accepting a new fingerprint should always be a deliberate decision.</li>

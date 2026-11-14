@@ -12,8 +12,8 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "SftpInternal.h"
+#include "TerminalText.h"
 #include "UnicodeHelpers.h"
 
 namespace {
@@ -30,33 +30,6 @@ constexpr DWORD kChannelExitStatusWaitMs  = 2000;
 constexpr DWORD kShellEagainGraceIdleMs   = 1000;
 constexpr DWORD kShellEagainGraceTotalMs  = 5000;
 constexpr DWORD kQuoteProgressStartMs     = 2000;
-
-// Helper: wait for an operation with timeout, handling EAGAIN
-template<typename F>
-int WaitForOperation(F&& op, DWORD timeoutMs, pConnectSettings cs, bool forWrite = false)
-{
-    const auto start = std::chrono::steady_clock::now();
-    int rc;
-    do {
-        rc = op();
-        if (rc != LIBSSH2_ERROR_EAGAIN)
-            return rc;
-        if (EscapePressed())
-            return LIBSSH2_ERROR_EAGAIN; // treat as abort
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed > timeoutMs)
-            return LIBSSH2_ERROR_TIMEOUT;
-        if (cs && cs->sock != INVALID_SOCKET) {
-            if (forWrite)
-                IsSocketWritable(cs->sock);
-            else
-                IsSocketReadable(cs->sock);
-        } else {
-            Sleep(25);
-        }
-    } while (true);
-}
 
 // RAII wrapper for ISshChannel with automatic disconnect
 class ScopedChannel {
@@ -79,11 +52,14 @@ private:
         if (!cs_ || !channel_)
             return;
 
-        WaitForOperation([this] { return channel_->flush(); }, kShellFlushTimeoutMs / 2, cs_, true);
-        WaitForOperation([this] { return channel_->sendEof(); }, kShellEofTimeoutMs / 3, cs_, true);
-        WaitForOperation([this] { return channel_->waitEof(); }, kShellEofTimeoutMs / 3, cs_, false);
-        WaitForOperation([this] { return channel_->channelClose(); }, kShellCloseTimeoutMs / 3, cs_, true);
-        WaitForOperation([this] { return channel_->channelFree(); }, kShellFreeTimeoutMs / 5, cs_, true);
+        WaitForOperation([this] { return channel_->flush(); }, kShellFlushTimeoutMs / 2, cs_);
+        WaitForOperation([this] { return channel_->sendEof(); }, kShellEofTimeoutMs / 3, cs_);
+        WaitForOperation([this] { return channel_->waitEof(); }, kShellEofTimeoutMs / 3, cs_);
+        WaitForOperation([this] { return channel_->channelClose(); }, kShellCloseTimeoutMs / 3, cs_);
+        // Explicit drained channelFree() preferred over destructor's bounded
+        // tight-loop because shells on restrictive servers may need socket
+        // yielding between EAGAIN retries.
+        WaitForOperation([this] { return channel_->channelFree(); }, kShellFreeTimeoutMs / 5, cs_);
         delete channel_;
     }
 
@@ -109,30 +85,10 @@ bool IsEchoOrPromptLine(std::string_view line) noexcept
     return false;
 }
 
-// Decode octal escape sequences in-place (modifies string)
+// Terminal control sequences out, then ls-style \ooo escapes decoded.
 void StripEscapeSequences(std::string& str)
 {
-    std::string result;
-    result.reserve(str.size());
-    for (size_t i = 0; i < str.size(); ++i) {
-        if (str[i] == '\x1B') { // ESC
-            ++i;
-            while (i < str.size() && str[i] != 'm')
-                ++i;
-            // skip 'm' as well
-        } else if (str[i] == '\\' && i + 3 < str.size() &&
-                   std::isdigit(static_cast<unsigned char>(str[i+1])) &&
-                   std::isdigit(static_cast<unsigned char>(str[i+2])) &&
-                   std::isdigit(static_cast<unsigned char>(str[i+3]))) {
-            // octal escape: \123
-            int value = (str[i+1] - '0') * 64 + (str[i+2] - '0') * 8 + (str[i+3] - '0');
-            result.push_back(static_cast<char>(value));
-            i += 3;
-        } else {
-            result.push_back(str[i]);
-        }
-    }
-    str.swap(result);
+    str = terminal_text::DecodeOctalEscapes(terminal_text::StripControls(str));
 }
 
 void StripEscapeSequencesLocalA(LPSTR msgbuf)
@@ -157,12 +113,12 @@ void DisconnectShell(ISshChannel* channel)
 {
     if (!channel)
         return;
-    // Use WaitForOperation with appropriate timeouts
-    WaitForOperation([channel] { return channel->flush(); }, kShellFlushTimeoutMs, nullptr, true);
-    WaitForOperation([channel] { return channel->sendEof(); }, kShellEofTimeoutMs, nullptr, true);
-    WaitForOperation([channel] { return channel->waitEof(); }, kShellEofTimeoutMs, nullptr, false);
-    WaitForOperation([channel] { return channel->channelClose(); }, kShellCloseTimeoutMs, nullptr, true);
-    WaitForOperation([channel] { return channel->channelFree(); }, kShellFreeTimeoutMs, nullptr, true);
+    WaitForOperation([channel] { return channel->flush(); }, kShellFlushTimeoutMs, nullptr);
+    WaitForOperation([channel] { return channel->sendEof(); }, kShellEofTimeoutMs, nullptr);
+    WaitForOperation([channel] { return channel->waitEof(); }, kShellEofTimeoutMs, nullptr);
+    WaitForOperation([channel] { return channel->channelClose(); }, kShellCloseTimeoutMs, nullptr);
+    // Explicit drained channelFree() — see DisconnectShell rationale.
+    WaitForOperation([channel] { return channel->channelFree(); }, kShellFreeTimeoutMs, nullptr);
 }
 
 std::unique_ptr<ISshChannel> ConnectChannel(ISshSession* session, SOCKET sock)
@@ -223,11 +179,11 @@ bool SendChannelCommandNoEof([[maybe_unused]] ISshSession* session, ISshChannel*
         tempCtx.sock = sock;
         waitCtx = &tempCtx;
     }
-    int rc = WaitForOperation([&] { return channel->exec(command); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx, true);
+    int rc = WaitForOperation([&] { return channel->exec(command); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx);
     if (rc < 0)
         return false;
 
-    rc = WaitForOperation([&] { return channel->flush(); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx, true);
+    rc = WaitForOperation([&] { return channel->flush(); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx);
     return rc >= 0;
 }
 
@@ -241,7 +197,7 @@ bool SendChannelCommand(ISshSession* session, ISshChannel* channel, const char* 
         tempCtx.sock = sock;
         waitCtx = &tempCtx;
     }
-    WaitForOperation([&] { return channel->sendEof(); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx, true);
+    WaitForOperation([&] { return channel->sendEof(); }, SSH_AUTH_STAGE_TIMEOUT_MS, waitCtx);
     return true;
 }
 
@@ -256,11 +212,11 @@ bool GetChannelCommandReply(ISshSession* session, ISshChannel* channel, const ch
     std::array<char, 1024> errbuf{};
 
     while (!channel->eof()) {
-        const int errRc = channel->readStderr(errbuf.data(), errbuf.size() - 1);
+        const auto errRc = channel->readStderr(errbuf.data(), errbuf.size());
         if (errRc > 0)
             hasStderr = true;
 
-        const int rc = channel->read(buf.data(), buf.size() - 1);
+        const auto rc = channel->read(buf.data(), buf.size());
         if (rc == LIBSSH2_ERROR_EAGAIN || errRc == LIBSSH2_ERROR_EAGAIN) {
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - start).count();
@@ -282,7 +238,10 @@ bool GetChannelCommandReply(ISshSession* session, ISshChannel* channel, const ch
             std::chrono::steady_clock::now() - exitStart).count();
         if (elapsed > kChannelExitStatusWaitMs)
             break;
-        Sleep(50);
+        if (sock != INVALID_SOCKET)
+            IsSocketReadable(sock);
+        else
+            Sleep(50);
     }
 
     return (channel->getExitStatus() == 0 && !hasStderr);
@@ -311,15 +270,21 @@ bool EnsureScpShell(pConnectSettings cs)
 
     // Request PTY
     int ptyRc = WaitForOperation([&] {
-        return channel->requestPty("vt102", 5, "", 0, 80, 40, 640, 480);
-    }, kScpPtyOpenTimeoutMs, cs, false);
+        // A wide terminal, because the shell echoes back what it is sent and the
+        // reader tells output from that echo by the markers wrapped around each
+        // command. At 80 columns a command with a full path wraps, the tail
+        // carries the end marker, and the reading stops before any output is
+        // seen — a listing then looks like an empty directory and a transfer
+        // like an empty file.
+        return channel->requestPty("vt102", 5, "", 0, 1000, 40, 8000, 480);
+    }, kScpPtyOpenTimeoutMs, cs);
 
     if (ptyRc < 0 && ptyRc != LIBSSH2_ERROR_EAGAIN) {
         return false;
     }
 
 	// Start shell
-    int shellRc = WaitForOperation([&] { return channel->shell(); }, kScpShellOpenTimeoutMs, cs, false);
+    int shellRc = WaitForOperation([&] { return channel->shell(); }, kScpShellOpenTimeoutMs, cs);
     if (shellRc < 0) {
         return false;
     }
@@ -331,6 +296,39 @@ bool EnsureScpShell(pConnectSettings cs)
     cs->scpShellChannel = std::move(channel);
     cs->scpShellMsgBuf.clear();
     cs->scpShellErrBuf.clear();
+
+    // Silence the terminal's echo. Everything sent here comes back otherwise,
+    // and the reader tells a command's output from that echo by the markers
+    // around it — an echo long enough to be broken up defeats that, and an
+    // upload carries its data inside the command line, where no terminal width
+    // is enough. A shell without `stty` simply ignores this and behaves as it
+    // did before.
+    {
+        const std::string quiet = "stty -echo 2>/dev/null\n";
+        size_t written = 0;
+        const auto start = std::chrono::steady_clock::now();
+        while (written < quiet.size()) {
+            const int rc = static_cast<int>(
+                cs->scpShellChannel->write(quiet.data() + written, quiet.size() - written));
+            if (rc > 0) {
+                written += rc;
+                continue;
+            }
+            if (rc != LIBSSH2_ERROR_EAGAIN)
+                break;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start).count() > kScpShellOpenTimeoutMs)
+                break;
+            IsSocketReadable(cs->sock);
+        }
+        // Let the command run, then drop whatever it echoed on its way out.
+        Sleep(200);
+        std::array<char, 1024> drain{};
+        while (cs->scpShellChannel->read(drain.data(), drain.size()) > 0) {
+        }
+        cs->scpShellMsgBuf.clear();
+        cs->scpShellErrBuf.clear();
+    }
     return true;
 }
 
@@ -345,7 +343,7 @@ void CloseScpShell(pConnectSettings cs)
 
         if (cs->scp_fast_close_required) {
             cs->scpShellChannel->channelClose();
-            cs->scpShellChannel->channelFree();
+            // ~Libssh2Channel() handles channelFree on scope exit.
         } else {
             DisconnectShell(cs->scpShellChannel.get());
         }
@@ -357,8 +355,12 @@ void CloseScpShell(pConnectSettings cs)
 
 bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
                            std::vector<std::string>& outLines,
-                           DWORD timeoutMs, const char* beginMarker)
+                           DWORD timeoutMs, const char* beginMarker,
+                           std::string* endLineOut)
 {
+    if (endLineOut)
+        endLineOut->clear();
+
     if (!cs || !cs->scpShellChannel || !endMarker)
         return false;
 
@@ -389,12 +391,27 @@ bool ScpReadCommandOutput(pConnectSettings cs, const char* endMarker,
             continue;
         }
 
-        if (!IsEchoOrPromptLine(trimmed) && trimmed.substr(0, endMarkerStr.size()) == endMarkerStr) {
+        // The shell may still echo what it was sent, and that echo carries
+        // every marker the command mentions — including the end one, with a
+        // literal "$?" where the status would be. Taken for the real thing it
+        // ends the reading at once and reports a status of zero, so it is
+        // skipped before either test below.
+        if (IsEchoOrPromptLine(trimmed))
+            continue;
+
+        // The command ends by echoing the marker, and whatever the command
+        // wanted to report rides on that same line. It is handed back rather
+        // than dropped, so callers can read an exit status from it.
+        if (trimmed.substr(0, endMarkerStr.size()) == endMarkerStr) {
             gotEnd = true;
+            if (endLineOut)
+                endLineOut->assign(trimmed);
             break;
         }
         if (trimmed.find(endMarkerStr) != std::string_view::npos) {
             gotEnd = true;
+            if (endLineOut)
+                endLineOut->assign(trimmed);
             break;
         }
 
@@ -528,6 +545,7 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
     display += cmd;
     std::replace(display.begin(), display.end(), '\\', '/');
     ShowStatus(display.c_str());
+    SFTP_LOG("SHELL", "Quote command: %s", cmd);
 
     auto channel = ConnectChannel(cs->session.get(), cs->sock);
     if (!channel)
@@ -563,7 +581,16 @@ int SftpQuoteCommand2(pConnectSettings cs, const char* remotedir, const char* cm
         }
     }
 
+    // The loop also ends on its timeouts. A command that never finished has
+    // no exit status, and the channel reports 0 for one that never came —
+    // which would pass a hung `mv` or `cp` for a success.
+    if (!channel->eof()) {
+        SFTP_LOG("SHELL", "Quote command timed out before it finished");
+        return -1;
+    }
+
     const int rc = channel->getExitStatus();
+    SFTP_LOG("SHELL", "Quote command done: rc=%d", rc);
     if (rc != 0) {
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);
@@ -650,7 +677,7 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
         StripEscapeSequences(linebuf.data());
         if (!reply) {
             std::array<wchar_t, 4096> wline{};
-            CopyStringA2W(cs, linebuf.data(), wline.data(), wline.size() - 1, false);
+            CopyStringA2W(cs, linebuf.data(), wline.data(), wline.size());
             ShowStatusW(wline.data());
         } else {
             if (reply[0])
@@ -665,7 +692,16 @@ int SftpQuoteCommand2W(pConnectSettings cs, LPCWSTR remotedir, LPCWSTR cmd,
         }
     }
 
+    // The loop also ends on its timeouts. A command that never finished has
+    // no exit status, and the channel reports 0 for one that never came —
+    // which would pass a hung `mv` or `cp` for a success.
+    if (!channel->eof()) {
+        SFTP_LOG("SHELL", "Quote command timed out before it finished");
+        return -1;
+    }
+
     const int rc = channel->getExitStatus();
+    SFTP_LOG("SHELL", "Quote command done: rc=%d", rc);
     if (rc != 0) {
         char tmp[128];
         snprintf(tmp, sizeof(tmp), "Function return code: %d", rc);

@@ -1,0 +1,105 @@
+From: Marek Wesolowski
+Subject: [PATCH] sftp: optionally start the server through an exec request
+
+Servers such as OpenWrt (Dropbear) ship an sftp-server binary but offer no
+"sftp" subsystem. libssh2_sftp_init_command() starts SFTP with an "exec"
+request for the given command instead, as OpenSSH's `sftp -s` does.
+---
+diff --git a/include/libssh2_sftp.h b/include/libssh2_sftp.h
+index bc4f569..b3a5ae3 100644
+--- a/include/libssh2_sftp.h
++++ b/include/libssh2_sftp.h
+@@ -221,6 +221,13 @@ struct _LIBSSH2_SFTP_STATVFS {
+ 
+ /* SFTP API */
+ LIBSSH2_API LIBSSH2_SFTP *libssh2_sftp_init(LIBSSH2_SESSION *session);
++/* Like libssh2_sftp_init(), but starts the SFTP server by executing
++   `command` (for example "/usr/lib/sftp-server") instead of requesting the
++   "sftp" subsystem, as OpenSSH's `sftp -s` does. On a non-blocking session
++   pass the same command on every LIBSSH2_ERROR_EAGAIN retry. */
++LIBSSH2_API LIBSSH2_SFTP *libssh2_sftp_init_command(LIBSSH2_SESSION *session,
++                                                    const char *command,
++                                                    size_t command_len);
+ LIBSSH2_API int libssh2_sftp_shutdown(LIBSSH2_SFTP *sftp);
+ LIBSSH2_API unsigned long libssh2_sftp_last_error(LIBSSH2_SFTP *sftp);
+ LIBSSH2_API LIBSSH2_CHANNEL *libssh2_sftp_get_channel(LIBSSH2_SFTP *sftp);
+diff --git a/src/sftp.c b/src/sftp.c
+index 036de0a..7e4c70c 100644
+--- a/src/sftp.c
++++ b/src/sftp.c
+@@ -776,7 +776,8 @@ LIBSSH2_CHANNEL_CLOSE_FUNC(libssh2_sftp_dtor)
+ /* sftp_init
+  * Startup an SFTP session
+  */
+-static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
++static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session,
++                               const char *command, size_t command_len)
+ {
+     unsigned char *data;
+     size_t data_len = 0;
+@@ -830,18 +831,28 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
+     }
+ 
+     if(session->sftpInit_state == libssh2_NB_state_sent) {
+-        int ret = _libssh2_channel_process_startup(session->sftpInit_channel,
+-                                                   "subsystem",
+-                                                   sizeof("subsystem") - 1,
+-                                                   "sftp",
+-                                                   strlen("sftp"));
++        /* An explicit server command replaces the "sftp" subsystem request
++           with an "exec" request. */
++        const int use_command = command && command_len;
++        int ret = use_command ?
++            _libssh2_channel_process_startup(session->sftpInit_channel,
++                                             "exec", sizeof("exec") - 1,
++                                             command, command_len) :
++            _libssh2_channel_process_startup(session->sftpInit_channel,
++                                             "subsystem",
++                                             sizeof("subsystem") - 1,
++                                             "sftp", strlen("sftp"));
+         if(ret == LIBSSH2_ERROR_EAGAIN) {
+             _libssh2_error(session, LIBSSH2_ERROR_EAGAIN,
++                           use_command ?
++                           "Would block to start SFTP server command" :
+                            "Would block to request SFTP subsystem");
+             return NULL;
+         }
+         else if(ret) {
+             _libssh2_error(session, LIBSSH2_ERROR_CHANNEL_FAILURE,
++                           use_command ?
++                           "Unable to start SFTP server command" :
+                            "Unable to request SFTP subsystem");
+             goto sftp_init_error;
+         }
+@@ -1044,7 +1055,30 @@ LIBSSH2_API LIBSSH2_SFTP *libssh2_sftp_init(LIBSSH2_SESSION *session)
+         return NULL;
+     }
+ 
+-    BLOCK_ADJUST_ERRNO(ptr, session, sftp_init(session));
++    BLOCK_ADJUST_ERRNO(ptr, session, sftp_init(session, NULL, 0));
++    return ptr;
++}
++
++/* libssh2_sftp_init_command
++ * Startup an SFTP session through an SFTP server command
++ */
++LIBSSH2_API LIBSSH2_SFTP *
++libssh2_sftp_init_command(LIBSSH2_SESSION *session,
++                          const char *command, size_t command_len)
++{
++    LIBSSH2_SFTP *ptr;
++
++    if(!session)
++        return NULL;
++
++    if(!(session->state & LIBSSH2_STATE_AUTHENTICATED)) {
++        _libssh2_error(session, LIBSSH2_ERROR_INVAL,
++                       "session not authenticated yet");
++        return NULL;
++    }
++
++    BLOCK_ADJUST_ERRNO(ptr, session,
++                       sftp_init(session, command, command_len));
+     return ptr;
+ }
+ 

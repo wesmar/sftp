@@ -2,20 +2,24 @@
 #include <windows.h>
 #include <array>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include "SftpClient.h"
 #include "PluginEntryPoints.h"
 #include "SftpInternal.h"
 #include "IUserFeedback.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "TransferUtils.h"
+#include "TextConversion.h"
+#include "WildcardMatch.h"
 
 namespace {
 constexpr int SFTP_PROGRESS_ABORT_POLL_MS = 5000;
 
-// RAII wrapper for SSH channel with automatic timeout handling
+// RAII wrapper for SSH channel with explicit timeout-driven close. Provides
+// EAGAIN-poll cleanup with cancellation support; destructor of bare
+// Libssh2Channel only does a bounded tight-loop free without yielding.
 class ScopedChannel {
 public:
     explicit ScopedChannel(ISshChannel* channel, pConnectSettings cs) noexcept
@@ -41,24 +45,11 @@ private:
         if (!channel_ || !cs_)
             return;
 
-        auto wait = [&](auto fn, DWORD timeoutMs) {
-            const SYSTICKS start = get_sys_ticks();
-            int rc;
-            do {
-                rc = fn();
-                if (rc != LIBSSH2_ERROR_EAGAIN)
-                    return rc;
-                if (EscapePressed() || get_ticks_between(start) > static_cast<int>(timeoutMs))
-                    break;
-                Sleep(25);
-            } while (true);
-            return rc;
-        };
-
-        wait([&] { return channel_->sendEof(); }, 1000);
-        wait([&] { return channel_->waitEof(); }, 1000);
-        wait([&] { return channel_->channelClose(); }, 1000);
-        wait([&] { return channel_->channelFree(); }, 2000);
+        WaitForOperation([this] { return channel_->sendEof(); }, 1000, cs_);
+        WaitForOperation([this] { return channel_->waitEof(); }, 1000, cs_);
+        WaitForOperation([this] { return channel_->channelClose(); }, 1000, cs_);
+        // Explicit drained channelFree() — see class header comment.
+        WaitForOperation([this] { return channel_->channelFree(); }, 2000, cs_);
         delete channel_;
     }
 
@@ -96,34 +87,9 @@ std::string ToRemotePathA(pConnectSettings cs, LPCWSTR pathW)
     return std::string(tmp.data());
 }
 
-int ConvertCrToCrLf(LPSTR data, size_t len, bool* pLastWasCr)
+std::string BuildShellScpArgument(const std::string& path)
 {
-    if (!data || !pLastWasCr)
-        return 0;
-
-    bool lastWasCr = *pLastWasCr;
-    std::string result;
-    result.reserve(len + len / 2); // worst case expansion
-
-    for (size_t i = 0; i < len; ++i) {
-        const unsigned char c = static_cast<unsigned char>(data[i]);
-        if (c == '\r') {
-            lastWasCr = true;
-            result.push_back('\r');
-        } else if (c == '\n') {
-            if (!lastWasCr)
-                result.push_back('\r');
-            result.push_back('\n');
-            lastWasCr = false;
-        } else {
-            lastWasCr = false;
-            result.push_back(c);
-        }
-    }
-
-    *pLastWasCr = lastWasCr;
-    memcpy(data, result.data(), result.size());
-    return static_cast<int>(result.size());
+    return "'" + string_util::ShellQuoteSingle(path) + "'";
 }
 
 bool SftpDetermineTransferModeW(LPCWSTR RemoteName)
@@ -140,6 +106,37 @@ bool SftpDetermineTransferModeW(LPCWSTR RemoteName)
         name.remove_prefix(slash + 1);
 
     return MultiFileMatchW(Global_TextTypes.data(), name.data());
+}
+
+bool MeasureTextUpload(HANDLE file, int64_t& convertedSize)
+{
+    convertedSize = 0;
+    LARGE_INTEGER zero{};
+    if (!SetFilePointerEx(file, zero, nullptr, FILE_BEGIN))
+        return false;
+
+    text_conversion::CrLfToLf counter;
+    std::vector<char> buf(256 * 1024);
+    bool isText = true;
+    for (;;) {
+        DWORD got = 0;
+        // A read error is reported by the upload's own read; sending the file
+        // unconverted keeps the announced size equal to what is read.
+        if (!ReadFile(file, buf.data(), static_cast<DWORD>(buf.size()), &got, nullptr)) {
+            isText = false;
+            break;
+        }
+        if (got == 0)
+            break;
+        if (std::find(buf.data(), buf.data() + got, '\0') != buf.data() + got) {
+            isText = false;
+            break;
+        }
+        convertedSize += static_cast<int64_t>(counter.Count(buf.data(), got));
+    }
+    convertedSize += static_cast<int64_t>(counter.FinishCount());
+    SetFilePointerEx(file, zero, nullptr, FILE_BEGIN);
+    return isText;
 }
 
 int CloseRemote(pConnectSettings cs, ISftpHandle* remotefilesftp,

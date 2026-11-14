@@ -6,6 +6,7 @@
 
 #include <string>
 #include <algorithm>
+#include <climits>
 #include <cstring>
 #include <cwchar>
 #include <array>
@@ -95,58 +96,65 @@ LPWSTR awlcopyCP(int codepage, LPWSTR outname, LPCSTR inname, size_t maxlen) noe
     return outname;
 }
 
+// UTF-8 <-> UTF-16 through the system converter, which validates its input
+// and turns every invalid sequence into U+FFFD. Both write at most
+// outmax - 1 units, never split a multi-byte character or a surrogate pair,
+// always terminate when asked to, and return the units written - or -1 when
+// the input was cut short to fit.
 int ConvUTF16toUTF8(LPCWSTR inbuf, size_t inlen, LPSTR outbuf, size_t outmax, bool nullterm) noexcept
 {
     if (!inbuf || !outbuf || outmax < 2) return -1;
-    
     if (nullterm) outbuf[0] = '\0';
     if (inlen == 0) inlen = wcslen(inbuf);
     if (inlen == 0) return 0;
-    
-    UTF16* source = reinterpret_cast<UTF16*>(const_cast<LPWSTR>(inbuf));
-    UTF8* target = reinterpret_cast<UTF8*>(outbuf);
-    
-    const int rc = ConvertUTF16toUTF8(
-        &source, 
-        reinterpret_cast<const UTF16*>(inbuf + inlen),
-        &target, 
-        reinterpret_cast<const UTF8*>(outbuf + outmax - 1)
-    );
-    
-    const size_t outlen = reinterpret_cast<size_t>(target) - reinterpret_cast<size_t>(outbuf);
-    
-    if (nullterm && outlen < outmax - 1) {
-        outbuf[outlen] = '\0';
+    if (inlen > INT_MAX) return -1;
+
+    const int need = WideCharToMultiByte(CP_UTF8, 0, inbuf, static_cast<int>(inlen), nullptr, 0, nullptr, nullptr);
+    if (need <= 0) return -1;
+    try {
+        std::string utf8(static_cast<size_t>(need), '\0');
+        WideCharToMultiByte(CP_UTF8, 0, inbuf, static_cast<int>(inlen), utf8.data(), need, nullptr, nullptr);
+        size_t n = utf8.size();
+        const bool truncated = n > outmax - 1;
+        if (truncated) {
+            n = outmax - 1;
+            while (n > 0 && (static_cast<unsigned char>(utf8[n]) & 0xC0) == 0x80)
+                --n; // utf8[n] continues the character that started before it
+        }
+        memcpy(outbuf, utf8.data(), n);
+        if (nullterm) outbuf[n] = '\0';
+        return truncated ? -1 : static_cast<int>(n);
+    } catch (...) {
+        return -1;
     }
-    
-    return (rc == CVT_OK) ? static_cast<int>(outlen) : -1;
 }
 
 int ConvUTF8toUTF16(LPCSTR inbuf, size_t inlen, LPWSTR outbuf, size_t outmax, bool nullterm) noexcept
 {
     if (!inbuf || !outbuf || outmax < 2) return -1;
-    
     if (nullterm) outbuf[0] = L'\0';
     if (inlen == 0) inlen = strlen(inbuf);
     if (inlen == 0) return 0;
-    
-    UTF8* source = reinterpret_cast<UTF8*>(const_cast<LPSTR>(inbuf));
-    UTF16* target = reinterpret_cast<UTF16*>(outbuf);
-    
-    const int rc = ConvertUTF8toUTF16(
-        &source, 
-        reinterpret_cast<UTF8*>(const_cast<LPSTR>(inbuf + inlen)),
-        &target, 
-        reinterpret_cast<const UTF16*>(outbuf + outmax - 1)
-    );
-    
-    const size_t outlen = (reinterpret_cast<size_t>(target) - reinterpret_cast<size_t>(outbuf)) / sizeof(WCHAR);
-    
-    if (nullterm && outlen < outmax - 1) {
-        outbuf[outlen] = L'\0';
+    if (inlen > INT_MAX) return -1;
+
+    const int need = MultiByteToWideChar(CP_UTF8, 0, inbuf, static_cast<int>(inlen), nullptr, 0);
+    if (need <= 0) return -1;
+    try {
+        std::wstring utf16(static_cast<size_t>(need), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, inbuf, static_cast<int>(inlen), utf16.data(), need);
+        size_t n = utf16.size();
+        const bool truncated = n > outmax - 1;
+        if (truncated) {
+            n = outmax - 1;
+            if (n > 0 && IS_HIGH_SURROGATE(utf16[n - 1]))
+                --n;
+        }
+        memcpy(outbuf, utf16.data(), n * sizeof(wchar_t));
+        if (nullterm) outbuf[n] = L'\0';
+        return truncated ? -1 : static_cast<int>(n);
+    } catch (...) {
+        return -1;
     }
-    
-    return (rc == CVT_OK) ? static_cast<int>(outlen) : -1;
 }
 
 // ============================================================================

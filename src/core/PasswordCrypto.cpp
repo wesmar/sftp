@@ -1,222 +1,167 @@
 #include "global.h"
 #include <windows.h>
 #include <wincrypt.h>
-#include <vector>
-#include <string>
-#include <format>
 #include <optional>
-#include <memory>
-#include "SftpInternal.h"
-#include "PluginEntryPoints.h"
+#include <string>
+#include <string_view>
+#include <vector>
+#include "PasswordCrypto.h"
 
 namespace {
 
-// RAII wrapper for CryptProtectData / CryptUnprotectData
-// Manages DATA_BLOB memory allocated by Windows Crypto API (LocalAlloc/LocalFree)
-class DataBlob {
+constexpr std::string_view kDpapiPrefix = "dpapi:";
+constexpr std::string_view kPlainPrefix = "plain:";
+
+// Key of the pre-DPAPI format. XOR with a published key is obfuscation, not
+// encryption; it stays only so profiles written by older releases still load.
+constexpr std::string_view kLegacyKey = "unpzScGeCInX7XcRM2z+svTK+gegRLhz9KXVbYKJl5boSvVCcfym";
+
+// Owns a DATA_BLOB that CryptProtectData/CryptUnprotectData filled in.
+class LocalBlob {
 public:
-    DataBlob() noexcept : blob_{} {}
-    
-    ~DataBlob() { 
-        // CryptProtectData/CryptUnprotectData allocate output via LocalAlloc
+    LocalBlob() noexcept = default;
+    ~LocalBlob()
+    {
         if (blob_.pbData) {
             SecureZeroMemory(blob_.pbData, blob_.cbData);
-            LocalFree(blob_.pbData); 
+            LocalFree(blob_.pbData);
         }
     }
+    LocalBlob(const LocalBlob&) = delete;
+    LocalBlob& operator=(const LocalBlob&) = delete;
 
-    DATA_BLOB* get() noexcept { return &blob_; }
-    const DATA_BLOB* get() const noexcept { return &blob_; }
-    
-    // Encrypt plain text - allocates blob_.pbData via CryptProtectData
-    bool encrypt(const std::string& plain) {
-        DATA_BLOB in{ static_cast<DWORD>(plain.size()), reinterpret_cast<BYTE*>(const_cast<char*>(plain.data())) };
-        return CryptProtectData(&in, L"SFTP Password", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &blob_) != FALSE;
-    }
-
-    // Decrypt - returns decrypted string, caller doesn't own memory
-    std::optional<std::string> decrypt() const {
-        DATA_BLOB in = blob_;
-        DATA_BLOB out{};
-        if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
-            return std::nullopt;
-        std::string result(reinterpret_cast<char*>(out.pbData), out.cbData);
-        SecureZeroMemory(out.pbData, out.cbData);
-        LocalFree(out.pbData);
-        return result;
+    DATA_BLOB* out() noexcept { return &blob_; }
+    std::string_view view() const noexcept
+    {
+        return { reinterpret_cast<const char*>(blob_.pbData), blob_.cbData };
     }
 
 private:
     DATA_BLOB blob_{};
 };
 
-// Base64 encoding/decoding using Windows CryptoAPI.
-// Free functions in anonymous namespace — no class needed, no instance state.
-namespace {
-
-std::optional<std::string> Base64Encode(const std::vector<BYTE>& data) {
+std::optional<std::string> Base64Encode(std::string_view data)
+{
+    const auto* bytes = reinterpret_cast<const BYTE*>(data.data());
+    const auto size = static_cast<DWORD>(data.size());
+    constexpr DWORD flags = CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF;
     DWORD needed = 0;
-    if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
-                              CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &needed))
+    if (!CryptBinaryToStringA(bytes, size, flags, nullptr, &needed))
         return std::nullopt;
     std::string result(needed, '\0');
-    if (!CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
-                              CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, result.data(), &needed))
+    if (!CryptBinaryToStringA(bytes, size, flags, result.data(), &needed))
         return std::nullopt;
-    result.resize(needed); // needed on output = chars written, NOT including null terminator
+    result.resize(needed); // characters written, without the terminator
     return result;
 }
 
-std::optional<std::vector<BYTE>> Base64Decode(std::string_view b64) {
+std::optional<std::vector<BYTE>> Base64Decode(std::string_view b64)
+{
+    const auto size = static_cast<DWORD>(b64.size());
     DWORD needed = 0;
-    if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()),
-                              CRYPT_STRING_BASE64, nullptr, &needed, nullptr, nullptr))
+    if (!CryptStringToBinaryA(b64.data(), size, CRYPT_STRING_BASE64, nullptr, &needed, nullptr, nullptr))
         return std::nullopt;
     std::vector<BYTE> result(needed);
-    if (!CryptStringToBinaryA(b64.data(), static_cast<DWORD>(b64.size()),
-                              CRYPT_STRING_BASE64, result.data(), &needed, nullptr, nullptr))
+    if (!CryptStringToBinaryA(b64.data(), size, CRYPT_STRING_BASE64, result.data(), &needed, nullptr, nullptr))
         return std::nullopt;
+    result.resize(needed);
     return result;
 }
 
-} // anonymous namespace
-
-const char* kDpapiPrefix = "dpapi:";
-const char* kPlainPrefix = "plain:";
-
-// Legacy XOR key for decrypting old password format (pre-DPAPI).
-// This is NOT used for new passwords - those use DPAPI (CryptProtectData).
-// The key is hardcoded because:
-//   1. It's only for reading legacy passwords, not writing new ones
-//   2. XOR is not real encryption, just obfuscation
-//   3. Moving it to config/resources wouldn't add security (XOR is trivially breakable)
-//   4. We need this for backward compatibility with existing user profiles
-// DO NOT use this for any new encryption - always use DPAPI via DataBlob class.
-LPCSTR g_pszKey = "unpzScGeCInX7XcRM2z+svTK+gegRLhz9KXVbYKJl5boSvVCcfym";
-
-static std::string LegacyEncryptXor(const std::string& plain)
+std::optional<std::string> DpapiProtect(std::string_view plain)
 {
-    const size_t keyLen = strlen(g_pszKey);
-    const size_t plainLen = plain.size();
-    const int iPos = static_cast<int>(plainLen % keyLen);
+    if (plain.size() > MAXDWORD)
+        return std::nullopt;
+    DATA_BLOB in{ static_cast<DWORD>(plain.size()),
+                  reinterpret_cast<BYTE*>(const_cast<char*>(plain.data())) };
+    LocalBlob out;
+    if (!CryptProtectData(&in, L"SFTP Password", nullptr, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, out.out()))
+        return std::nullopt;
+    auto b64 = Base64Encode(out.view());
+    if (!b64)
+        return std::nullopt;
+    return std::string(kDpapiPrefix) + *b64;
+}
+
+std::optional<std::string> DpapiUnprotect(std::string_view b64)
+{
+    auto bin = Base64Decode(b64);
+    if (!bin || bin->size() > MAXDWORD)
+        return std::nullopt;
+    DATA_BLOB in{ static_cast<DWORD>(bin->size()), bin->data() };
+    LocalBlob out;
+    if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, out.out()))
+        return std::nullopt;
+    return std::string(out.view());
+}
+
+// Each byte becomes three decimal digits after XOR with the key, read from
+// an offset of (length mod key length).
+std::string LegacyXorEncode(std::string_view plain)
+{
+    const size_t offset = plain.size() % kLegacyKey.size();
     std::string result;
-    result.reserve(plainLen * 3);
-    for (size_t j = 0; j < plainLen; ++j) {
-        const int num = static_cast<unsigned char>(plain[j]) ^ static_cast<unsigned char>(g_pszKey[(j + iPos) % keyLen]);
-        result += std::format("{:03d}", num);
+    result.reserve(plain.size() * 3);
+    for (size_t i = 0; i < plain.size(); ++i) {
+        const unsigned value = static_cast<unsigned char>(plain[i])
+                             ^ static_cast<unsigned char>(kLegacyKey[(i + offset) % kLegacyKey.size()]);
+        result += static_cast<char>('0' + value / 100);
+        result += static_cast<char>('0' + value / 10 % 10);
+        result += static_cast<char>('0' + value % 10);
     }
     return result;
 }
 
-std::optional<std::string> LegacyDecryptXor(std::string_view encrypted)
+std::optional<std::string> LegacyXorDecode(std::string_view encoded)
 {
-    if (encrypted.size() % 3 != 0)
+    if (encoded.size() % 3 != 0)
         return std::nullopt;
-
-    const size_t keyLen = strlen(g_pszKey);
-    const int iPos = (static_cast<int>(encrypted.size() / 3)) % static_cast<int>(keyLen);
+    const size_t length = encoded.size() / 3;
+    const size_t offset = length % kLegacyKey.size();
+    const auto digit = [](char c) { return c >= '0' && c <= '9'; };
 
     std::string result;
-    result.reserve(encrypted.size() / 3);
-
-    for (size_t i = 0; i < encrypted.size(); i += 3) {
-        if (!isdigit(encrypted[i]) || !isdigit(encrypted[i+1]) || !isdigit(encrypted[i+2]))
+    result.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+        const char* triplet = encoded.data() + i * 3;
+        if (!digit(triplet[0]) || !digit(triplet[1]) || !digit(triplet[2]))
             return std::nullopt;
-
-        int num = (encrypted[i] - '0') * 100 +
-                  (encrypted[i+1] - '0') * 10 +
-                  (encrypted[i+2] - '0');
-
-        char ch = static_cast<char>(num ^ g_pszKey[(i/3 + iPos) % keyLen]);
-        result.push_back(ch);
+        const unsigned value = (triplet[0] - '0') * 100u + (triplet[1] - '0') * 10u + (triplet[2] - '0');
+        if (value > 0xFF)
+            return std::nullopt;
+        result += static_cast<char>(value ^ static_cast<unsigned char>(kLegacyKey[(i + offset) % kLegacyKey.size()]));
     }
     return result;
 }
 
-} // anonymous namespace
+} // namespace
 
-void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted)
+namespace password_crypto {
+
+std::string Protect(std::string_view plain)
 {
-    if (!pszEncrypted || cchEncrypted == 0)
-        return;
-    pszEncrypted[0] = '\0';
-    if (!pszPlain)
-        return;
-
-    std::string plain(pszPlain);
-
-    // Try DPAPI first
-    DataBlob blob;
-    if (blob.encrypt(plain)) {
-        auto b64 = Base64Encode({ blob.get()->pbData, blob.get()->pbData + blob.get()->cbData });
-        if (b64) {
-            std::string result = kDpapiPrefix + *b64;
-            if (result.size() < cchEncrypted) {
-                strcpy(pszEncrypted, result.c_str());
-                return;
-            }
-        }
-    }
-
-    // Fallback: XOR obfuscation (same format as legacy passwords — numeric triplets)
-    const std::string result = LegacyEncryptXor(plain);
-    if (result.size() < cchEncrypted)
-        strcpy(pszEncrypted, result.c_str());
+    if (plain.empty())
+        return {};
+    if (auto stored = DpapiProtect(plain))
+        return std::move(*stored);
+    // Without DPAPI (a broken user profile) the password would otherwise be
+    // lost; the old format at least keeps it out of plain sight.
+    SFTP_LOG("CRYPT", "CryptProtectData failed (%lu), password stored in the legacy format", GetLastError());
+    return LegacyXorEncode(plain);
 }
 
-void DecryptString(LPCTSTR pszEncrypted, LPTSTR pszPlain, UINT cchPlain)
+std::string Unprotect(std::string_view stored)
 {
-    if (!pszPlain || cchPlain == 0)
-        return;
-    pszPlain[0] = 0;
-    if (!pszEncrypted)
-        return;
-
-    std::string_view input(pszEncrypted);
-
-    // Special marker "!" for TC master password
-    if (input == "!") {
-        if (CryptProc)
-            strlcpy(pszPlain, "\001", cchPlain);
-        return;
+    if (stored.starts_with(kPlainPrefix))
+        return std::string(stored.substr(kPlainPrefix.size()));
+    if (stored.starts_with(kDpapiPrefix)) {
+        auto plain = DpapiUnprotect(stored.substr(kDpapiPrefix.size()));
+        return plain ? std::move(*plain) : std::string();
     }
-
-    // Plain prefix
-    if (input.substr(0, strlen(kPlainPrefix)) == kPlainPrefix) {
-        auto plain = input.substr(strlen(kPlainPrefix));
-        if (plain.size() < cchPlain) {
-            memcpy(pszPlain, plain.data(), plain.size());
-            pszPlain[plain.size()] = '\0';
-        }
-        return;
-    }
-
-    // DPAPI
-    if (input.substr(0, strlen(kDpapiPrefix)) == kDpapiPrefix) {
-        auto b64 = input.substr(strlen(kDpapiPrefix));
-        auto bin = Base64Decode(b64);
-        if (bin) {
-            DATA_BLOB in{ static_cast<DWORD>(bin->size()), bin->data() };
-            DATA_BLOB out{};
-            if (CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
-                std::string plain(reinterpret_cast<char*>(out.pbData), out.cbData);
-                SecureZeroMemory(out.pbData, out.cbData);
-                LocalFree(out.pbData);
-                if (plain.size() < cchPlain) {
-                    memcpy(pszPlain, plain.data(), plain.size());
-                    pszPlain[plain.size()] = '\0';
-                }
-                SecureZeroMemory(plain.data(), plain.size());
-                return;
-            }
-        }
-    }
-
-    // Legacy XOR
-    auto plain = LegacyDecryptXor(input);
-    if (plain && plain->size() < cchPlain) {
-        memcpy(pszPlain, plain->data(), plain->size());
-        pszPlain[plain->size()] = '\0';
-        SecureZeroMemory(plain->data(), plain->size());
-    }
+    auto plain = LegacyXorDecode(stored);
+    return plain ? std::move(*plain) : std::string();
 }
+
+} // namespace password_crypto

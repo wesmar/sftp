@@ -1,0 +1,17 @@
+# Security backports applied on top of libssh2 1.11.1, in this order.
+# Taken unchanged from Debian (libssh2 (1.11.1-6) unstable; urgency=medium),
+# salsa.debian.org/debian/libssh2 commit 22a10fa8d045b5fe3ae5d37532c046ff6ef108a3, debian/patches.
+# Bound to the libssh2-1.11.1 tag: drop or replace on a submodule bump.
+cve-2026-7598.patch
+CVE-2025-15661.patch
+CVE-2026-55199.patch
+CVE-2026-55200.patch
+libssh-unconst-backport.patch
+CVE-2026-66032.patch
+CVE-2026-66033.patch
+CVE-2026-66034.patch
+CVE-2026-66035.patch
+CVE-2026-58050.patch
+CVE-2026-58051.patch
+# SFTPplug's own changes, applied after the security backports.
+sftpplug-sftp-init-command.patch

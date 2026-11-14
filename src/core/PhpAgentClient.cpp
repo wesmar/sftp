@@ -13,7 +13,6 @@
 #include <regex>
 #include <unordered_map>
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
 #include "SftpInternal.h"
 #include "PluginEntryPoints.h"
@@ -79,25 +78,11 @@ struct AutoFileHandle {
     HANDLE get() const noexcept { return h; }
 };
 
-// Utf8ToWide removed - use unicode_util::utf8_to_wstring() instead
-// WideToUtf8 removed - use unicode_util::wide_to_narrow() instead
+// The agent speaks UTF-8: paths go out and names come back in it.
 
-static bool StartsWithIcase(const std::string& s, const std::string& prefix)
+static std::string NormalizePhpRemotePath(LPCWSTR pathW)
 {
-    if (prefix.size() > s.size())
-        return false;
-    for (size_t i = 0; i < prefix.size(); ++i) {
-        const unsigned char a = static_cast<unsigned char>(s[i]);
-        const unsigned char b = static_cast<unsigned char>(prefix[i]);
-        if (std::tolower(a) != std::tolower(b))
-            return false;
-    }
-    return true;
-}
-
-static std::string NormalizePhpRemotePath(pConnectSettings cs, LPCWSTR pathW)
-{
-    std::string p = unicode_util::wide_to_narrow(pathW ? pathW : L".");
+    std::string p = unicode_util::wstring_to_utf8(pathW ? pathW : L".");
     if (p.empty())
         return ".";
     ReplaceBackslashBySlash(p.data());
@@ -117,44 +102,9 @@ static std::string NormalizePhpRemotePath(pConnectSettings cs, LPCWSTR pathW)
         }
     }
     p.swap(collapsed);
+    // The panel path is relative to the agent root as it is; nothing of the
+    // agent URL is part of it, so no host or script name is cut from it.
     while (!p.empty() && p.front() == '/')
-        p.erase(p.begin());
-
-    AgentUrl url;
-    if (ParseAgentUrl(cs, &url)) {
-        std::string host = unicode_util::wide_to_narrow(url.host.c_str());
-        if (!host.empty()) {
-            if (StartsWithIcase(p, host + "/"))
-                p.erase(0, host.size() + 1);
-            else if (StartsWithIcase(p, host))
-                p.erase(0, host.size());
-        }
-
-        std::string object = unicode_util::wide_to_narrow(url.object.c_str());
-        size_t q = object.find('?');
-        if (q != std::string::npos)
-            object = object.substr(0, q);
-        while (!object.empty() && object.front() == '/')
-            object.erase(object.begin());
-
-        if (!object.empty()) {
-            if (StartsWithIcase(p, object + "/"))
-                p.erase(0, object.size() + 1);
-            else if (StartsWithIcase(p, object))
-                p.erase(0, object.size());
-
-            size_t slash = object.find_last_of('/');
-            std::string base = (slash == std::string::npos) ? object : object.substr(slash + 1);
-            if (!base.empty()) {
-                if (StartsWithIcase(p, base + "/"))
-                    p.erase(0, base.size() + 1);
-                else if (StartsWithIcase(p, base))
-                    p.erase(0, base.size());
-            }
-        }
-    }
-
-    while (!p.empty() && (p.front() == '/' || p.front() == '\\'))
         p.erase(p.begin());
     return p.empty() ? "." : p;
 }
@@ -489,8 +439,8 @@ static bool ParseListLine(const std::string& line, WIN32_FIND_DATAW* outFd)
     fd.nFileSizeLow = (DWORD)(sz & 0xFFFFFFFFULL);
     long long mt = std::strtoll(mtimeS.c_str(), nullptr, 10);
     ConvUnixTimeToFileTime(&fd.ftLastWriteTime, mt);
-    ConvUTF8toUTF16(nameUtf8.c_str(), 0, fd.cFileName, countof(fd.cFileName) - 1);
-    if (!fd.cFileName[0])
+    // A name cut to fit would point at a file that does not exist.
+    if (ConvUTF8toUTF16(nameUtf8.c_str(), 0, fd.cFileName, std::size(fd.cFileName)) <= 0)
         return false;
     *outFd = fd;
     return true;
@@ -730,7 +680,7 @@ int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText)
 int PhpAgentListDirectoryW(pConnectSettings cs, LPCWSTR remoteDir, std::vector<WIN32_FIND_DATAW>& outEntries)
 {
     outEntries.clear();
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDir ? remoteDir : L".");
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteDir ? remoteDir : L".");
     DWORD code = 0;
     std::string body;
     auto doList = [&](const std::string& p) -> int {
@@ -739,19 +689,11 @@ int PhpAgentListDirectoryW(pConnectSettings cs, LPCWSTR remoteDir, std::vector<W
         return SendSimpleRequest(cs, L"GET", L"LIST", query, nullptr, 0, &code, &body);
     };
 
+    // A missing folder is an error, never the root listed under its name:
+    // files copied there would land somewhere else than the panel shows.
     int rc = doList(pathUtf8);
     if (rc != SFTP_OK)
         return rc;
-    if (!IsHttpSuccess(code)) {
-        // Some sessions start in virtual/home path from SSH mode.
-        // PHP agent has its own root jail, so fallback to agent root listing.
-        if (code == 404 && pathUtf8 != "." && pathUtf8 != "/") {
-            PHP_LOG("LIST 404 for path='%s', retrying with root", pathUtf8.c_str());
-            rc = doList(".");
-            if (rc != SFTP_OK)
-                return rc;
-        }
-    }
     if (!IsHttpSuccess(code)) {
         ReportPhpAgentHttpError(cs, code, "LIST");
         return SFTP_FAILED;
@@ -801,7 +743,7 @@ int PhpAgentDownloadFileW(pConnectSettings cs,
         }
     }
 
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     PHP_LOG("GET normalized path='%s'", pathUtf8.c_str());
     std::wstring query = BuildQueryPathOnly(L"GET", pathUtf8);
     if (offset > 0) {
@@ -837,7 +779,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
         return SFTP_READFAILED;
     int64_t localSize = li.QuadPart;
 
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     // Resume may be invoked against an already-visible "*.part" entry.
     // Canonicalize to the final target name to avoid creating "*.part.part".
     if (resume && pathUtf8.size() > 5 && _stricmp(pathUtf8.c_str() + pathUtf8.size() - 5, ".part") == 0) {
@@ -846,9 +788,11 @@ int PhpAgentUploadFileW(pConnectSettings cs,
     PHP_LOG("PUT normalized path='%s'", pathUtf8.c_str());
 
     int64_t offset = 0;
-    // Auto-resume from "<path>.part" even when host did not request Resume via TC prompt.
-    // This makes interrupted PHP uploads continue seamlessly on restrictive hosts.
-    {
+    // Continue a "<path>.part" only when the user asked to resume. A leftover
+    // one may belong to another file: taking it up unasked would splice its
+    // head onto this file's tail — or, at equal size, finalise it without a
+    // byte sent — and a move would then delete the local original.
+    if (resume) {
         std::wstring statQuery = BuildQueryPathOnly(L"STAT", pathUtf8 + ".part");
         DWORD statCode = 0;
         std::string statBody;
@@ -861,8 +805,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
                 offset = partSize;
                 if (offset > localSize)
                     offset = 0;
-                PHP_LOG("PUT %sresume found .part size=%lld local=%lld",
-                        resume ? "" : "auto-",
+                PHP_LOG("PUT resume found .part size=%lld local=%lld",
                         (long long)partSize,
                         (long long)localSize);
             }
@@ -940,7 +883,7 @@ int PhpAgentUploadFileW(pConnectSettings cs,
 
 int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW)
 {
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     DWORD code = 0;
     std::wstring q = BuildQueryPathOnly(L"MKDIR", pathUtf8);
     int rc = SendSimpleRequest(cs, L"POST", L"MKDIR", q, nullptr, 0, &code, nullptr);
@@ -955,8 +898,8 @@ int PhpAgentCreateDirectoryW(pConnectSettings cs, LPCWSTR remoteDirW)
 
 int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNameW, bool overwrite)
 {
-    std::string oldUtf8 = NormalizePhpRemotePath(cs, oldNameW);
-    std::string newUtf8 = NormalizePhpRemotePath(cs, newNameW);
+    std::string oldUtf8 = NormalizePhpRemotePath(oldNameW);
+    std::string newUtf8 = NormalizePhpRemotePath(newNameW);
     std::wstring q = L"op=RENAME&from=" + UrlEncodeUtf8(oldUtf8) + L"&to=" + UrlEncodeUtf8(newUtf8);
     q += overwrite ? L"&overwrite=1" : L"&overwrite=0";
     DWORD code = 0;
@@ -972,7 +915,7 @@ int PhpAgentRenameMoveFileW(pConnectSettings cs, LPCWSTR oldNameW, LPCWSTR newNa
 
 int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
 {
-    std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteNameW);
+    std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
     std::wstring q = BuildQueryPathOnly(isdir ? L"RMDIR" : L"DELETE", pathUtf8);
     DWORD code = 0;
     int rc = SendSimpleRequest(cs, L"POST", isdir ? L"RMDIR" : L"DELETE", q, nullptr, 0, &code, nullptr);
@@ -983,6 +926,17 @@ int PhpAgentDeleteFileW(pConnectSettings cs, LPCWSTR remoteNameW, bool isdir)
         return SFTP_FAILED;
     }
     return SFTP_OK;
+}
+
+// The agent answers 404 for a missing path or a missing parent; anything
+// else, a failed request included, leaves the question open.
+bool PhpAgentPathMayExist(pConnectSettings cs, LPCWSTR remoteNameW)
+{
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteNameW);
+    const std::wstring q = BuildQueryPathOnly(L"STAT", pathUtf8);
+    DWORD code = 0;
+    const int rc = SendSimpleRequest(cs, L"GET", L"STAT", q, nullptr, 0, &code, nullptr);
+    return !(rc == SFTP_OK && code == 404);
 }
 
 // ---------------------------------------------------------------------------
@@ -1119,7 +1073,7 @@ int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR lo
     h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
     if (!h.connect) return SFTP_FAILED;
 
-    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     const std::wstring query   = L"op=TAR_STREAM&path=" + UrlEncodeUtf8(pathUtf8);
     const std::wstring object  = BuildObjectPath(url.object, query);
     h.request = WinHttpOpenRequest(h.connect, L"GET", object.c_str(), nullptr,
@@ -1265,8 +1219,8 @@ int PhpAgentDownloadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW, LPCWSTR lo
             size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
             const uint8_t* p = reader.peek(want);
             if (!p) return SFTP_READFAILED;
-            DWORD wr = 0;
-            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+            DWORD written = 0;
+            if (!WriteFile(localFile.get(), p, static_cast<DWORD>(want), &written, nullptr) || written != want)
                 return SFTP_WRITEFAILED;
             reader.advance(want);
             bytesRead += (int64_t)want;
@@ -1367,7 +1321,7 @@ bool TarUploadSessionQueue(pConnectSettings cs, LPCWSTR localPath, const char* r
     }
 
     // Compute TAR name: strip remoteBase prefix
-    std::string baseA = unicode_util::wide_to_narrow(s_tarSession.remoteBaseRel.c_str());
+    std::string baseA = unicode_util::wstring_to_utf8(s_tarSession.remoteBaseRel);
     std::string tarName;
     if (!baseA.empty() && remoteA.size() > baseA.size() + 1
         && _strnicmp(remoteA.c_str(), baseA.c_str(), baseA.size()) == 0
@@ -1452,7 +1406,7 @@ bool TarDownloadSessionQueue(pConnectSettings cs, LPCWSTR localPath, LPCWSTR rem
         return false;
 
     TarDownloadEntry e;
-    e.remotePath = NormalizePhpRemotePath(cs, remotePath);
+    e.remotePath = NormalizePhpRemotePath(remotePath);
     if (e.remotePath.empty() || e.remotePath == ".") return false;
     e.localPath = localPath;
     s_tarDlSession.entries.push_back(std::move(e));
@@ -1634,8 +1588,8 @@ int PhpAgentDownloadFilesAsTar(pConnectSettings cs, const std::vector<TarDownloa
             size_t want = (size_t)(remaining < 65536 ? remaining : 65536);
             const uint8_t* p = reader.peek(want);
             if (!p) return SFTP_READFAILED;
-            DWORD wr = 0;
-            if (!WriteFile(localFile.get(), p, (DWORD)want, &wr, nullptr) || wr != want)
+            DWORD written = 0;
+            if (!WriteFile(localFile.get(), p, static_cast<DWORD>(want), &written, nullptr) || written != want)
                 return SFTP_WRITEFAILED;
             reader.advance(want);
             remaining -= (int64_t)want;
@@ -1685,7 +1639,7 @@ int PhpAgentUploadDirAsTar(pConnectSettings cs, LPCWSTR remoteDirW,
     h.connect = WinHttpConnect(h.session, url.host.c_str(), url.port, 0);
     if (!h.connect) return SFTP_FAILED;
 
-    const std::string pathUtf8 = NormalizePhpRemotePath(cs, remoteDirW);
+    const std::string pathUtf8 = NormalizePhpRemotePath(remoteDirW);
     const std::wstring query   = L"op=TAR_EXTRACT&path=" + UrlEncodeUtf8(pathUtf8);
     const std::wstring object  = BuildObjectPath(url.object, query);
     h.request = WinHttpOpenRequest(h.connect, L"POST", object.c_str(), nullptr,

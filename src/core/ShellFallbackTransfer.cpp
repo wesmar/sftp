@@ -13,11 +13,17 @@
 #include "TransferUtils.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "TextConversion.h"
 #include "res/resource.h"
 
-// Keep command length safely below shell line limits on restricted hosts.
-// 1024 bytes -> 1368 base64 chars (+ command overhead).
+// An upload carries its data inside the command line, and the shell reads
+// that line through a terminal, which holds at most 4095 bytes of one line.
+// A shell that takes base64 spread over lines inside one quoted word gets
+// 48 KiB per command in lines of 76 characters; any other gets one line of
+// 1 KiB (1368 characters plus the command around them).
 static constexpr size_t SHELL_DD_UPLOAD_CHUNK_BYTES  = 1024;
+static constexpr size_t SHELL_DD_UPLOAD_LARGE_CHUNK  = 48 * 1024;
+static constexpr size_t SHELL_B64_LINE_CHARS         = 76;
 static constexpr size_t SHELL_DD_DOWNLOAD_BLOCK      = 65536;
 
 #define SHELL_DD_LOG(fmt, ...) SFTP_LOG("SHELL_DD", fmt, ##__VA_ARGS__)
@@ -43,21 +49,31 @@ static std::string ShellB64Encode(std::span<const uint8_t> data)
     return out;
 }
 
+// Breaks base64 text into lines; `base64 -d` skips the line ends.
+static std::string ShellB64WrapLines(const std::string& b64)
+{
+    std::string out;
+    out.reserve(b64.size() + b64.size() / SHELL_B64_LINE_CHARS + 1);
+    for (size_t i = 0; i < b64.size(); i += SHELL_B64_LINE_CHARS) {
+        if (i)
+            out += '\n';
+        out.append(b64, i, SHELL_B64_LINE_CHARS);
+    }
+    return out;
+}
+
 static size_t ShellB64Decode(std::string_view in, std::span<uint8_t> out)
 {
     // MimeDecode takes (const char*, size_t) and never calls strlen — no copy needed.
     return static_cast<size_t>(MimeDecode(in.data(), in.size(), out.data(), out.size()));
 }
 
+// The shell commands address a file by the path they were given. Making it
+// relative would send every transfer looking inside the login directory, which
+// is where the listing used to be stuck as well.
 static std::string ShellNormalizeScpPath(const std::string& path)
 {
-    if (path.empty())
-        return ".";
-    if (path[0] != '/')
-        return path;
-    if (path.size() == 1)
-        return ".";
-    return path.substr(1);
+    return path.empty() ? "." : path;
 }
 
 static std::unique_ptr<ISshChannel> OpenShellDdChannel(pConnectSettings cs, const char* where)
@@ -92,9 +108,9 @@ static bool ShellSendPersistentCommand(pConnectSettings cs, const std::string& c
     size_t written = 0;
     const SYSTICKS writeStart = get_sys_ticks();
     while (written < cmdLen) {
-        int writeRc = cs->scpShellChannel->write(command.c_str() + written, cmdLen - written);
+        const auto writeRc = cs->scpShellChannel->write(command.c_str() + written, cmdLen - written);
         if (writeRc > 0) {
-            written += (size_t)writeRc;
+            written += static_cast<size_t>(writeRc);
             continue;
         }
         if (writeRc != LIBSSH2_ERROR_EAGAIN)
@@ -129,12 +145,20 @@ static bool ShellIsEchoOrPromptLine(const char* line) noexcept
 }
 
 template <typename LineHandler>
+// `outExitCode`, when given, receives what the command answered: the status is
+// appended to the end marker, and the marker line is consumed here rather than
+// passed on, so a caller has no other way to learn it. Left at -1 when the
+// command did not get that far.
 static bool ShellExecPersistentProcessLines(
     pConnectSettings cs,
     const std::string& payload,
     DWORD timeoutMs,
-    LineHandler onLine)
+    LineHandler onLine,
+    int* outExitCode = nullptr)
 {
+    if (outExitCode)
+        *outExitCode = -1;
+
     if (!cs)
         return false;
     if (!EnsureScpShell(cs))
@@ -155,12 +179,16 @@ static bool ShellExecPersistentProcessLines(
     _snprintf_s(endMarker.data(), endMarker.size(), _TRUNCATE, "__WFX_DD_END__%u", seq);
     const size_t endMarkerLen = strlen(endMarker.data());
 
+    // The end marker goes out split by an empty string, "__WFX_DD_""END__n":
+    // the shell joins it when the command runs, but a terminal that still
+    // echoes (a host without `stty`) never shows it whole - so the echo of a
+    // command's last line cannot pass for the command having finished.
     std::string fullCmd = "echo \"";
     fullCmd += beginMarker.data();
     fullCmd += "\"; ";
     fullCmd += payload;
-    fullCmd += "; echo \"";
-    fullCmd += endMarker.data();
+    fullCmd += "; echo \"__WFX_DD_\"\"";
+    fullCmd += endMarker.data() + strlen("__WFX_DD_");
     fullCmd += "\":$?\n";
 
     if (!ShellSendPersistentCommand(cs, fullCmd)) {
@@ -193,10 +221,20 @@ static bool ShellExecPersistentProcessLines(
         // in the line for shells that inject prompt prefixes.
         if (!ShellIsEchoOrPromptLine(p) && strncmp(p, endMarker.data(), endMarkerLen) == 0) {
             gotEndMarker = true;
+            if (outExitCode) {
+                const char* colon = strrchr(p, ':');
+                if (colon)
+                    *outExitCode = atoi(colon + 1);
+            }
             break;
         }
-        if (strstr(p, endMarker.data()) != nullptr) {
+        if (const char* at = strstr(p, endMarker.data())) {
             gotEndMarker = true;
+            if (outExitCode) {
+                const char* colon = strchr(at, ':');
+                if (colon)
+                    *outExitCode = atoi(colon + 1);
+            }
             break;
         }
 
@@ -224,14 +262,15 @@ static bool ShellExecPersistentProcessLines(
 static bool ShellExecPersistentCollectLines(
     pConnectSettings cs,
     const std::string& payload,
-    std::vector<std::string>& outLines)
+    std::vector<std::string>& outLines,
+    int* outExitCode = nullptr)
 {
     outLines.clear();
     return ShellExecPersistentProcessLines(cs, payload, 90000,
         [&](const char* p, size_t len) -> bool {
             outLines.emplace_back(p, len);
             return true;
-        });
+        }, outExitCode);
 }
 
 // ---- helper: get remote file size via "wc -c" ----
@@ -365,7 +404,7 @@ static int ShellDdDownloadRaw(
                 DisconnectShell(ch.get());
                 return SFTP_READFAILED;
             }
-            ScpWaitIo(cs, false);
+            WaitForSshIo(cs);
         } else if (rc == 0 || ch->eof()) {
             break; // clean EOF
         } else {
@@ -419,6 +458,7 @@ static int ShellDdDownloadBase64(
     int lineCount = 0;    
     int64_t decodedTotal = resumeFrom;
     int streamRc = SFTP_OK;
+    int exitCode = -1;
     bool ok = ShellExecPersistentProcessLines(cs, payload, 90000,
         [&](const char* p, size_t lineLen) -> bool {
             lineCount++;
@@ -454,18 +494,34 @@ static int ShellDdDownloadBase64(
                 return false;
             }
             return true;
-        });
+        }, &exitCode);
     if (!ok) {
         if (streamRc != SFTP_OK)
             return streamRc;
         SHELL_DD_LOG("b64 DL: persistent shell command failed");
         return SFTP_READFAILED;
     }
-    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld",
-                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded);
+    SHELL_DD_LOG("b64 DL end: lines=%d decodedTotal=%lld out=%lld exit=%d",
+                 lineCount, (long long)decodedTotal, (long long)*outSizeLoaded, exitCode);
+
+    // A file that could not be read (missing, no permission) gives no output
+    // at all - indistinguishable from an empty file except by base64's status.
+    // A resumed read is a pipeline whose status is the encoder's; its
+    // completeness is checked by size below.
+    if (resumeFrom == 0 && exitCode != 0) {
+        SHELL_DD_LOG("b64 DL failed: base64 exited with %d", exitCode);
+        return SFTP_READFAILED;
+    }
 
     if (lineCount == 0 && hintedSize > resumeFrom) {
         SHELL_DD_LOG("b64 DL failed: no lines returned for non-empty file");
+        return SFTP_READFAILED;
+    }
+    // The stream carries no end-of-file status of its own, so a read that
+    // stopped early on the server only shows as a short count.
+    if (hintedSize > 0 && *outSizeLoaded != hintedSize) {
+        SHELL_DD_LOG("b64 DL size mismatch: got %lld expected %lld",
+                     (long long)*outSizeLoaded, (long long)hintedSize);
         return SFTP_READFAILED;
     }
 
@@ -536,7 +592,7 @@ static int ShellDdUploadRaw(
     while (ch->sendEof() == LIBSSH2_ERROR_EAGAIN) {
         if (get_ticks_between(eofStart) > (int)SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)
             break;
-        ScpWaitIo(cs, true);
+        WaitForSshIo(cs);
     }
     // Wait for remote cat to finish writing.
     const SYSTICKS waitStart = get_sys_ticks();
@@ -545,7 +601,7 @@ static int ShellDdUploadRaw(
             break;
         if (EscapePressed())
             break;
-        ScpWaitIo(cs, false);
+        WaitForSshIo(cs);
     }
 
     DisconnectShell(ch.get());
@@ -553,7 +609,24 @@ static int ShellDdUploadRaw(
     return SFTP_OK;
 }
 
-// ---- base64 upload: one channel per chunk via printf | base64 -d ----
+// Whether the shell decodes base64 spread over lines inside one quoted word,
+// asked with six bytes before an upload rather than learned from a damaged one.
+static bool ShellTakesMultiLineBase64(pConnectSettings cs)
+{
+    std::vector<std::string> out;
+    int status = -1;
+    if (!ShellExecPersistentCollectLines(cs, "printf '%s' 'QUJD\nREVG' | base64 -d | wc -c", out, &status) ||
+        status != 0)
+        return false;
+    for (const auto& line : out) {
+        const char* p = ShellTrimLeft(line.c_str());
+        if (p[0] == '6' && (p[1] == '\0' || static_cast<unsigned char>(p[1]) <= ' '))
+            return true;
+    }
+    return false;
+}
+
+// ---- base64 upload: one command per chunk via printf | base64 -d ----
 
 static int ShellDdUploadBase64(
     pConnectSettings cs,
@@ -565,22 +638,19 @@ static int ShellDdUploadBase64(
     int64_t resumeFrom,
     int64_t* outSizeLoaded)
 {
-    // Align resume to 3-byte boundary (base64 encodes in groups of 3).
-    // If alignedResume < resumeFrom, remote file has 1-2 extra bytes —
-    // known limitation: truncate not reliable on restricted hosts.
-    // Worst case: TC detects size mismatch and retransfers the file.
-    int64_t alignedResume = (resumeFrom / 3) * 3;
-    *outSizeLoaded = alignedResume;
+    // Every chunk is encoded and decoded on its own, padding included, so a
+    // resume may start at any byte; rounding it down to a multiple of three
+    // would append bytes the server already holds a second time.
+    *outSizeLoaded = resumeFrom;
 
-    if (alignedResume > 0) {
+    if (resumeFrom > 0) {
         LARGE_INTEGER li;
-        li.QuadPart = alignedResume;
+        li.QuadPart = resumeFrom;
         if (!SetFilePointerEx(localfile, li, nullptr, FILE_BEGIN))
             return SFTP_READFAILED;
     }
 
-    bool firstChunk = (alignedResume == 0);
-    std::vector<uint8_t> readBuf(SHELL_DD_UPLOAD_CHUNK_BYTES);
+    bool firstChunk = (resumeFrom == 0);
     const SYSTICKS starttime = get_sys_ticks();
     DWORD bytesRead = 0;
 
@@ -589,8 +659,16 @@ static int ShellDdUploadBase64(
         return SFTP_FAILED;
     }
 
-    while (ReadFile(localfile, readBuf.data(), (DWORD)SHELL_DD_UPLOAD_CHUNK_BYTES, &bytesRead, nullptr) && bytesRead > 0) {
+    const bool multiLine = fileSize - resumeFrom > static_cast<int64_t>(SHELL_DD_UPLOAD_CHUNK_BYTES) &&
+                           ShellTakesMultiLineBase64(cs);
+    const size_t chunkBytes = multiLine ? SHELL_DD_UPLOAD_LARGE_CHUNK : SHELL_DD_UPLOAD_CHUNK_BYTES;
+    SHELL_DD_LOG("b64 UL: %zu bytes per command", chunkBytes);
+    std::vector<uint8_t> readBuf(chunkBytes);
+
+    while (ReadFile(localfile, readBuf.data(), static_cast<DWORD>(chunkBytes), &bytesRead, nullptr) && bytesRead > 0) {
         std::string b64 = ShellB64Encode(std::span<const uint8_t>(readBuf.data(), bytesRead));
+        if (multiLine)
+            b64 = ShellB64WrapLines(b64);
 
         // ">" truncates/creates on the first chunk; ">>" appends on all subsequent ones.
         const char* redirect = firstChunk ? ">" : ">>";
@@ -604,8 +682,15 @@ static int ShellDdUploadBase64(
         cmd += "'";
 
         std::vector<std::string> cmdOut;
-        bool cmdOk = ShellExecPersistentCollectLines(cs, cmd, cmdOut);
+        int chunkStatus = -1;
+        // A chunk counts as written only when the shell says so. Reading just
+        // the markers reports success for a missing `base64`, a read-only
+        // destination or a full disk — and an upload that is really a move
+        // deletes the local original on the strength of that answer.
+        bool cmdOk = ShellExecPersistentCollectLines(cs, cmd, cmdOut, &chunkStatus)
+                     && chunkStatus == 0;
         if (!cmdOk) {
+            SHELL_DD_LOG("b64 upload chunk: shell answered %d", chunkStatus);
             SHELL_DD_LOG("b64 upload chunk failed at offset %lld", (long long)*outSizeLoaded);
             return SFTP_WRITEFAILED;
         }
@@ -620,7 +705,42 @@ static int ShellDdUploadBase64(
         }
     }
 
-    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - alignedResume, starttime);
+    // The loop above also ends when reading the local file fails, which is
+    // not the end of it.
+    if (*outSizeLoaded != fileSize) {
+        SHELL_DD_LOG("b64 upload: local read stopped at %lld of %lld",
+                     (long long)*outSizeLoaded, (long long)fileSize);
+        return SFTP_READFAILED;
+    }
+
+    // An empty file sends no chunk, so nothing above created it.
+    if (firstChunk) {
+        const std::string cmd = ": > '" + string_util::ShellQuoteSingle(ShellNormalizeScpPath(remotePath)) + "'";
+        std::vector<std::string> cmdOut;
+        int status = -1;
+        if (!ShellExecPersistentCollectLines(cs, cmd, cmdOut, &status) || status != 0) {
+            SHELL_DD_LOG("b64 upload: creating the empty file failed (%d)", status);
+            return SFTP_WRITEFAILED;
+        }
+    }
+
+    // What the server ended up with has the last word. Every chunk answering
+    // zero still leaves room for a truncated write, and this upload's caller
+    // may delete the local original on the strength of the answer. A server
+    // that cannot report the size is taken at the chunks' word, which every
+    // one of them gave.
+    {
+        const int64_t remoteSize = ShellGetRemoteFileSize(cs, remotePath);
+        if (remoteSize < 0)
+            SHELL_DD_LOG("b64 upload: server did not report the size; chunks all confirmed");
+        if (remoteSize >= 0 && remoteSize != fileSize) {
+            SHELL_DD_LOG("b64 upload size mismatch: file %lld, server holds %lld",
+                         (long long)fileSize, (long long)remoteSize);
+            return SFTP_WRITEFAILED;
+        }
+    }
+
+    ShowTransferSpeedIfLarge("Shell-b64 UL", *outSizeLoaded - resumeFrom, starttime);
     return SFTP_OK;
 }
 
@@ -656,7 +776,14 @@ int ShellDdDownloadFile(
         int rc = ShellDdDownloadRaw(cs, remotePath, remoteNameW,
                                     localfile, localNameW, hintedSize, resumeFrom, outSizeLoaded);
         if (rc == SFTP_OK) {
-            // Sanity-check size: if the raw channel mangled bytes the count will mismatch.
+            // Sanity-check size: if the raw channel mangled bytes the count will
+            // mismatch. A resumed file cannot be redone from scratch here, so a
+            // mismatch on it is a failure rather than a retry.
+            if (hintedSize > 0 && *outSizeLoaded != hintedSize && resumeFrom > 0) {
+                SHELL_DD_LOG("raw DL size mismatch after resume: got %lld expected %lld",
+                             (long long)*outSizeLoaded, (long long)hintedSize);
+                return SFTP_READFAILED;
+            }
             if (hintedSize > 0 && *outSizeLoaded != hintedSize && resumeFrom == 0) {
                 SHELL_DD_LOG("raw DL size mismatch: got %lld expected %lld, switching to base64",
                              (long long)*outSizeLoaded, (long long)hintedSize);
@@ -791,13 +918,16 @@ int ShellScpUploadFile(
 
     std::string cmd = "scp -t ";
     cmd += remotePathArg;
+    SFTP_LOG("SCP", "upload command: %s", cmd.c_str());
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+        SFTP_LOG("SCP", "upload: sending the command failed");
         DisconnectShell(channel.get());
         return SFTP_WRITEFAILED;
     }
 
     std::string ackErr;
     if (!ScpReadAck(channel.get(), cs, ackErr)) {
+        SFTP_LOG("SCP", "upload handshake failed: err='%s'", ackErr.c_str());
         if (!ackErr.empty())
             ShowStatus(ackErr.c_str());
         DisconnectShell(channel.get());
@@ -815,22 +945,46 @@ int ShellScpUploadFile(
         return SFTP_WRITEFAILED;
     }
 
-    std::vector<char> dataBuf(textMode ? (SFTP_SCP_BLOCK_SIZE * 2) : (SFTP_MAX_WRITE_SIZE * 8));
+    std::vector<char> dataBuf(SFTP_MAX_WRITE_SIZE * 8);
+    std::vector<char> converted;
+    text_conversion::CrLfToLf toLf;
+    int64_t emitted = 0;
     const SYSTICKS starttime = get_sys_ticks();
-    DWORD len = 0;
-    while (ReadFile(localfile, dataBuf.data(), (DWORD)dataBuf.size(), &len, nullptr) && len > 0) {
-        size_t sendLen = len;
-        if (textMode)
-            sendLen = (size_t)ConvertCrLfToLf(dataBuf.data(), len);
-        if (!ScpWriteAll(channel.get(), cs, dataBuf.data(), sendLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+    for (;;) {
+        DWORD len = 0;
+        if (!ReadFile(localfile, dataBuf.data(), static_cast<DWORD>(dataBuf.size()), &len, nullptr)) {
+            DisconnectShell(channel.get());
+            return SFTP_READFAILED;
+        }
+        const bool atEof = (len == 0);
+        const char* out = dataBuf.data();
+        size_t outLen = len;
+        if (textMode) {
+            converted.clear();
+            outLen = atEof ? toLf.Finish(converted) : toLf.Convert(dataBuf.data(), len, converted);
+            out = converted.data();
+        }
+        if (outLen > 0 && !ScpWriteAll(channel.get(), cs, out, outLen, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
             DisconnectShell(channel.get());
             return SFTP_WRITEFAILED;
         }
+        emitted += static_cast<int64_t>(outLen);
+        if (atEof)
+            break;
         *outSizeLoaded += len;
         if (UpdatePercentBar(cs, GetPercent(*outSizeLoaded, fileSize), localNameW, remoteNameW)) {
             DisconnectShell(channel.get());
             return SFTP_ABORT;
         }
+    }
+
+    // scp -t reads exactly the size the header announced; any other count
+    // would leave it waiting for data or read our status byte as content.
+    if (emitted != fileSize) {
+        SFTP_LOG("SCP", "upload: emitted %lld bytes, header announced %lld",
+                 static_cast<long long>(emitted), static_cast<long long>(fileSize));
+        DisconnectShell(channel.get());
+        return SFTP_READFAILED;
     }
 
     const char zero = 0;

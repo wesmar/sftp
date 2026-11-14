@@ -14,7 +14,9 @@
 #include <windows.h>
 #include <bcrypt.h>
 
+#include <algorithm>
 #include <array>
+#include <climits>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -167,46 +169,49 @@ inline std::optional<std::vector<uint8_t>> hmacSha256(
     return out;
 }
 
+// PBKDF2-HMAC-SHA256 (RFC 8018) with kPbkdf2Iterations rounds.
 inline std::optional<std::vector<uint8_t>> deriveKeyPbkdf2(
     std::string_view password,
     std::span<const uint8_t> salt,
     size_t keyLen)
 {
     if (keyLen == 0) return std::vector<uint8_t>{};
+    if (password.empty() || password.size() > ULONG_MAX ||
+        salt.size() > ULONG_MAX || keyLen > ULONG_MAX)
+        return std::nullopt;
 
-    const std::vector<uint8_t> passBytes(password.begin(), password.end());
-    if (passBytes.empty()) return std::nullopt;
-
-    constexpr size_t hLen = 32; // SHA-256 output size
-    const size_t blockCount = (keyLen + hLen - 1) / hLen;
-
-    std::vector<uint8_t> derived;
-    derived.reserve(blockCount * hLen);
-
-    for (size_t block = 1; block <= blockCount; ++block) {
-        // PRF input: salt || INT(block)  (RFC 2898 §5.2)
-        std::vector<uint8_t> saltBlock(salt.begin(), salt.end());
-        saltBlock.push_back(static_cast<uint8_t>((block >> 24) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >> 16) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>((block >>  8) & 0xFF));
-        saltBlock.push_back(static_cast<uint8_t>( block        & 0xFF));
-
-        auto u = hmacSha256(passBytes, saltBlock);
-        if (!u) return std::nullopt;
-
-        std::vector<uint8_t> t = *u;
-        for (ULONG i = 2; i <= kPbkdf2Iterations; ++i) {
-            u = hmacSha256(passBytes,
-                           std::span<const uint8_t>(u->data(), u->size()));
-            if (!u) return std::nullopt;
-            for (size_t j = 0; j < t.size(); ++j)
-                t[j] ^= (*u)[j];
-        }
-        derived.insert(derived.end(), t.begin(), t.end());
-    }
-
-    derived.resize(keyLen);
+    BCRYPT_ALG_HANDLE alg = nullptr;
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr,
+                                    BCRYPT_ALG_HANDLE_HMAC_FLAG) != 0)
+        return std::nullopt;
+    std::vector<uint8_t> derived(keyLen);
+    const NTSTATUS status = BCryptDeriveKeyPBKDF2(
+        alg,
+        reinterpret_cast<PUCHAR>(const_cast<char*>(password.data())),
+        static_cast<ULONG>(password.size()),
+        const_cast<PUCHAR>(salt.data()), static_cast<ULONG>(salt.size()),
+        kPbkdf2Iterations,
+        derived.data(), static_cast<ULONG>(derived.size()), 0);
+    BCryptCloseAlgorithmProvider(alg, 0);
+    if (status != 0) return std::nullopt;
     return derived;
+}
+
+// Key both peers derive from the shared pairing password. The salt binds it
+// to the two peer ids, taken in sorted order so both sides get the same one.
+inline std::optional<std::vector<uint8_t>> derivePairKey(
+    std::string_view password, std::string_view peerA, std::string_view peerB)
+{
+    const auto [low, high] = std::minmax(peerA, peerB);
+    std::string ids;
+    ids.reserve(low.size() + 2 + high.size());
+    ids.append(low).append("<>").append(high);
+
+    static constexpr uint8_t kLabel[] = { 'L', 'A', 'N', 'P', 'A', 'I', 'R' };
+    const auto mac = hmacSha256(kLabel, std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t*>(ids.data()), ids.size()));
+    if (!mac || mac->size() < 16) return std::nullopt;
+    return deriveKeyPbkdf2(password, std::span<const uint8_t>(mac->data(), 16), kDerivedKeySize);
 }
 
 // ---------------------------------------------------------------------------

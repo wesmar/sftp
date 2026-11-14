@@ -11,6 +11,14 @@ void fillProxyCombobox(HWND hWnd, int defproxynr, LPCSTR iniFileName);
 
 // Helpers implemented in SftpConnection.cpp and used by dialog module.
 bool LoadProxySettingsFromNr(int proxynr, pConnectSettings ConnectResults, LPCSTR iniFileName);
+
+// Proxy records, managed from the [Proxies] folder as well as from the
+// connection dialog. A record is identified by its number, which never moves.
+std::wstring DescribeProxyRecordW(int proxynr, LPCSTR iniFileName);
+bool ShowProxyRecordDialog(int proxynr, LPCSTR iniFileName);
+int  CreateProxyRecordDialog(LPCSTR iniFileName);
+bool DeleteProxy(int proxynrtodelete, LPCSTR ServerToSkip, LPCSTR iniFileName,
+                 LPSTR AppendToList, size_t maxlen);
 bool LoadServerSettings(LPCSTR DisplayName, pConnectSettings ConnectResults, LPCSTR iniFileName);
 void EnableControlsPageant(HWND hWnd, bool enable);
 void UpdateKeyControlsForPrivateKey(HWND hWnd);

@@ -223,3 +223,20 @@ bool LngLoadStringW(HINSTANCE hInst, UINT id, WCHAR* buf, int bufLen) noexcept
     }
     return LoadStringW(hInst, id, buf, bufLen) > 0;
 }
+
+std::wstring LngLoadString(HINSTANCE hInst, UINT id)
+{
+    if (const char* utf8 = LngGetString(id)) {
+        const int n = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, nullptr, 0);
+        if (n > 1) {
+            std::wstring text(static_cast<size_t>(n), L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, utf8, -1, text.data(), n);
+            text.pop_back(); // the terminator
+            return text;
+        }
+    }
+    // LoadStringW with a zero length hands out the resource's own buffer.
+    const wchar_t* resource = nullptr;
+    const int n = LoadStringW(hInst, id, reinterpret_cast<LPWSTR>(&resource), 0);
+    return n > 0 && resource ? std::wstring(resource, static_cast<size_t>(n)) : std::wstring();
+}

@@ -28,10 +28,19 @@
 
 <h2>Main dialog behavior</h2>
 <ul>
-  <li><b>Use jump host</b> and <b>Jump...</b> are enabled only when <b>Transfer = SSH (SFTP/SCP)</b></li>
+  <li><b>Use jump host</b>, the jump-host list and <b>Jump...</b> are enabled only when <b>Transfer = SSH (SFTP/SCP)</b></li>
   <li>For PHP and LAN Pair modes these controls are intentionally disabled</li>
   <li>Jump-host settings remain stored in the profile even when the controls are currently disabled</li>
 </ul>
+
+<h2>Manual settings or a saved session</h2>
+<p>The list next to <b>Jump host:</b> decides where the bastion's settings come from:</p>
+<ul>
+  <li><b>(manual)</b> - this session's own jump-host settings, entered in <b>Jump...</b></li>
+  <li><b>a saved session</b> - that session's host, user and keys are used, so editing it once updates every session that jumps through it. <b>Jump...</b> then shows them read-only and names the session they come from. Picking a session also turns <b>Use jump host</b> on.</li>
+  <li><b>[!] name (missing)</b> - the referenced session no longer exists, because it was removed outside the plugin (by editing <code>sftpplug.ini</code>, say); the connection is refused rather than made straight to the target, until another entry is picked</li>
+</ul>
+<p>A referenced session must reach the bastion directly: one that has a jump host of its own is refused, since chained jump hosts are not supported. Renaming or moving the referenced session inside the plugin keeps the reference valid.</p>
 
 <h2>Jump Host settings</h2>
 <ul>
@@ -68,8 +77,9 @@ jumpuser=ops-user
 jumppubkeyfile=C:\Keys\bastion.pub
 jumpprivkeyfile=C:\Keys\bastion.ppk
 jumpuseagent=1
-jumpfingerprint=AA BB CC DD ...
+jumpfingerprint=SHA256:...
 </pre>
+<p>With a saved session as the jump host, the profile carries <code>jumpsessionref=&lt;session name&gt;</code> and the session's own <code>jump*</code> keys are not used.</p>
 
 <h2>Requirements and limits</h2>
 <ul>

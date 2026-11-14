@@ -35,7 +35,32 @@ int Libssh2SftpHandle::readdir(char* buf, size_t blen,
 
 int Libssh2SftpHandle::close()
 {
-    return libssh2_sftp_close_handle(handle_);
+    int rc = libssh2_sftp_close_handle(handle_);
+    if (rc != LIBSSH2_ERROR_EAGAIN)
+        handle_ = nullptr;   // libssh2 frees the handle on success/error; null it so the destructor doesn't double-close.
+    return rc;
+}
+
+Libssh2SftpHandle::~Libssh2SftpHandle()
+{
+    if (!handle_)
+        return;
+    // Drain the close on a non-blocking session. libssh2_sftp_close_handle
+    // sends SFTP_FXP_CLOSE and waits for the server's STATUS reply; until both
+    // are flushed through the channel, the server keeps the file descriptor
+    // open. Loop until non-EAGAIN. Bounded retry guards against pathological
+    // cases (broken socket, dead session) where we'd otherwise spin forever.
+    for (int i = 0; i < 200; ++i) {
+        int rc = libssh2_sftp_close_handle(handle_);
+        if (rc != LIBSSH2_ERROR_EAGAIN) {
+            handle_ = nullptr;
+            return;
+        }
+    }
+    // Best-effort give-up: libssh2 still owns the handle structure; on session
+    // free it will be released. Server-side may briefly hold the file but that
+    // matches the prior (buggy) behaviour, so this is no regression.
+    handle_ = nullptr;
 }
 
 void Libssh2SftpHandle::seek(size_t offset)
@@ -110,7 +135,26 @@ int Libssh2Channel::channelClose()
 
 int Libssh2Channel::channelFree()
 {
-    return libssh2_channel_free(channel_);
+    int rc = libssh2_channel_free(channel_);
+    if (rc != LIBSSH2_ERROR_EAGAIN)
+        channel_ = nullptr;   // libssh2 freed it; avoid double-free in dtor.
+    return rc;
+}
+
+Libssh2Channel::~Libssh2Channel()
+{
+    if (!channel_)
+        return;
+    // Drain libssh2_channel_free on EAGAIN (async send of CHANNEL_CLOSE/EOF).
+    // Bounded loop guards against pathological dead-session spin.
+    for (int i = 0; i < 200; ++i) {
+        int rc = libssh2_channel_free(channel_);
+        if (rc != LIBSSH2_ERROR_EAGAIN) {
+            channel_ = nullptr;
+            return;
+        }
+    }
+    channel_ = nullptr;   // give up; session->free will clean residue.
 }
 
 int Libssh2Channel::flush()
@@ -173,8 +217,10 @@ Libssh2Agent::~Libssh2Agent()
 {
     // libssh2_agent_free() must be called exactly once; doing it here ensures
     // it runs even on error paths, regardless of whether disconnect() was called.
-    if (agent_)
+    if (agent_) {
         libssh2_agent_free(agent_);
+        agent_ = nullptr;
+    }
 }
 
 // ===========================================================================
@@ -205,7 +251,24 @@ std::unique_ptr<ISftpHandle> Libssh2SftpSession::openDir(const char* path)
 
 int Libssh2SftpSession::shutdown()
 {
-    return libssh2_sftp_shutdown(sftp_);
+    int rc = libssh2_sftp_shutdown(sftp_);
+    if (rc != LIBSSH2_ERROR_EAGAIN)
+        sftp_ = nullptr;   // libssh2 freed the SFTP subsystem.
+    return rc;
+}
+
+Libssh2SftpSession::~Libssh2SftpSession()
+{
+    if (!sftp_)
+        return;
+    for (int i = 0; i < 200; ++i) {
+        int rc = libssh2_sftp_shutdown(sftp_);
+        if (rc != LIBSSH2_ERROR_EAGAIN) {
+            sftp_ = nullptr;
+            return;
+        }
+    }
+    sftp_ = nullptr;
 }
 
 unsigned long Libssh2SftpSession::lastError()
@@ -275,9 +338,9 @@ int Libssh2SftpSession::symlink(const char* path, char* target,
 // Libssh2Session
 // ===========================================================================
 
-int Libssh2Session::startup(int sock)
+int Libssh2Session::handshake(libssh2_socket_t sock)
 {
-    return libssh2_session_startup(session_, sock);
+    return libssh2_session_handshake(session_, sock);
 }
 
 void Libssh2Session::setBlocking(int blocking)
@@ -298,7 +361,34 @@ int Libssh2Session::disconnect(const char* desc)
 
 int Libssh2Session::free()
 {
-    return libssh2_session_free(session_);
+    int rc = libssh2_session_free(session_);
+    if (rc != LIBSSH2_ERROR_EAGAIN)
+        session_ = nullptr;
+    return rc;
+}
+
+Libssh2Session::~Libssh2Session()
+{
+    if (!session_)
+        return;
+    // Best-effort SSH disconnect (lets server tear down cleanly). Bounded
+    // because we're in a destructor — if it doesn't drain in 50 iterations
+    // we'd rather leak the on-the-wire DISCONNECT than spin forever.
+    for (int i = 0; i < 50; ++i) {
+        int rc = libssh2_session_disconnect_ex(
+            session_, SSH_DISCONNECT_BY_APPLICATION, "Session destroyed", "");
+        if (rc != LIBSSH2_ERROR_EAGAIN)
+            break;
+    }
+    // Free regardless of disconnect outcome; session memory must be released.
+    for (int i = 0; i < 200; ++i) {
+        int rc = libssh2_session_free(session_);
+        if (rc != LIBSSH2_ERROR_EAGAIN) {
+            session_ = nullptr;
+            return;
+        }
+    }
+    session_ = nullptr;
 }
 
 const char* Libssh2Session::hostkeyHash(int hashType)
@@ -342,6 +432,14 @@ int Libssh2Session::userauthPubkeyFromFile(const char* user, unsigned ulen,
                                                    pub, priv, passphrase);
 }
 
+int Libssh2Session::userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                              const char* privData, size_t privLen,
+                                              const char* passphrase)
+{
+    return libssh2_userauth_publickey_frommemory(session_, user, ulen,
+                                                 nullptr, 0, privData, privLen, passphrase);
+}
+
 int Libssh2Session::userauthKeyboardInteractive(
     const char* user, unsigned ulen,
     LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*responseCb)))
@@ -370,9 +468,11 @@ int Libssh2Session::blockDirections()
     return libssh2_session_block_directions(session_);
 }
 
-std::unique_ptr<ISftpSession> Libssh2Session::sftpInit()
+std::unique_ptr<ISftpSession> Libssh2Session::sftpInit(std::string_view serverCommand)
 {
-    LIBSSH2_SFTP* sftp = libssh2_sftp_init(session_);
+    LIBSSH2_SFTP* sftp = serverCommand.empty()
+        ? libssh2_sftp_init(session_)
+        : libssh2_sftp_init_command(session_, serverCommand.data(), serverCommand.size());
     if (!sftp)
         return nullptr;
     return std::make_unique<Libssh2SftpSession>(sftp);
@@ -450,19 +550,14 @@ std::unique_ptr<ISshChannel> Libssh2Session::directTcpip(
     return std::make_unique<Libssh2Channel>(ch);
 }
 
-void* Libssh2Session::callbackSet(int cbtype, void* cb)
+void Libssh2Session::setCallback(int cbtype, libssh2_cb_generic* cb)
 {
-    return libssh2_session_callback_set(session_, cbtype, cb);
+    libssh2_session_callback_set2(session_, cbtype, cb);
 }
 
 int Libssh2Session::trace(int bitmask)
 {
     return libssh2_trace(session_, bitmask);
-}
-
-int Libssh2Session::bannerSet(const char* banner)
-{
-    return libssh2_banner_set(session_, banner);
 }
 
 // ===========================================================================

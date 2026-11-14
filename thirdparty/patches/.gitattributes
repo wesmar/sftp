@@ -1,0 +1,2 @@
+# Patches must reach git apply byte for byte: no line-ending conversion.
+* -text

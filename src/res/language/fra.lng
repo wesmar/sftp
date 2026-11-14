@@ -56,7 +56,7 @@
 12052=Redirection de soumission HTTPS vers HTTP
 12053=Insérer le CD-ROM
 130=F7 - aide.txt
-131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nAlt+Entrée:\tModifier les options\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
+131=Aide du plugin:\r\nF7:\tCréer une nouvelle connexion (TC affiche Nouveau Dossier – entrer le nom de la connexion)\r\nF8/Suppr:\tSupprimer la connexion\r\nEntrée:\tConnecter\r\nDéconnecter :\tDepuis la session, ou F8 sur sa ligne dans [Active Sessions]. Le bouton de la barre la laisse ouverte depuis la racine du plugin.\r\nAlt+Entrée:\tModifier les options\r\nF3/F4:\tAfficher les paramètres en INI (modifier via Alt+Entrée)\r\n\r\nSessions dans des dossiers:\r\nF7 dans un dossier:\tCrée la session dans ce dossier\r\nF7 avec le nom folder/x:\tCrée la session dans le dossier indiqué\r\nF6 vers \\dossier\\nom:\tDéplace une session dans un dossier\r\nF6 sur un dossier:\tRenomme toutes les sessions; les références de rebond suivent\r\nF5 ou glisser:\tCopie la session ou le dossier (duplicata)\r\nF8 sur un dossier:\tSupprime le dossier et toutes ses sessions\r\n\r\nModes de transfert:\r\nSSH (SFTP/SCP):\tDéfaut, le plus rapide quand SSH est disponible\r\nUtiliser SCP pour les données:\tUtiliser quand SFTP est bloqué/instable\r\nUtiliser SCP uniquement:\tDésactiver SFTP complètement (hôtes anciens)\r\nForcer transfert shell:\tForcer le transfert par shell (dd/base64)\r\nAgent PHP (HTTP):\tPas de compte SSH nécessaire; utiliser sftp.php téléversé\r\nShell PHP (HTTP):\tPseudo-terminal via HTTP par sftp.php
 132=Connexion rapide
 144=Aide
 146=Ici vous pouvez configurer comment le serveur envoie les noms de fichiers avec des accents. En choisissant 'détection auto', le plugin lira des variables d'environnement (comme LANG) et enverra la commande 'locale' pour déterminer l'encodage de caractères du serveur. Cela peut ne pas fonctionner avec tous les serveurs. Si vous savez que votre serveur utilise UTF-8, ou si les noms de fichiers apparaissent avec des caractères étranges à la place des accents, veuillez choisir 'oui' manuellement.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Cyrillique KOI8-R (20866)
 241=Autre (saisir manuellement)
-242=La bibliothèque libssh2.dll est trop ancienne pour les fonctions Pageant !\nLa version minimale requise est %s.
 243=Échec de connexion à l'agent SSH (Pageant) !\nVous pouvez placer un fichier de raccourci nommé pageant.lnk dans le répertoire du plugin pour lancer Pageant, par ex. pointant vers\nc:\\chemin\\pageant.exe fichiercle
 244=Échec de la demande d'identités à l'agent SSH !
 245=L'authentification par agent a échoué !
@@ -194,17 +193,6 @@
 280=Mot de passe pairage:
 12054=Peer LAN Pair trouvé.\nChoisissez le rôle:\n\nOui = Donneur\nNon = Receveur\nAnnuler = pas de changement
 12055=Délai session: [__] min (0=illimité)
-12056=Importer les sessions PuTTY
-12057=Importer les sessions WinSCP
-12058=Importer les sessions PuTTY Portable
-12059={} sessions {} trouvées (registre) :
-12060={} sessions trouvées dans {} :
-12061=&Tout sélectionner
-12062=Tout &désélectionner
-12063=&Importer
-12064=Annuler
-12065=Aucune session importée.
-12066=Aucune session trouvée dans {}.
 281=Receveur LAN Pair déjà en cours.
 282=LAN Pair accepté: {} ({})
 283=LAN Pair: en écoute. Dialogue de rôle au premier peer détecté.
@@ -217,7 +205,7 @@
 288=Changer le mot de passe...
 289=Protéger le mot de passe avec le gestionnaire (TC>=7.5)
 290=Certificat client pour l'&authentification :
-291=Fichier de clé publique (*.pub) :
+291=Certificat (*-cert.pub), facultatif :
 292=Fichier de clé privée (*.pem;*.ppk) :
 293=Compresser avec &ZLIB (peut échouer sur certains serveurs)
 294=Journaliser les listes complètes (&débogage)
@@ -233,8 +221,6 @@
 304=Hôte intermédiaire :
 305=Utiliser l'&hôte intermédiaire
 306=Paramètres du proxy :
-307=Supprimer le proxy
-308=Importer...
 309=Paramètres du proxy
 310=Paramètres du proxy
 311=Hôte proxy :
@@ -251,18 +237,13 @@
 318=Port :
 319=Nom d'utilisateur :
 320=&Mot de passe :
-321=Fichier de clé publique (*.pub) :
+321=Certificat (*-cert.pub), facultatif :
 322=Fichier de clé privée (*.pem;*.ppk) :
 323=Utiliser l'&agent SSH (Pageant) pour l'auth. de l'hôte intermédiaire
 
 324=Aide
 325=Annuler
 326=Flux TAR
-12067=Tout importer ({})
-12068=Importer depuis le dossier PuTTY Portable...
-12069=Importer depuis le dossier portable WinSCP...
-12070=Importer les sessions KiTTY Portable
-12071=Importer depuis le dossier KiTTY Portable...
 
 327=Système:
 328=Méthode:
@@ -275,7 +256,7 @@
 335=Point de terminaison de l'agent PHP introuvable (HTTP 404).\nVérifiez l'URL, le nom du fichier et téléversez sftp.php sur le serveur.
 336=L'agent PHP n'est pas configuré sur le serveur (HTTP 503).\nDéfinissez AGENT_PSK / AGENT_PSK_SHA256 dans sftp.php et téléversez à nouveau.
 337=Identifiants incorrects pour PHP Agent (HTTP {}).
-338=Erreur de requête HTTP {} pour PHP Agent.
+338=Échec de la requête de l'Agent PHP pour {} (HTTP {}).
 339=PHP Agent a rejeté la connexion : {}
 340=La validation PHP Agent a échoué : {}
 341=Identifiants incorrects pour PHP Agent.
@@ -292,7 +273,6 @@
 352=Utilisateur authentifié sans mot de passe.
 353=Délai d'attente dépassé pour l'auth interactive clavier.
 354=Délai d'attente dépassé pour l'auth par mot de passe.
-355=Chargement de la bibliothèque SSH...
 356=LAN Pair : localisation du pair par découverte...
 357=LAN Pair : connecté.
 358=Mode PHP Agent
@@ -354,16 +334,8 @@
 414=PHP Agent : mise à jour locale de sftp.php ignorée (fichier manquant ou en lecture seule).
 415=Envoi TAR :
 416=Envoi TAR échoué
-417=Sélectionner le fichier de clé publique
+417=Sélectionner le fichier de certificat
 418=Sélectionner le fichier de clé privée
-419=Sélectionner le dossier PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} session(s) importée(s).
-423={} session(s) importée(s).
-{} {} ignorée(s).
-424=session(s) non prise(s) en charge
-425=session(s) WinSCP non prise(s) en charge
 426=SOCKS4a : 
 427=SOCKS5 : 
 428=Page de code
@@ -375,12 +347,6 @@
 12094=LAN Pair: l'emprunt d'identite TrustedInstaller a echoue. Le processus ne s'execute peut-etre pas en tant qu'Administrateur.
 12095=LAN Pair: connexion à {}...
 12096=LAN Pair: connexion échouée
-12097=PuTTY
-12098=WinSCP
-12099=Autre
-12100=Sélectionner le dossier portable WinSCP
-12101=WinSCP.ini introuvable dans le dossier sélectionné.
-12102=Sélectionner le dossier portable KiTTY
 12103=LAN Pair : cet ordinateur est configuré en tant que Donneur. Le Récepteur distant doit se connecter ici.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -396,10 +362,48 @@
 12081=Échec du chargement du mot de passe proxy !
 12082=Adresse de serveur non valide.
 12083=Mémoire insuffisante lors de la création des paramètres de connexion.
-12084=Aucune session importée (type de protocole non pris en charge).
-12085=putty.reg introuvable dans le dossier sélectionné ou ses sous-dossiers.
-12086=Échec de la lecture ou de l'analyse de putty.reg.
-12087=Dossier Sessions introuvable dans le répertoire KiTTY Portable sélectionné.
 12088=Une session avec ce nom existe déjà.\nChoisissez un nom de session différent.
+12118=Cette session appartient à un autre programme et ne peut pas être modifiée ici.\nF3 affiche ses paramètres, F5 la copie dans votre propre liste.
+12119= Session LAN Pair : 
+12120=Ces paramètres proviennent de la session '{}' et sont en lecture seule. Choisissez (manuel) dans la liste des jump hosts pour en configurer un ici.
+12121=Cette session atteint son hôte via un élément qui n'a pas été importé avec elle : un proxy, un jump host ou un tunnel. Se connecter maintenant irait droit à la cible, en contournant ce qui avait été placé sur le chemin ; c'est donc refusé.
+12122=La session devait se connecter via un proxy, mais le fichier n'en contient aucune description. Elle a été importée sans le proxy et se connectera directement : vérifiez son paramètre de proxy avant de l'utiliser.
+12123=Ce proxy peut être recréé par le plugin : copiez la session dans votre propre liste avec F5 et le proxy l'accompagne. Son mot de passe, s'il en faut un, est demandé à la première connexion.
+12124=Déplacement : la source a été conservée, car la copie a repris sur un fichier déjà présent
+12125=La source et la destination sont le même fichier : les deux sessions désignent le même compte sur le même serveur, au même chemin. Copier un fichier sur lui-même le tronquerait, l'opération est donc refusée.
+12126=Le serveur n'a pas démarré de session SFTP. S'il n'offre qu'un shell — dropbear sur une caméra ou un routeur, par exemple —, activez « Utiliser SCP pour tout (sans SFTP) » pour cette session.
+12127=Le serveur n'accepte que la connexion par clé, et cette session n'en a aucune à proposer. Indiquez un fichier de clé privée pour la session, ou utilisez Pageant avec la clé chargée.
+12128=Propriétés
+12129=Propriétés du fichier
+12130=Nom :
+12131=Propriétaire :
+12132=Groupe :
+12133=Permissions :
+12134=Taille :
+12135=Dernière modification :
+12136=Réponse de stat sur le serveur
+12137=Le serveur n'a exécuté aucune commande stat. Ce qu'indique le protocole SFTP :
 12089=SFTP
-
+12104=(manuel)
+12105= (introuvable)
+12106=Session de rebond '{}' introuvable parmi les sessions enregistrées
+12107=La session de rebond '{}' possède sa propre configuration d'hôte de rebond — les rebonds chaînés ou cycliques ne sont pas pris en charge. Choisissez une session qui se connecte directement au bastion.
+12109=Plugin SFTP - import de session
+12110=Impossible d'ouvrir le fichier source en lecture.
+12111=Import impossible : le fichier source est vide.
+12112=Import impossible : le fichier source ne contient aucune section INI.\r\nUn fichier avec au moins une [section] et une clé `server=` est attendu.
+12113=Import impossible : aucune section INI avec une clé `server=` non vide.
+12114=Import impossible : le chemin de destination est vide.
+12115=Import impossible : échec de l'écriture dans sftpplug.ini.
+12116=Rebond...
+12117=L'hôte de rebond est activé pour cette session mais aucun n'est configuré. Choisissez une session de rebond ou renseignez les détails de l'hôte.
+12138=Délai de session (min) :
+12139=(0 = illimité)
+12140=Auto
+12141=Le fichier .ppk demande des paramètres Argon2 au-delà des limites sûres.
+12142=Le fichier .ppk contient une clé dont les parties ne correspondent pas.
+12143=Erreur de téléchargement
+12144=Le fichier n'a pas pu être téléchargé :
+12145=Ignorer
+12146=Tout ignorer
+12147=Ignoré après une erreur de téléchargement :

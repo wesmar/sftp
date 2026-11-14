@@ -17,12 +17,14 @@
       <li>IPv6 support: <code>[::1]:22</code></li>
     </ul>
   </li>
-  <li><b>Session:</b> Dropdown with saved sessions. Use F7 to create new, F8/Delete to remove.</li>
+  <li><b>Session:</b> The name this session is saved under. Typing a different
+      name renames it when you press OK. Sessions themselves are created with F7
+      and removed with F8/Delete in the plugin panel.</li>
   <li><b>User name:</b> SSH username (for SSH modes); optional label in PHP modes (not used for PHP auth)</li>
   <li><b>Password:</b> 
     <ul>
       <li>SSH password authentication</li>
-      <li>PHP Agent HMAC authentication secret</li>
+      <li>PHP Agent shared secret, sent with every request (use HTTPS)</li>
       <li>Stored encrypted via Windows DPAPI when "Save password" is used</li>
     </ul>
   </li>
@@ -37,7 +39,7 @@
       <li>Shows detailed log of which keys were tried</li>
     </ul>
   </li>
-  <li><b>Public key file:</b> Optional path to public key (.pub, .pem)</li>
+  <li><b>Certificate:</b> Optional. An OpenSSH certificate (<code>*-cert.pub</code>) signed for the private key, for servers that log users in by certificate. Leave it empty otherwise: the public half of the key is derived from the private key file. A private key entered here by mistake is still used to log in.</li>
   <li><b>Private key file:</b> 
     <ul>
       <li>Accepts PEM format (OpenSSH)</li>
@@ -98,17 +100,20 @@
 <h3>Advanced Options</h3>
 <ul>
   <li><b>Detailed log:</b> Enable verbose logging; output appears in the TC log window (F5 log pane or separate log window)</li>
-  <li><b>Show entire directory listings in log:</b> Includes full remote <code>ls -la</code> output in the log — useful for diagnosing SCP/shell listing problems</li>
+  <li><b>Log full directory listings (debug):</b> Writes every line the server sends for a directory listing into Total Commander's log window — the <code>ls -la</code> output in SCP mode, the server's long entries in SFTP mode. Useful when a listing shows wrong names, dates or permissions: the raw lines show what the plugin was given.</li>
 </ul>
 
-<h3>File Permissions (SFTP mode)</h3>
-<p>In SFTP transfer mode you can change file and directory permissions directly from Total Commander:</p>
+<h3>Permissions, Owner and Group</h3>
+<p>The plugin offers custom columns for remote files:</p>
 <ul>
-  <li>Use <b>Properties</b> (Alt+Enter) on a remote file or directory to view and edit its Unix permissions</li>
-  <li>Permission changes use SFTP setstat — the plugin reads current permissions first, applies your change, and writes back</li>
-  <li>Works on files and directories; symlinks are not followed</li>
-  <li>Not available in SCP-only, Shell, PHP Agent, or LAN Pair modes</li>
+  <li><b>permissions</b> — as <code>ls</code> writes them, e.g. <code>rwxr-xr-x</code>, with <code>s</code>/<code>t</code> for setuid, setgid and sticky</li>
+  <li><b>octal</b> — the same as a number, e.g. <code>0755</code></li>
+  <li><b>owner</b> and <b>group</b> — names; a server that sends no names shows the numeric ids</li>
+  <li><b>link target</b> — where a symbolic link points</li>
 </ul>
+<p>Total Commander picks up a default view for the plugin on its own: size, date, permissions, owner and group. Other combinations are set up under <i>Configuration → Custom columns</i>, file system <i>Secure FTP</i>. The values come from the directory listing in SFTP and SCP mode; PHP Agent and LAN Pair leave the columns empty.</p>
+<p><b>Alt+Enter</b> on a remote file opens its properties: path, link target, owner, group, permissions, size and date as the listing gave them, and below that the reply of <code>stat</code> run on the server. A server without a shell shows what the SFTP protocol reports instead. The window is for viewing only.</p>
+<p>To change permissions, use <b>Files → Change Attributes</b> (Alt+A) on one or more remote files. Over SFTP the mode is set through the protocol, which also works on servers without a shell; in SCP mode the plugin runs <code>chmod</code>. Owner and group cannot be changed from the plugin.</p>
 
 <h3>Character Encoding</h3>
 <ul>
@@ -165,20 +170,19 @@
   <li><code>F8 / Delete</code> - Delete selected session</li>
   <li><code>Enter</code> - Connect with current settings</li>
   <li><code>Alt+Enter</code> - Edit selected session properties</li>
-  <li><code>Ctrl+Down</code> - Open session dropdown</li>
 </ul>
 
 <h2>Session Storage</h2>
 <ul>
   <li>Sessions stored in <code>sftpplug.ini</code> in Total Commander directory</li>
   <li>Passwords encrypted with Windows DPAPI (user-specific)</li>
-  <li>Import from PuTTY (registry + Portable), WinSCP (registry + .ini), and KiTTY Portable via <b>Import...</b> button</li>
-  <li>Checkbox picker — select any combination of sessions in one step</li>
-  <li>Last 4 browse paths remembered per source in <code>[ImportPaths]</code> of <code>sftpplug.ini</code></li>
+  <li>Sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY appear in the <code>[Imports]</code> folder in the plugin root</li>
+  <li>Cached session lists live next to <code>sftpplug.ini</code>, so imported entries are available right after Total Commander starts</li>
+  <li>Custom locations added through <code>[Add custom location...]</code> are stored per source in <code>sftpplug.ini</code></li>
 </ul>
 
 <div class="note">
-  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions are imported with <code>scponly=1</code> and <code>scpfordata=1</code>. For KiTTY Portable, point the browser at the KiTTYPortable root folder; the plugin locates the <code>Sessions</code> subfolder automatically. KiTTY passwords are decrypted and imported automatically when possible; PuTTY and WinSCP passwords are never imported — you will be prompted on first connection.
+  <b>Tip:</b> After importing from WinSCP, verify transfer mode settings — SCP sessions arrive with <code>scponly=1</code> and <code>scpfordata=1</code>. Proxy definitions are not imported from any source and have to be set up again. See <a href="import-migration.html">Import sessions from other programs</a>.
 </div>
 
 <p><a href="index.html">Back to index</a></p>

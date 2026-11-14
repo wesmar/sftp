@@ -19,7 +19,7 @@
 
 <h3>Editing a Session</h3>
 <ol>
-  <li>Select session from dropdown</li>
+  <li>Select the session in the plugin panel</li>
   <li>Press <code>Alt+Enter</code></li>
   <li>Modify settings as needed</li>
   <li>Changes are saved automatically</li>
@@ -27,7 +27,7 @@
 
 <h3>Deleting a Session</h3>
 <ul>
-  <li>Select session from dropdown</li>
+  <li>Select the session in the plugin panel</li>
   <li>Press <code>F8</code> or <code>Delete</code></li>
   <li>Confirm deletion</li>
 </ul>
@@ -36,13 +36,51 @@
 
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Key</th><th>Action</th></tr>
-  <tr><td><code>F7</code></td><td>Create new session</td></tr>
-  <tr><td><code>F8 / Delete</code></td><td>Delete selected session</td></tr>
-  <tr><td><code>Enter</code></td><td>Connect with current settings</td></tr>
+  <tr><td><code>F7</code></td><td>Create new session (works inside folders too)</td></tr>
+  <tr><td><code>F8 / Delete</code></td><td>Delete selected session or folder (folders remove every session inside)</td></tr>
+  <tr><td><code>Enter</code></td><td>Open a folder, or connect to a session with current settings</td></tr>
+  <tr><td><code>F3 / F4</code></td><td>Show session settings as an INI snippet (read-only; edit with <code>Alt+Enter</code>)</td></tr>
   <tr><td><code>Alt+Enter</code></td><td>Edit selected session</td></tr>
-  <tr><td><code>Ctrl+Down</code></td><td>Open session dropdown</td></tr>
+  <tr><td><code>F6</code></td><td>Rename / move a session or folder (see "Folders" below)</td></tr>
   <tr><td><code>Escape</code></td><td>Cancel connection attempt</td></tr>
 </table>
+
+<h2>Organising Sessions in Folders</h2>
+
+<p>Saved sessions can be grouped into folders for easier navigation when you accumulate many of them. Folders are <em>implicit</em>: they exist as long as at least one session lives under them, and disappear when the last one is removed. There is no separate "create empty folder" step.</p>
+
+<h3>Putting Sessions into a Folder</h3>
+<ul>
+  <li><strong>From scratch:</strong> press <code>F7</code> inside an existing folder — the new session is created in that folder automatically (folder name is taken from the current path).</li>
+  <li><strong>Move an existing session:</strong> press <code>F6</code> on the session and type a new path that includes a folder, e.g. <code>\work\web1</code>. The folder appears in the listing on the next refresh.</li>
+  <li><strong>Manually:</strong> save a session whose Display Name uses <code>/</code> as a hierarchy separator (e.g. <code>work/web1</code>). The plugin splits on <code>/</code> when building the listing.</li>
+</ul>
+
+<h3>Renaming or Moving a Folder</h3>
+<p>Press <code>F6</code> on a folder entry to rename it. All sessions under the folder are renamed in one go — both the INI section names and any <code>jumpsessionref</code> values pointing into the folder are updated, so jump-host references survive the rename.</p>
+
+<h3>Deleting a Folder</h3>
+<p><code>F8</code> on a folder removes every session in it (recursively). Total Commander shows its standard "delete non-empty folder?" confirmation first. Jump-host references targeting the deleted sessions are cleared so the by-reference picker does not surface them as broken markers.</p>
+
+<h3>Copying and Moving with F5 / F6 / Drag-and-Drop</h3>
+<p>Drag-and-drop and TC's copy/move commands work uniformly across the plugin namespace: dropping a folder onto another folder relocates every session inside. Behind the scenes this is the same code path as <code>F6</code>, so jump-host references are kept consistent.</p>
+
+<h3>Moving a Session to Another Machine</h3>
+
+<p>Copying a session out of the plugin writes a small INI file describing it,
+and dropping such a file back onto the plugin creates the session again. If the
+session goes through a proxy, the proxy travels with it: on the way back an
+identical proxy already on the machine is reused, and only a proxy never seen
+before is added to your list. Either way the session ends up pointing at the
+right one, whatever number it happens to have locally.</p>
+
+<p>Two things do not travel, by design: the password of the session and the
+password of its proxy. Both are tied to the machine that stored them. You are
+asked for them on the first connection.</p>
+
+<p>A file written by an older version of the plugin names a proxy without
+describing it. Such a session is imported without a proxy and says so, rather
+than being pointed at whichever proxy happens to hold that number here.</p>
 
 <h2>Session Storage</h2>
 
@@ -77,50 +115,46 @@
 
 <h2>Import Sessions</h2>
 
-<p>Click <b>Import...</b> to open the import menu. Sessions are imported without modifying the source data. See <a href="import-migration.html">Import from PuTTY / WinSCP / KiTTY</a> for full details.</p>
+<p>Sessions from other programs appear in the <code>[Imports]</code> folder in the plugin root, one subfolder per source program. Nothing in the source program is modified.</p>
 
 <h3>Supported sources</h3>
 <ul>
-  <li><b>PuTTY (registry)</b> — <code>HKCU\Software\SimonTatham\PuTTY\Sessions</code></li>
-  <li><b>PuTTY Portable</b> — browse to the portable folder; plugin finds <code>putty.reg</code> automatically (up to 4 levels deep)</li>
-  <li><b>WinSCP (registry)</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code></li>
-  <li><b>WinSCP Portable</b> — browse to <code>WinSCP.ini</code> directly</li>
-  <li><b>KiTTY Portable</b> — browse to the KiTTYPortable root; plugin finds the <code>Sessions</code> folder automatically (up to 4 levels deep); only SSH sessions imported</li>
+  <li><b>SecureCRT</b> — <code>%APPDATA%\VanDyke\Config\Sessions\</code></li>
+  <li><b>PuTTY</b> — <code>HKCU\Software\SimonTatham\PuTTY\Sessions</code>, or a <code>putty.reg</code> export</li>
+  <li><b>WinSCP</b> — <code>HKCU\Software\Martin Prikryl\WinSCP 2\Sessions</code>, or a portable <code>WinSCP.ini</code></li>
+  <li><b>FileZilla</b> — <code>%APPDATA%\FileZilla\sitemanager.xml</code></li>
+  <li><b>KiTTY</b> — common install locations, or any <code>Sessions\</code> folder you point the plugin at</li>
 </ul>
 
-<h3>Checkbox picker</h3>
+<h3>Using an imported session</h3>
 <ul>
-  <li>All found sessions are shown in a checkbox list — pick any combination</li>
-  <li>Select All / Deselect All buttons for bulk operations</li>
-  <li>Only checked sessions are imported</li>
+  <li><code>Enter</code> — connect straight away, using the settings read from the source program</li>
+  <li><code>F5</code> — copy into your own session list; select several first, or <code>Ctrl+A</code> for all of them</li>
+  <li><code>[Refresh]</code> inside a source folder — pick up sessions added or renamed in the source program</li>
+  <li><code>[Add custom location...]</code> — point the plugin at a portable install or a backup folder</li>
 </ul>
 
-<h3>Path memory</h3>
+<h3>Passwords</h3>
 <ul>
-  <li>Last 4 used folder/file paths stored in <code>[ImportPaths]</code> of <code>sftpplug.ini</code></li>
-  <li>Browse dialog pre-selects the last used location automatically</li>
-</ul>
-
-<h3>Protocol Mapping</h3>
-<ul>
-  <li><b>WinSCP SFTP:</b> Imported as SSH (SFTP/SCP) mode</li>
-  <li><b>WinSCP SCP:</b> Imported with <code>scponly=1</code> and <code>scpfordata=1</code></li>
-  <li><b>Unsupported protocols (FTP, WebDAV, S3):</b> Skipped with summary report</li>
+  <li>KiTTY and FileZilla passwords are carried over when the source has one saved</li>
+  <li>PuTTY keeps no password on disk; WinSCP and SecureCRT passwords are not imported</li>
+  <li>Imported passwords are re-protected with Windows DPAPI, never stored in plain text</li>
 </ul>
 
 <h3>Key File Compatibility</h3>
 <ul>
-  <li>Imported key paths preserved as-is</li>
-  <li>Supports both <code>.pem</code> and <code>.ppk</code> extensions</li>
-  <li>PPK v2 and PPK v3 (Argon2) converted natively — no external puttygen needed</li>
-  <li>Passwords are not imported — you will be prompted on first connection</li>
+  <li>Key paths preserved as-is, with environment variables resolved</li>
+  <li>Supports <code>.pem</code>, <code>.ppk</code>, and OpenSSH keys with no extension</li>
+  <li>PPK v2, PPK v3 (Argon2) and ed25519 converted natively — no external puttygen needed</li>
 </ul>
+
+<p>See <a href="import-migration.html">Import sessions from other programs</a> for full details.</p>
 
 <h2>After Import Checklist</h2>
 <ol>
   <li>Open imported session with <code>Alt+Enter</code></li>
   <li>Verify transfer mode matches server capabilities</li>
-  <li>Check proxy settings if applicable</li>
+  <li>Check proxy settings if applicable — proxy definitions are not imported</li>
   <li>Verify key file paths are valid</li>
   <li>Test connection</li>
   <li>Adjust SCP/Shell options for restrictive hosts</li>
@@ -139,7 +173,7 @@ aws-eu-west-web         - Cloud provider + region
 <h3>Session Groups</h3>
 <p>Use naming patterns for logical grouping:</p>
 <ul>
-  <li>Sessions appear alphabetically in dropdown</li>
+  <li>Sessions appear alphabetically in the panel listing</li>
   <li>Prefix with category for grouping</li>
   <li>Example: <code>AWS-</code>, <code>Azure-</code>, <code>Local-</code></li>
 </ul>

@@ -1,7 +1,5 @@
 #pragma once
-// Libssh2Backend.h — Concrete ISshBackend adapter for libssh2.
-// In SFTP_ALLINONE mode: calls libssh2 directly.
-// In dynamic mode: calls through existing function pointers.
+// Libssh2Backend.h — Concrete ISshBackend adapter for libssh2 (statically linked).
 
 #include "ISshBackend.h"
 
@@ -12,7 +10,12 @@
 class Libssh2SftpHandle : public ISftpHandle {
 public:
     explicit Libssh2SftpHandle(LIBSSH2_SFTP_HANDLE* h) : handle_(h) {}
-    ~Libssh2SftpHandle() override = default;
+    // RAII close: without this, dropping the unique_ptr leaks the libssh2
+    // handle entirely. Server-side sftp-server keeps the file descriptor open
+    // until the whole SFTP session terminates, which on a long-lived TC
+    // connection means the file shows up as held by sftp-server long after
+    // the upload finished.
+    ~Libssh2SftpHandle() override;
 
     ssize_t read(char* buf, size_t len) override;
     ssize_t write(const char* buf, size_t len) override;
@@ -31,7 +34,10 @@ private:
 class Libssh2Channel : public ISshChannel {
 public:
     explicit Libssh2Channel(LIBSSH2_CHANNEL* ch) : channel_(ch) {}
-    ~Libssh2Channel() override = default;
+    // RAII free: matches Libssh2SftpHandle pattern. Without explicit destructor
+    // a dropped unique_ptr leaks the libssh2 channel, which on the server side
+    // counts against MaxSessions per SSH connection.
+    ~Libssh2Channel() override;
 
     ssize_t read(char* buf, size_t len) override;
     ssize_t readStderr(char* buf, size_t len) override;
@@ -77,7 +83,9 @@ private:
 class Libssh2SftpSession : public ISftpSession {
 public:
     explicit Libssh2SftpSession(LIBSSH2_SFTP* sftp) : sftp_(sftp) {}
-    ~Libssh2SftpSession() override = default;
+    // RAII shutdown: leaks the SFTP subsystem channel without this. Visible
+    // server-side as a stray channel counted against MaxSessions.
+    ~Libssh2SftpSession() override;
 
     std::unique_ptr<ISftpHandle> open(const char* path, unsigned long flags,
                                       long mode) override;
@@ -103,9 +111,12 @@ private:
 class Libssh2Session : public ISshSession {
 public:
     explicit Libssh2Session(LIBSSH2_SESSION* s) : session_(s) {}
-    ~Libssh2Session() override = default;
+    // RAII disconnect+free: without this a dropped unique_ptr leaks the SSH
+    // session entirely (socket level + sshd-side process). Best-effort
+    // disconnect first to inform the server, then free the libssh2 struct.
+    ~Libssh2Session() override;
 
-    int startup(int sock) override;
+    int handshake(libssh2_socket_t sock) override;
     void setBlocking(int blocking) override;
     int getBlocking() override;
     int disconnect(const char* desc) override;
@@ -121,6 +132,9 @@ public:
     int userauthPubkeyFromFile(const char* user, unsigned ulen,
                                const char* pub, const char* priv,
                                const char* passphrase) override;
+    int userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                 const char* privData, size_t privLen,
+                                 const char* passphrase) override;
     int userauthKeyboardInteractive(
         const char* user, unsigned ulen,
         LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*responseCb))) override;
@@ -129,7 +143,7 @@ public:
     int sessionFlag(int flag, int value) override;
     int blockDirections() override;
 
-    std::unique_ptr<ISftpSession> sftpInit() override;
+    std::unique_ptr<ISftpSession> sftpInit(std::string_view serverCommand) override;
     std::unique_ptr<ISshChannel> openChannel() override;
     std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                            libssh2_struct_stat* sb) override;
@@ -146,9 +160,8 @@ public:
         const char* shost, int sport) override;
 
     void** abstractPtr() override;
-    void* callbackSet(int cbtype, void* cb) override;
+    void setCallback(int cbtype, libssh2_cb_generic* cb) override;
     int trace(int bitmask) override;
-    int bannerSet(const char* banner) override;
 
     LIBSSH2_SESSION* raw() const { return session_; }
 private:

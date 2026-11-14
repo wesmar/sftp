@@ -9,6 +9,7 @@
 #include "WindowsUserFeedback.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
+#include "UnicodeHelpers.h"
 
 #pragma comment(lib, "version.lib")
 
@@ -73,20 +74,25 @@ void OpenPluginHelp(HWND hWnd)
     if (!ver.empty())
         helpTitle += L" v" + ver;
 
-    std::string chmPath = pluginDir + "\\sftpplug.chm";
-    DWORD attrs = GetFileAttributesA(chmPath.c_str());
+    // One self-contained page, opened by whatever handles .html. It replaced
+    // a CHM: the only compiler for that format was withdrawn, and a CHM
+    // arriving inside a downloaded ZIP is blocked by Windows and opens blank.
+    std::string helpPath = pluginDir + "\\SFTPplug-help.html";
+    DWORD attrs = GetFileAttributesA(helpPath.c_str());
     if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        HINSTANCE openRc = ShellExecuteA(hWnd, "open", chmPath.c_str(), nullptr, pluginDir.c_str(), SW_SHOWNORMAL);
+        HINSTANCE openRc = ShellExecuteA(hWnd, "open", helpPath.c_str(), nullptr, pluginDir.c_str(), SW_SHOWNORMAL);
         if (reinterpret_cast<INT_PTR>(openRc) > 32)
             return;
     }
 
-    std::array<WCHAR, 8192> shortHelpW{};
-    LoadStringW(hinst, IDS_HELPTEXT, shortHelpW.data(), static_cast<int>(shortHelpW.size() - 1));
-    std::wstring msgW = L"CHM help file not found or failed to open.\n\nExpected location:\n";
-    msgW += std::wstring(chmPath.begin(), chmPath.end());
+    // Nothing to open: fall back to the same block the F7 row shows, so the
+    // user still gets the essentials.
+    const std::wstring shortHelpW =
+        unicode_util::utf8_to_wstring(LngStrU8(IDS_HELPTEXT, "Plugin help:"));
+    std::wstring msgW = L"Help file not found or failed to open.\n\nExpected location:\n";
+    msgW += std::wstring(helpPath.begin(), helpPath.end());
     msgW += L"\n\n";
-    msgW += shortHelpW.data();
+    msgW += shortHelpW;
     int needed = WideCharToMultiByte(CP_ACP, 0, msgW.c_str(), -1, nullptr, 0, nullptr, nullptr);
     std::string msg(needed > 0 ? needed - 1 : 0, '\0');
     if (needed > 0)

@@ -12,7 +12,7 @@
 <ul>
   <li>Single PHP file (<code>sftp.php</code>) deployed to web server</li>
   <li>Provides file operations via HTTP API</li>
-  <li>Secure HMAC-SHA256 authentication</li>
+  <li>Password authentication on every request (HTTPS required outside local testing)</li>
   <li>Supports file listing, upload, download, delete, rename, mkdir</li>
   <li>No SSH account required - works with web hosting</li>
 </ul>
@@ -90,27 +90,33 @@ const AGENT_PSK_SHA256 = 'sha256(salt:psk)';</pre>
   </li>
 </ol>
 
-<h3>HMAC Authentication</h3>
-<p>Each request includes authentication headers:</p>
+<h3>Password Header</h3>
+<p>The plugin sends the password with every request:</p>
 <pre>
-X-SFTP-Auth: legacy_token (optional)
+X-SFTP-Auth: password
+</pre>
+<p>The agent compares it with the plain PSK, or hashes it with <code>AGENT_PSK_SALT</code> and compares the result with <code>AGENT_PSK_SHA256</code>. The password itself crosses the network on every request, so the connection must be HTTPS: over plain HTTP it can be read and reused by anyone on the path.</p>
+
+<h3>HMAC Signing (agent only)</h3>
+<p>The agent also accepts signed requests, which the plugin does not send:</p>
+<pre>
 X-SFTP-TS: timestamp
 X-SFTP-Nonce: random_nonce
-X-SFTP-Signature: HMAC-SHA256(base, psk)
+X-SFTP-Signature: HMAC-SHA256(METHOD\nOPERATION\nPATH\nTIMESTAMP\nNONCE, psk)
 </pre>
-
-<p>Base string format:</p>
-<pre>
-METHOD\nOPERATION\nPATH\nTIMESTAMP\nNONCE
-</pre>
+<p>Signing needs the plain PSK on the server (environment variable or <code>AGENT_PSK</code>); with only the salted hash configured it is refused. The signature covers the method, operation, <code>path</code>, timestamp and nonce — not other parameters (<code>to</code>, <code>cmd</code>, <code>offset</code>) or the request body, so it does not replace HTTPS either.</p>
 
 <h3>Security Features</h3>
 <ul>
-  <li><b>Timestamp validation:</b> Requests expire after 300 seconds</li>
-  <li><b>Nonce replay protection:</b> Each nonce used once</li>
-  <li><b>HMAC-SHA256:</b> Cryptographic signature</li>
-  <li><b>Path traversal protection:</b> Root jail enforced</li>
+  <li><b>Root confinement:</b> file operations stay inside <code>AGENT_ROOT</code>; paths with <code>..</code>, and links pointing outside the root, are refused</li>
+  <li><b>Root protection:</b> the root folder itself cannot be removed or renamed</li>
+  <li><b>Anonymous PROBE:</b> without the password it returns only the agent name, version and recommended chunk size</li>
+  <li><b>Signed requests:</b> expire after 300 seconds, each nonce is accepted once</li>
 </ul>
+
+<div class="warn">
+  <b>The shell is not confined.</b> <code>SHELL_EXEC</code> runs any command as the web server user, outside <code>AGENT_ROOT</code> too. Whoever holds the password has that access. Set <code>const AGENT_ALLOW_SHELL = false;</code> in <code>sftp.php</code> when the shell is not needed.
+</div>
 
 <h2>URL Format</h2>
 
@@ -140,13 +146,20 @@ https://example.com/sftp.php?path=%2Fvar%2Fwww
 <pre>
 GET https://example.com/sftp.php?op=PROBE
 
-Response:
+Response without the password:
 {
   "ok": true,
-  "agent": { "name": "TC PHP Agent", "version": "1.0.1" },
+  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "capabilities": { "recommended_chunk_size": 1048576 }
+}
+
+Response with a valid X-SFTP-Auth header:
+{
+  "ok": true,
+  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "capabilities": { "recommended_chunk_size": 1048576, "operations": [...], ... },
   "runtime": { "php_version": "8.2", "sapi": "apache2handler" },
-  "ini": { "upload_max_filesize": "256M", ... },
-  "capabilities": { "upload": true, "download": true, ... }
+  "ini": { "upload_max_filesize": "256M", ... }
 }
 </pre>
 
@@ -235,6 +248,7 @@ POST https://example.com/sftp.php?op=MKDIR&path=newdir&recursive=1&mode=0775
 Response:
 { "ok": true, "created": true, "path": "newdir" }
 </pre>
+<p><code>mode</code> is three octal digits, optionally with a leading zero; anything else is refused with <code>INVALID_MODE</code>.</p>
 
 <h3>RMDIR - Remove Directory</h3>
 <pre>
@@ -243,6 +257,7 @@ POST https://example.com/sftp.php?op=RMDIR&path=olddir&recursive=0
 Response:
 { "ok": true, "removed": true, "path": "olddir", "recursive": false }
 </pre>
+<p>The agent root is refused with <code>ROOT_PROTECTED</code>. A link to a directory is removed as a link; the directory it points to stays. The same holds for DELETE and RENAME: they act on the link, not on its target.</p>
 
 <h3>RENAME - Move/Rename</h3>
 <pre>
@@ -312,6 +327,7 @@ Response:
   "stderr_b64": "base64_encoded_errors"
 }
 </pre>
+<p>With <code>AGENT_ALLOW_SHELL = false</code> the agent answers HTTP 403 <code>SHELL_DISABLED</code>.</p>
 
 <h2>PHP Shell Console</h2>
 
@@ -370,11 +386,12 @@ Response:
 <h3>Agent Constants</h3>
 <pre>
 AGENT_NAME = 'TC PHP Agent'
-AGENT_VERSION = '1.0.0'
+AGENT_VERSION = '1.0.2'
 AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET'
 AGENT_PSK_SALT = ''
 AGENT_PSK_SHA256 = ''
 AGENT_ROOT = __DIR__  (or custom path)
+AGENT_ALLOW_SHELL = true  (false refuses SHELL_EXEC)
 AGENT_NONCE_TTL = 300
 AGENT_DEFAULT_CHUNK = 262144
 AGENT_MAX_LIST_ITEMS = 20000
@@ -385,8 +402,7 @@ AGENT_MAX_LIST_ITEMS = 20000
 <h3>HTTP 401 - Authentication Failed</h3>
 <ul>
   <li>Verify password matches PSK in sftp.php</li>
-  <li>Check timestamp synchronization</li>
-  <li>Ensure HMAC signature computed correctly</li>
+  <li>If sftp.php holds only the salted hash, re-save the session and upload the regenerated file</li>
 </ul>
 
 <h3>HTTP 403 - Path Escape Attempt</h3>

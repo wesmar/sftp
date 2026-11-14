@@ -19,7 +19,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // Dialog
 //
 
-IDD_WEBDAV DIALOGEX 0, 0, 315, 320
+IDD_CONNECTION DIALOGEX 0, 0, 315, 320
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_NOPARENTNOTIFY
 CAPTION "Connect to SFTP Server"
@@ -40,7 +40,7 @@ BEGIN
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_CRYPTPASS,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,5,82,305,10
     GROUPBOX        "Client certificate for &authentication:",IDC_LABEL_CERTGROUP,5,92,305,60
-    LTEXT           "Public key file (*.pub):",IDC_STATICPUB,10,103,269,8
+    LTEXT           "Certificate (*-cert.pub), optional:",IDC_STATICPUB,10,103,269,8
     EDITTEXT        IDC_PUBKEY,10,112,261,12,ES_AUTOHSCROLL
     PUSHBUTTON      "?",IDC_CERTHELP,275,112,12,12
     PUSHBUTTON      ">>",IDC_LOADPUBKEY,289,112,16,12
@@ -74,46 +74,54 @@ BEGIN
     LTEXT           "Session timeout (min):",IDC_LAN_TIMEOUT_LABEL,13,224,80,8,NOT WS_VISIBLE
     EDITTEXT        IDC_LAN_TIMEOUT,95,222,15,12,ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE
     LTEXT           "(0=no limit)",IDC_LAN_TIMEOUT_HINT,130,224,50,8,NOT WS_VISIBLE
-    CONTROL         "TrustedInstaller",IDC_LAN_TI,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,185,224,105,8,NOT WS_VISIBLE
+    CONTROL         "TrustedInstaller",IDC_LAN_TI,"Button",BS_AUTOCHECKBOX | NOT WS_VISIBLE | WS_TABSTOP,185,224,105,8
     LTEXT           "Session:",IDC_LABEL_SESSION,5,241,30,8
-    COMBOBOX        IDC_SESSIONCOMBO,38,239,227,120,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_SESSIONNAME,38,240,227,12,ES_AUTOHSCROLL
     PUSHBUTTON      "Shell...",IDC_PHPSHELL,270,238,40,14
     LTEXT           "Jump host:",IDC_LABEL_JUMPHOST_GRP,5,257,42,8
-    CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,49,257,104,8
+    COMBOBOX        IDC_JUMP_SESSION_PICK,49,255,104,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Use &jump host",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,158,257,64,8
     PUSHBUTTON      "Jump...",IDC_JUMP_BUTTON,224,255,40,14
     CONTROL         "TAR",IDC_PHP_TAR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,242,224,60,8
     LTEXT           "Proxy settings:",IDC_LABEL_PROXY_SETTINGS,5,273,295,8
-    COMBOBOX        IDC_PROXYCOMBO,5,283,282,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    PUSHBUTTON      ">>",IDC_PROXYBUTTON,290,282,20,14
-    PUSHBUTTON      "Delete last proxy",IDC_DELETELAST,5,301,105,14
-    PUSHBUTTON      "Import...",IDC_IMPORTSESSIONS,113,301,70,14
-    PUSHBUTTON      "Help",IDC_PLUGINHELP,186,301,40,14
-    DEFPUSHBUTTON   "OK",IDOK,229,301,26,14
+    COMBOBOX        IDC_PROXYCOMBO,5,283,305,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Help",IDC_PLUGINHELP,5,301,45,14
+    DEFPUSHBUTTON   "OK",IDOK,204,301,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,258,301,50,14
 END
 
-IDD_PROPERTIES DIALOGEX 0, 0, 249, 214
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+IDD_DOWNLOAD_ERROR DIALOGEX 0, 0, 300, 82
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Download error"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    LTEXT           "The file could not be downloaded:",IDC_DOWNLOAD_ERROR_TEXT,8,8,284,10
+    EDITTEXT        IDC_DOWNLOAD_ERROR_PATH,8,21,284,26,ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL
+    DEFPUSHBUTTON   "Skip",IDC_DOWNLOAD_SKIP,122,59,52,14
+    PUSHBUTTON      "Skip all",IDC_DOWNLOAD_SKIP_ALL,178,59,56,14
+    PUSHBUTTON      "Cancel",IDCANCEL,238,59,54,14
+END
+IDD_PROPERTIES DIALOGEX 0, 0, 380, 236
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Properties"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,123,193,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,192,193,50,14
-    GROUPBOX        "File properties",IDC_STATIC,7,7,235,93
-    LTEXT           "Name:",IDC_STATIC,16,20,22,8
-    LTEXT           "Owner:",IDC_STATIC,16,33,24,8
-    LTEXT           "Group:",IDC_STATIC,16,46,22,8
-    LTEXT           "Permissions:",IDC_STATIC,16,59,40,8
-    LTEXT           "Size:",IDC_STATIC,16,72,16,8
-    LTEXT           "Last modified:",IDC_STATIC,16,85,44,8
-    EDITTEXT        IDC_PROP_NAME,72,20,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_OWNER,72,33,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_GROUP,72,46,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_SIZE,72,72,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    EDITTEXT        IDC_PROP_MODIFIED,72,85,164,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
-    GROUPBOX        " Raw STAT reply",IDC_STATIC,7,103,235,88
-    EDITTEXT        IDC_PROP_RAWSTAT,15,113,220,73,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    DEFPUSHBUTTON   "OK",IDOK,323,215,50,14
+    GROUPBOX        "File properties",IDC_PROP_GRP_FILE,7,7,366,93
+    LTEXT           "Name:",IDC_PROP_LBL_NAME,16,20,54,8
+    LTEXT           "Owner:",IDC_PROP_LBL_OWNER,16,33,54,8
+    LTEXT           "Group:",IDC_PROP_LBL_GROUP,16,46,54,8
+    LTEXT           "Permissions:",IDC_PROP_LBL_PERMS,16,59,54,8
+    LTEXT           "Size:",IDC_PROP_LBL_SIZE,16,72,54,8
+    LTEXT           "Last modified:",IDC_PROP_LBL_MODIFIED,16,85,54,8
+    EDITTEXT        IDC_PROP_NAME,72,20,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_OWNER,72,33,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_GROUP,72,46,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_PERMISSIONS,72,59,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_SIZE,72,72,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    EDITTEXT        IDC_PROP_MODIFIED,72,85,295,12,ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    GROUPBOX        "Server's stat reply",IDC_PROP_GRP_RAW,7,103,366,107
+    EDITTEXT        IDC_PROP_RAWSTAT,13,114,354,91,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER | WS_VSCROLL | WS_HSCROLL
 END
 
 IDD_PROXY DIALOGEX 0, 0, 315, 120
@@ -140,47 +148,34 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,260,99,50,14
 END
 
-IDD_JUMPHOST DIALOGEX 0, 0, 315, 185
+IDD_JUMPHOST DIALOGEX 0, 0, 315, 203
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "SSH Jump Host (ProxyJump) Settings"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     GROUPBOX        "Jump host connection",IDC_JUMP_GROUP,5,5,305,170
-    CONTROL         "&Use jump host (ProxyJump)",IDC_JUMP_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,17,180,10
-    LTEXT           "Jump host:",IDC_JUMP_LABEL_HOST,12,33,50,8
-    EDITTEXT        IDC_JUMP_HOST,65,31,165,12,ES_AUTOHSCROLL
-    LTEXT           "Port:",IDC_JUMP_LABEL_PORT,235,33,18,8
-    EDITTEXT        IDC_JUMP_PORT,255,31,43,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "User name:",IDC_JUMP_LABEL_USER,12,50,50,8
-    EDITTEXT        IDC_JUMP_USER,65,48,233,12,ES_AUTOHSCROLL
-    LTEXT           "&Password:",IDC_JUMP_LABEL_PASS,12,67,50,8
-    EDITTEXT        IDC_JUMP_PASSWORD,65,65,233,12,ES_PASSWORD | ES_AUTOHSCROLL
+    LTEXT           "",IDC_JUMP_FROM_SESSION,12,17,290,16
+    LTEXT           "Jump host:",IDC_JUMP_LABEL_HOST,12,43,50,8
+    EDITTEXT        IDC_JUMP_HOST,65,41,165,12,ES_AUTOHSCROLL
+    LTEXT           "Port:",IDC_JUMP_LABEL_PORT,235,43,18,8
+    EDITTEXT        IDC_JUMP_PORT,255,41,43,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "User name:",IDC_JUMP_LABEL_USER,12,60,50,8
+    EDITTEXT        IDC_JUMP_USER,65,58,233,12,ES_AUTOHSCROLL
+    LTEXT           "&Password:",IDC_JUMP_LABEL_PASS,12,77,50,8
+    EDITTEXT        IDC_JUMP_PASSWORD,65,75,233,12,ES_PASSWORD | ES_AUTOHSCROLL
     CONTROL         "Protect password with password manager (TC>=7.5)",IDC_JUMP_CRYPTPASS,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,80,286,10
-    PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,65,233,14,NOT WS_VISIBLE
-    LTEXT           "Public key file (*.pub):",IDC_JUMP_LABEL_PUBKEY,12,95,120,8
-    EDITTEXT        IDC_JUMP_PUBKEY,12,105,270,12,ES_AUTOHSCROLL
-    PUSHBUTTON      ">>",IDC_JUMP_LOADPUBKEY,284,105,16,12
-    LTEXT           "Private key file (*.pem;*.ppk):",IDC_JUMP_LABEL_PRIVKEY,12,121,180,8
-    EDITTEXT        IDC_JUMP_PRIVKEY,12,131,270,12,ES_AUTOHSCROLL
-    PUSHBUTTON      ">>",IDC_JUMP_LOADPRIVKEY,284,131,16,12
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,90,286,10
+    PUSHBUTTON      "Change password...",IDC_JUMP_EDITPASS,65,75,233,14,NOT WS_VISIBLE
+    LTEXT           "Certificate (*-cert.pub), optional:",IDC_JUMP_LABEL_PUBKEY,12,105,270,8
+    EDITTEXT        IDC_JUMP_PUBKEY,12,115,270,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_JUMP_LOADPUBKEY,284,115,16,12
+    LTEXT           "Private key file (*.pem;*.ppk):",IDC_JUMP_LABEL_PRIVKEY,12,131,180,8
+    EDITTEXT        IDC_JUMP_PRIVKEY,12,141,270,12,ES_AUTOHSCROLL
+    PUSHBUTTON      ">>",IDC_JUMP_LOADPRIVKEY,284,141,16,12
     CONTROL         "Use SSH &agent (Pageant) for jump host auth",IDC_JUMP_USEAGENT,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,149,286,10
-    DEFPUSHBUTTON   "OK",IDOK,205,163,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,260,163,50,14
-END
-
-IDD_SESSION_PICKER DIALOGEX 0, 0, 315, 202
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Import Sessions"
-FONT 8, "MS Shell Dlg", 0, 0, 0x1
-BEGIN
-    LTEXT           "",IDC_SESSION_SOURCE_LABEL,5,5,305,8
-    CONTROL         "",IDC_SESSION_LIST,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,5,18,305,152
-    PUSHBUTTON      "Select &All",IDC_SELECTALL,5,178,70,14
-    PUSHBUTTON      "&Deselect All",IDC_DESELECTALL,81,178,76,14
-    DEFPUSHBUTTON   "&Import",IDOK,184,178,66,14
-    PUSHBUTTON      "Cancel",IDCANCEL,256,178,54,14
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,12,159,286,10
+    DEFPUSHBUTTON   "OK",IDOK,205,181,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,260,181,50,14
 END
 
 IDD_PAIRING_PROGRESS DIALOGEX 0, 0, 220, 62
@@ -202,7 +197,7 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN
-    IDD_WEBDAV, DIALOG
+    IDD_CONNECTION, DIALOG
     BEGIN
         LEFTMARGIN, 5
         TOPMARGIN, 5
@@ -229,11 +224,6 @@ BEGIN
     BEGIN
     END
 
-    IDD_SESSION_PICKER, DIALOG
-    BEGIN
-        RIGHTMARGIN, 310
-        BOTTOMMARGIN, 201
-    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -286,17 +276,12 @@ END
 // AFX_DIALOG_LAYOUT
 //
 
-IDD_WEBDAV AFX_DIALOG_LAYOUT
+IDD_CONNECTION AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
 
 IDD_PROXY AFX_DIALOG_LAYOUT
-BEGIN
-    0
-END
-
-IDD_SESSION_PICKER AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
@@ -308,8 +293,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 10,0,0,18
- PRODUCTVERSION 10,0,0,18
+ FILEVERSION VER_FILEVERSION
+ PRODUCTVERSION VER_FILEVERSION
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -326,12 +311,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "kvc.pl"
             VALUE "FileDescription", "SFTP Plugin for Total Commander"
-            VALUE "FileVersion", "10.0.0.18"
+            VALUE "FileVersion", VER_FILEVERSION_STR
             VALUE "InternalName", "sftpplug"
             VALUE "LegalCopyright", "Copyright (C) 2026 kvc.pl"
             VALUE "OriginalFilename", "sftpplug.wfx"
             VALUE "ProductName", "SFTPplug"
-            VALUE "ProductVersion", "10.0.0.18"
+            VALUE "ProductVersion", VER_PRODUCTVERSION_STR
         END
     END
     BLOCK "VarFileInfo"
@@ -415,26 +400,10 @@ BEGIN
     IDS_STRING12053         "Insert CD-ROM"
     IDS_LAN_ROLE_PROMPT     "LAN Pair peer found.\nChoose role:\n\nYes = Donor\nNo = Receiver\nCancel = no change"
     IDS_LAN_SESSION_TIMEOUT "Session timeout: [__] min (0=no limit)"
-    IDS_IMP_TITLE_PUTTY     "Import PuTTY Sessions"
-    IDS_IMP_TITLE_WINSCP    "Import WinSCP Sessions"
-    IDS_IMP_TITLE_PUTTY_PORT "Import PuTTY Portable Sessions"
-    IDS_IMP_FOUND_REG       "Found {} {} sessions (registry):"
-    IDS_IMP_FOUND_FILE      "Found {} sessions in {}:"
-    IDS_IMP_BTN_SELECT_ALL  "Select &All"
-    IDS_IMP_BTN_DESELECT_ALL "&Deselect All"
-    IDS_IMP_BTN_IMPORT      "&Import"
 END
 
 STRINGTABLE
 BEGIN
-    IDS_IMP_BTN_CANCEL      "Cancel"
-    IDS_IMP_MSG_NONE        "No sessions imported."
-    IDS_IMP_MSG_NOT_FOUND   "No sessions found in {}."
-    IDS_IMP_MENU_ALL        "Import all ({})"
-    IDS_IMP_MENU_FROM_PUTTY_PORT "Import from PuTTY Portable folder..."
-    IDS_IMP_MENU_FROM_WINSCP "Import from WinSCP Portable folder..."
-    IDS_IMP_TITLE_KITTY_PORT "Import KiTTY Portable Sessions"
-    IDS_IMP_MENU_FROM_KITTY_PORT "Import from KiTTY Portable folder..."
     IDS_SCP_PROTOCOL_ERROR  "SCP Protocol Error"
     IDS_SCP_EXEC_FAILED     "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings)."
     IDS_LAN_ERR_NO_PEER     "LAN Pair: no peer configured. Open connection settings and pair first."
@@ -451,16 +420,11 @@ BEGIN
     IDS_ERR_LOAD_PASS       "Failed to load password!"
     IDS_ERR_LOAD_PROXY_PASS "Failed to load proxy password!"
     IDS_ERR_INVALID_SERVER  "Invalid server address."
-    IDS_ERR_OOM_CONN_SETTINGS 
+    IDS_ERR_OOM_CONN_SETTINGS
                             "Out of memory while creating connection settings."
-    IDS_IMP_MSG_UNSUPPORTED_PROTO 
-                            "No sessions imported (unsupported protocol type)."
-    IDS_IMP_ERR_NO_PUTTY_REG 
-                            "putty.reg not found in the selected folder or its subfolders."
-    IDS_IMP_ERR_PARSE_PUTTY_REG "Failed to read or parse putty.reg."
-    IDS_IMP_ERR_NO_KITTY_SESSIONS 
-                            "Sessions folder not found in the selected KiTTY Portable directory."
     IDS_ERR_SESSION_EXISTS  "Session with this name already exists.\nChoose a different session name."
+    IDS_IMPORTS_NO_EDIT     "This session belongs to another program and cannot be edited here.
+Press F3 to see its settings, or F5 to copy it into your own session list."
     IDS_TITLE_SFTP          "SFTP"
     IDS_PAIRING_SEARCH      "Searching for LAN Pair peer on local network..."
     IDS_PAIRING_SECS        "{} s"
@@ -473,7 +437,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_JUMP_DLG_PASS       "&Password:"
-    IDS_JUMP_DLG_PUBKEY     "Public key file (*.pub):"
+    IDS_JUMP_DLG_PUBKEY     "Certificate (*-cert.pub), optional:"
     IDS_JUMP_DLG_PRIVKEY    "Private key file (*.pem;*.ppk):"
     IDS_JUMP_DLG_USEAGENT   "Use SSH &agent (Pageant) for jump host auth"
     IDS_BTN_HELP            "Help"
@@ -527,7 +491,6 @@ BEGIN
     IDS_LOG_AUTH_NO_PASSWORD "User authenticated without password."
     IDS_LOG_KBD_AUTH_TIMEOUT "Keyboard-interactive auth timed out."
     IDS_LOG_PASS_AUTH_TIMEOUT "Password authentication timed out."
-    IDS_LOG_LOADING_SSH_LIB "Loading SSH Library..."
     IDS_LOG_LAN_DISCOVER    "LAN Pair: locating peer via discovery..."
     IDS_LOG_LAN_CONNECTED   "LAN Pair: connected."
     IDS_LOG_PHP_AGENT_MODE  "PHP Agent mode"
@@ -606,15 +569,8 @@ END
 STRINGTABLE
 BEGIN
     IDS_LOG_TAR_UPLOAD_FAIL "TAR upload failed"
-    IDS_DLG_SELECT_PUBKEY   "Select public key file"
+    IDS_DLG_SELECT_PUBKEY   "Select certificate file"
     IDS_DLG_SELECT_PRIVKEY  "Select private key file"
-    IDS_IMP_BROWSE_PUTTY_FOLDER "Select PuTTY Portable folder"
-    IDS_IMP_MENU_PUTTY      "PuTTY ({})..."
-    IDS_IMP_MENU_WINSCP     "WinSCP ({})..."
-    IDS_IMP_MSG_IMPORTED    "Imported {} session(s)."
-    IDS_IMP_MSG_IMPORTED_SKIPPED "Imported {} session(s).\nSkipped {} {}."
-    IDS_IMP_MSG_SKIP_UNSUPPORTED "unsupported session(s)"
-    IDS_IMP_MSG_SKIP_WINSCP "unsupported WinSCP session(s)"
     IDS_PROXY_LABEL_SOCKS4A "SOCKS4a: "
     IDS_PROXY_LABEL_SOCKS5  "SOCKS5: "
     IDS_DLG_CODEPAGE_TITLE  "Code page"
@@ -624,7 +580,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_F7NEW               "F7 - help.txt"
-    IDS_HELPTEXT            "Plugin help:\r\nF7:\tCreate new connection (TC shows New Folder - enter connection name)\r\nF8/Del:\tDelete connection\r\nEnter:\tConnect\r\nAlt+Enter:\tChange options\r\n\r\nTransfer modes:\r\nSSH (SFTP/SCP):\tDefault, fastest when SSH access is available\r\nUse SCP for data:\tUse when SFTP is blocked/unstable\r\nUse SCP only:\tDisable SFTP completely (legacy hosts)\r\nShell transfer force:\tForce shell-based transfer (dd/base64)\r\nPHP Agent (HTTP):\tNo SSH account needed; use uploaded sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal over HTTP via sftp.php"
+    IDS_HELPTEXT            "Plugin help:\r\nF7:\tCreate new connection (TC asks for the name)\r\nF8/Del:\tDelete connection\r\nEnter:\tConnect\r\nDisconnect:\tFrom inside the session, or F8 on its row in [Active Sessions]. The toolbar button leaves it open when pressed from the plugin root.\r\nAlt+Enter:\tChange options\r\nF3/F4:\tShow session settings as INI (edit with Alt+Enter)\r\n\r\nOrganising sessions in folders:\r\nF7 inside a folder:\tCreates the session in that folder\r\nF7 with name folder/x:\tCreates the session under that (possibly new) folder\r\nF6 rename to \\folder\\name:\tMoves a session into a folder\r\nF6 rename a folder:\tBulk-renames every session under it; jump-host references update too\r\nF5 or drag to other panel:\tCopy a session or folder (creates a duplicate)\r\nF8 on a folder:\tRemoves the folder and every session in it\r\n\r\nTransfer modes:\r\nSSH (SFTP/SCP):\tDefault, fastest when SSH access is available\r\nUse SCP for data:\tUse when SFTP is blocked/unstable\r\nUse SCP only:\tDisable SFTP completely (legacy hosts)\r\nShell transfer force:\tForce shell-based transfer (dd/base64)\r\nPHP Agent (HTTP):\tNo SSH account needed; use uploaded sftp.php\r\nPHP Shell (HTTP):\tPseudo-terminal over HTTP via sftp.php"
     IDS_QUICKCONNECT        "Quick Connection"
 END
 
@@ -752,7 +708,6 @@ STRINGTABLE
 BEGIN
     IDS_20866               "Cyrillic KOI8-R (20866)"
     IDS_OTHER               "Other (enter manually)"
-    IDS_SSH2_TOO_OLD        "Library libssh2.dll is too old for Pageant functions!\nMinimum required version is %s."
     IDS_AGENT_CONNECTERROR  "Failure connecting to ssh-agent (Pageant)!\nYou can put a link file named pageant.lnk in the plugin directory to launch pageant, e.g. pointing to\nc:\\path\\pageant.exe keyfilename"
     IDS_AGENT_REQUESTIDENTITIES 
                             "Failure requesting identities from ssh-agent!"
@@ -814,7 +769,7 @@ BEGIN
     IDS_DLG_CHANGEPASS      "Change password..."
     IDS_DLG_CRYPTPASS       "Protect password with password manager (TC>=7.5)"
     IDS_DLG_CERTGROUP       "Client certificate for &authentication:"
-    IDS_DLG_PUBKEY          "Public key file (*.pub):"
+    IDS_DLG_PUBKEY          "Certificate (*-cert.pub), optional:"
     IDS_DLG_PRIVKEY         "Private key file (*.pem;*.ppk):"
     IDS_DLG_COMPRESS        "Compress with &ZLIB (may fail on some servers)"
     IDS_DLG_DETAILED_LOG    "Log full directory listings (&debug)"
@@ -825,6 +780,34 @@ BEGIN
     IDS_DLG_ENCODING        "Encoding (codepage) of file names:"
     IDS_DLG_PERMISSIONS_GROUP 
                             " User &rights of newly created files/directories: "
+    IDS_JUMP_FROM_SESSION   "These settings come from session '{}' and are shown read-only. Pick (manual) in the jump-host list to configure a host here instead."
+    IDS_IMPORT_BLOCKED      "This session reaches its host through something that was not imported with it: a proxy, a jump host or a tunnel. Connecting now would go straight to the target instead, past the very thing that was put in the way, so it is refused."
+    IDS_SIMPORT_PROXY_LOST  "The session was set to connect through a proxy, but the file carries no description of it. The session was imported without the proxy and will connect directly, so check its proxy setting before using it."
+    IDS_IMPORT_BLOCKED_COPY "The proxy is one the plugin can rebuild: copy the session into your own list with F5 and the proxy comes with it. Its password, if it needs one, is asked for on the first connect."
+    IDS_MOVE_KEPT_RESUMED   "Move: the source was kept, because the copy was resumed onto a file already there"
+    IDS_ERR_SAME_FILE       "Source and destination are the same file: both sessions point at the same account on the same server, at the same path. Copying a file onto itself would cut it short, so this is refused."
+    IDS_ERR_NO_SFTP_HINT    "The server did not start an SFTP session. If it offers only a shell — dropbear on a camera or a router, say — turn on ""Use SCP for everything (no SFTP)"" for this session."
+    IDS_ERR_KEY_ONLY_NO_KEY "The server accepts only login with a key, and this session has none to offer. Set a private key file for the session, or use Pageant with the key loaded."
+    IDS_PROP_CAPTION        "Properties"
+    IDS_PROP_GRP_FILE       "File properties"
+    IDS_PROP_LBL_NAME       "Name:"
+    IDS_PROP_LBL_OWNER      "Owner:"
+    IDS_PROP_LBL_GROUP      "Group:"
+    IDS_PROP_LBL_PERMS      "Permissions:"
+    IDS_PROP_LBL_SIZE       "Size:"
+    IDS_PROP_LBL_MODIFIED   "Last modified:"
+    IDS_PROP_GRP_RAW        "Server's stat reply"
+    IDS_PROP_NO_STAT        "The server ran no stat command. What the SFTP protocol reports:"
+    IDS_DLG_LAN_TIMEOUT     "Session timeout (min):"
+    IDS_DLG_LAN_TIMEOUT_HINT "(0 = no limit)"
+    IDS_DLG_PROTO_AUTO      "Auto"
+    IDS_LOG_PPK_ERR_LIMITS  "The .ppk file asks for Argon2 parameters beyond the safe limits."
+    IDS_LOG_PPK_ERR_INCONSISTENT "The .ppk file holds a key whose parts do not belong together."
+    IDS_DOWNLOAD_ERROR_TITLE "Download error"
+    IDS_DOWNLOAD_ERROR_TEXT "The file could not be downloaded:"
+    IDS_DOWNLOAD_SKIP       "Skip"
+    IDS_DOWNLOAD_SKIP_ALL   "Skip all"
+    IDS_LOG_DOWNLOAD_SKIPPED "Skipped after a download error:"    IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"
     IDS_DLG_SESSION         "Session:"
@@ -835,8 +818,6 @@ BEGIN
     IDS_DLG_JUMPHOST_GRP    "Jump host:"
     IDS_DLG_USE_JUMPHOST    "Use &jump host"
     IDS_DLG_PROXY_SETTINGS  "Proxy settings:"
-    IDS_DLG_DELETELAST      "Delete proxy"
-    IDS_DLG_IMPORT          "Import..."
     IDS_PROXY_DLG_CAPTION   "Proxy Settings"
     IDS_PROXY_DLG_GROUP     "Proxy settings"
     IDS_PROXY_DLG_HOST      "Proxy host:"
@@ -848,18 +829,25 @@ BEGIN
     IDS_JUMP_DLG_HOST       "Jump host:"
     IDS_JUMP_DLG_PORT       "Port:"
     IDS_JUMP_DLG_USER       "User name:"
+    IDS_DLG_JUMP_BUTTON     "Jump..."
+    IDS_JUMP_NOT_CONFIGURED "Jump host is enabled for this session but none is configured. Pick a jump session or fill in the jump host details."
 END
 
 STRINGTABLE
 BEGIN
     IDS_LAN_ERR_CONN_FAILED "LAN Pair: connection failed"
-    IDS_IMP_MENU_PUTTY_HDR       "PuTTY"
-    IDS_IMP_MENU_WINSCP_HDR      "WinSCP"
-    IDS_IMP_MENU_OTHER_HDR       "Other"
-    IDS_IMP_BROWSE_WINSCP_FOLDER "Select WinSCP Portable folder"
-    IDS_IMP_ERR_NO_WINSCP_INI    "WinSCP.ini not found in the selected folder."
-    IDS_IMP_BROWSE_KITTY_FOLDER  "Select KiTTY Portable folder"
     IDS_LAN_ERR_DONOR_NO_CONNECT "LAN Pair: this machine is configured as Donor. The remote Receiver must connect here."
+    IDS_JUMP_SESSION_NONE           "(manual)"
+    IDS_JUMP_SESSION_MISSING_SUFFIX " (missing)"
+    IDS_JUMP_SESSION_NOT_FOUND      "Jump session '{}' not found in saved sessions"
+    IDS_JUMP_SESSION_CHAINED        "Jump session '{}' has its own jump-host configuration — chained or cyclic jump hosts are not supported. Pick a session that connects directly to the bastion."
+    IDS_SIMPORT_TITLE               "SFTP plugin - session import"
+    IDS_SIMPORT_ERR_OPEN            "Cannot open the source file for reading."
+    IDS_SIMPORT_ERR_EMPTY           "Cannot import session: the source file is empty."
+    IDS_SIMPORT_ERR_NO_SECTIONS     "Cannot import session: the source file has no INI sections.\r\nExpected a file with at least one [section] and a `server=` key."
+    IDS_SIMPORT_ERR_NO_SERVER       "Cannot import session: no INI section with a non-empty `server=` key was found."
+    IDS_SIMPORT_ERR_EMPTY_DEST      "Cannot import session: the destination path is empty."
+    IDS_SIMPORT_ERR_WRITE           "Cannot import session: failed to write to sftpplug.ini."
 END
 
 #endif    // English (United States) resources

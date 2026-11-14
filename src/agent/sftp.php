@@ -27,6 +27,12 @@ if (!function_exists('str_ends_with')) {
  * 2) Prefer setting PSK via environment variable (see AGENT_PSK_ENV_KEYS).
  * 3) For "upload-only deploy" flow, set AGENT_PSK_SALT + AGENT_PSK_SHA256 and keep AGENT_PSK placeholder.
  * 4) Optionally set AGENT_ROOT to the desired jail root.
+ * 5) Serve it over HTTPS: the client sends the PSK in the X-SFTP-AUTH header
+ *    of every request, so plain HTTP exposes it to anyone on the path.
+ *
+ * AGENT_ROOT confines file operations only. SHELL_EXEC runs any command as
+ * the web server user, so whoever holds the PSK can reach everything that
+ * user can; set AGENT_ALLOW_SHELL to false when the shell is not needed.
  */
 
 // ---------------------------------------------------------------------
@@ -34,12 +40,13 @@ if (!function_exists('str_ends_with')) {
 // ---------------------------------------------------------------------
 
 const AGENT_NAME = 'TC PHP Agent';
-const AGENT_VERSION = '1.0.1';
+const AGENT_VERSION = '1.0.2';
 const AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET';
 const AGENT_PSK_SALT = '';
 const AGENT_PSK_SHA256 = '';
 const AGENT_PSK_ENV_KEYS = ['TC_SFTP_AGENT_PSK', 'SFTP_AGENT_PSK', 'AGENT_PSK'];
 const AGENT_ROOT = __DIR__;
+const AGENT_ALLOW_SHELL = true;
 const AGENT_NONCE_TTL = 300; // seconds
 const AGENT_REPLAY_DIR = '._sftp_agent_nonce_cache';
 const AGENT_DEFAULT_CHUNK = 262144; // 256 KiB
@@ -112,30 +119,40 @@ try {
             fail(400, 'UNKNOWN_OPERATION', 'Unsupported operation');
     }
 } catch (Throwable $e) {
-    fail(500, 'INTERNAL_ERROR', $e->getMessage());
+    // The exception text may carry server paths; it goes to the server log only.
+    error_log('TC PHP Agent: ' . $e->getMessage());
+    fail(500, 'INTERNAL_ERROR', 'Internal agent error');
 }
 
 // ---------------------------------------------------------------------
 // Operations
 // ---------------------------------------------------------------------
 
+// PROBE answers without auth, so an anonymous caller gets only what the
+// client needs to connect; runtime and configuration details need the PSK.
 function op_probe(): void
 {
-    $ini = collect_ini_info();
-    $caps = collect_capabilities($ini);
-    ok([
+    $payload = [
         'agent' => [
             'name' => AGENT_NAME,
             'version' => AGENT_VERSION,
         ],
-        'runtime' => [
+        'capabilities' => [
+            'recommended_chunk_size' => recommended_chunk_size(),
+        ],
+    ];
+    $auth = get_header('x-sftp-auth', '');
+    if ($auth !== '' && verify_legacy_auth($auth)) {
+        $ini = collect_ini_info();
+        $payload['runtime'] = [
             'php_version' => PHP_VERSION,
             'sapi' => PHP_SAPI,
             'os_family' => PHP_OS_FAMILY,
-        ],
-        'ini' => $ini,
-        'capabilities' => $caps,
-    ]);
+        ];
+        $payload['ini'] = $ini;
+        $payload['capabilities'] = collect_capabilities($ini);
+    }
+    ok($payload);
 }
 
 function op_list(): void
@@ -307,7 +324,7 @@ function op_tar_stream(): void
     }
 
     // End-of-archive: two 512-byte zero blocks
-    fwrite($out, str_repeat("\0", 1024));
+    tar_write_all($out, str_repeat("\0", 1024));
     fclose($out);
     exit;
 }
@@ -324,6 +341,15 @@ function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath):
         }
         $childAbs = $dirAbs . DIRECTORY_SEPARATOR . $name;
         $childRel = ($relPath === '') ? $name : $relPath . '/' . $name;
+
+        // A link is packed as the file it points to only while that file is
+        // inside the root; links to directories are never followed.
+        if (is_link($childAbs)) {
+            $real = realpath($childAbs);
+            if ($real === false || !is_within_root(normalize_abs($real), root_realpath())) {
+                continue;
+            }
+        }
 
         if (is_dir($childAbs) && !is_link($childAbs)) {
             $mtime = (int)@filemtime($childAbs);
@@ -348,8 +374,10 @@ function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath):
                 return false;
             }
             
+            // Copy exactly the size in the header: a file growing meanwhile
+            // would otherwise shift every following block of the archive.
             if ($size > 0) {
-                $copied = @stream_copy_to_stream($fp, $out);
+                $copied = @stream_copy_to_stream($fp, $out, $size);
                 if ($copied === false || $copied < $size) {
                     fclose($fp);
                     closedir($dh);
@@ -371,6 +399,24 @@ function tar_stream_dir(string $rootAbs, string $dirAbs, $out, string $relPath):
         }
     }
     closedir($dh);
+    return true;
+}
+
+// fwrite may take fewer bytes than it was given, so a single call cannot be
+// trusted to have written the whole buffer. Everything that goes into a tar
+// stream must go through here: a short write inside an archive shifts every
+// following block and the result no longer unpacks.
+function tar_write_all($out, string $data): bool
+{
+    $offset = 0;
+    $length = strlen($data);
+    while ($offset < $length) {
+        $written = fwrite($out, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            return false;
+        }
+        $offset += $written;
+    }
     return true;
 }
 
@@ -434,7 +480,7 @@ function op_tar_extract(): void
 {
     @set_time_limit(0);
     $relPath = normalize_rel((string)get_param('path', '.'));
-    $absPath = resolve_path_for_create($relPath);
+    $absPath = ($relPath === '.') ? root_realpath() : resolve_path_for_create($relPath);
     if (!is_dir($absPath) && !@mkdir($absPath, 0775, true)) {
         fail(500, 'MKDIR_FAILED', 'Cannot create target directory');
     }
@@ -490,6 +536,8 @@ function tar_extract_stream(string $rootAbs, $in): int
         $entryPath  = ($prefix !== '') ? ($prefix . '/' . $nameRaw) : $nameRaw;
         $paddedSize = (int)(($fileSize + 511) / 512) * 512;
         if ($typeflag === 'L') {
+            // A long name is a path, not data; anything bigger is a broken stream.
+            if ($fileSize > 65536) break;
             $longData = ($paddedSize > 0) ? tar_read_exact($in, $paddedSize) : '';
             if ($longData === null) break;
             $pendingLongName = rtrim(substr((string)$longData, 0, $fileSize), "\0");
@@ -500,11 +548,20 @@ function tar_extract_stream(string $rootAbs, $in): int
             $pendingLongName = '';
         }
         $entryPath = str_replace('\\', '/', trim($entryPath, '/'));
-        if ($entryPath === '' || strpos($entryPath, '..') !== false) {
+        // Only directories and regular files are unpacked; links, devices and
+        // pax headers are skipped with their data.
+        $isFile = ($typeflag === '0' || $typeflag === "\0" || $typeflag === '7');
+        if ($entryPath === '' || str_contains($entryPath, "\0")
+            || in_array('..', explode('/', $entryPath), true)
+            || ($typeflag !== '5' && !$isFile)) {
             if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
             continue;
         }
         $absTarget = $rootAbs . '/' . $entryPath;
+        if (!create_target_is_safe($absTarget, root_realpath())) {
+            if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
+            continue;
+        }
         if ($typeflag === '5') {
             @mkdir($absTarget, 0755, true);
             if ($paddedSize > 0) tar_skip_exact($in, $paddedSize);
@@ -564,8 +621,8 @@ function op_tar_pack(): void
     }
 
     foreach ($lines as $relPath) {
-        $relPath = trim((string)$relPath);
-        if ($relPath === '') {
+        $relPath = normalize_rel(trim((string)$relPath));
+        if ($relPath === '.') {
             continue;
         }
         // Validate: path must resolve inside root
@@ -575,7 +632,7 @@ function op_tar_pack(): void
             continue;
         }
         $real = normalize_abs($real);
-        if (!str_starts_with($real, $root)) {
+        if (!is_within_root($real, $root)) {
             continue;
         }
         if (is_dir($real)) {
@@ -588,28 +645,42 @@ function op_tar_pack(): void
             }
             $fh = fopen($real, 'rb');
             if ($fh === false) {
-                fwrite($mem, str_repeat("\0", (($size + 511) & ~511)));
+                tar_write_all($mem, str_repeat("\0", (($size + 511) & ~511)));
                 continue;
             }
+            // The entry holds exactly the size in its header: extra bytes of a
+            // growing file are left out, a shrunk file is padded with zeros.
             $written = 0;
-            while (!feof($fh)) {
-                $chunk = fread($fh, 65536);
-                if ($chunk === false) {
+            while ($written < $size && !feof($fh)) {
+                $chunk = fread($fh, min(65536, $size - $written));
+                if ($chunk === false || $chunk === '') {
                     break;
                 }
-                fwrite($mem, $chunk);
+                if (!tar_write_all($mem, $chunk)) {
+                    fclose($fh);
+                    fclose($mem);
+                    exit;
+                }
                 $written += strlen($chunk);
             }
             fclose($fh);
+            while ($written < $size) {
+                $fill = min(65536, $size - $written);
+                if (!tar_write_all($mem, str_repeat("\0", $fill))) {
+                    fclose($mem);
+                    exit;
+                }
+                $written += $fill;
+            }
             $pad = (($written + 511) & ~511) - $written;
             if ($pad > 0) {
-                fwrite($mem, str_repeat("\0", $pad));
+                tar_write_all($mem, str_repeat("\0", $pad));
             }
         }
     }
 
     // End-of-archive: two zero blocks
-    fwrite($mem, str_repeat("\0", 1024));
+    tar_write_all($mem, str_repeat("\0", 1024));
     fclose($mem);
     exit;
 }
@@ -721,16 +792,15 @@ function op_finalize(): void
     $finalAbs = resolve_path_for_create($relPath);
     ensure_parent_dir($finalAbs);
 
+    // rename() replaces an existing file in one step, so the old content
+    // stays in place until the new one takes its name.
     $overwrite = bool_param('overwrite', true);
     if (file_exists($finalAbs)) {
         if (!$overwrite) {
             fail(409, 'TARGET_EXISTS', 'Target exists and overwrite=false');
         }
-        if (is_dir($finalAbs)) {
+        if (is_dir($finalAbs) && !is_link($finalAbs)) {
             fail(409, 'TARGET_IS_DIR', 'Target path is a directory');
-        }
-        if (!@unlink($finalAbs)) {
-            fail(500, 'UNLINK_FAILED', 'Failed to remove existing target');
         }
     }
 
@@ -745,11 +815,13 @@ function op_finalize(): void
     ]);
 }
 
+// The path is taken as named, not resolved: deleting a link removes the link
+// and leaves the file it points to alone.
 function op_delete(): void
 {
     $relPath = normalize_rel((string)get_param('path', ''));
-    $absPath = resolve_path($relPath, true);
-    if (!is_file($absPath)) {
+    $absPath = resolve_path($relPath, false);
+    if (!is_link($absPath) && !is_file($absPath)) {
         fail(404, 'NOT_A_FILE', 'Path is not a file');
     }
     if (!@unlink($absPath)) {
@@ -766,7 +838,11 @@ function op_mkdir(): void
     }
     $absPath = resolve_path_for_create($relPath);
     $recursive = bool_param('recursive', true);
-    $mode = octdec((string)get_param('mode', '0775'));
+    $modeRaw = (string)get_param('mode', '0775');
+    if (!preg_match('/^0?[0-7]{3}$/', $modeRaw)) {
+        fail(400, 'INVALID_MODE', 'Mode must be three octal digits');
+    }
+    $mode = octdec($modeRaw);
     if (is_dir($absPath)) {
         ok(['created' => false, 'exists' => true, 'path' => $relPath]);
     }
@@ -776,10 +852,21 @@ function op_mkdir(): void
     ok(['created' => true, 'path' => $relPath]);
 }
 
+// The root holds the agent itself and is never removed. A link to a
+// directory is removed as a link; the directory it points to stays.
 function op_rmdir(): void
 {
     $relPath = normalize_rel((string)get_param('path', ''));
-    $absPath = resolve_path($relPath, true);
+    if ($relPath === '.') {
+        fail(403, 'ROOT_PROTECTED', 'The agent root cannot be removed');
+    }
+    $absPath = resolve_path($relPath, false);
+    if (is_link($absPath)) {
+        if (!@unlink($absPath) && !@rmdir($absPath)) {
+            fail(500, 'RMDIR_FAILED', 'Link cannot be removed');
+        }
+        ok(['removed' => true, 'path' => $relPath, 'recursive' => false]);
+    }
     if (!is_dir($absPath)) {
         fail(404, 'NOT_A_DIRECTORY', 'Path is not a directory');
     }
@@ -796,6 +883,23 @@ function op_rmdir(): void
     ok(['removed' => true, 'path' => $relPath, 'recursive' => $recursive]);
 }
 
+// Whether two paths name one file. Inode numbers decide where the platform
+// has them; where it reports none (PHP on Windows), the same path in other
+// letter case is the same file, since that file system ignores case. Links
+// are not followed: a link and the file it points to are two names.
+function same_file(string $a, string $b): bool
+{
+    $sa = @lstat($a);
+    $sb = @lstat($b);
+    if ($sa === false || $sb === false) {
+        return false;
+    }
+    if ($sa['ino'] !== 0 || $sb['ino'] !== 0) {
+        return $sa['dev'] === $sb['dev'] && $sa['ino'] === $sb['ino'];
+    }
+    return strcasecmp($a, $b) === 0;
+}
+
 function op_rename(): void
 {
     $fromRel = normalize_rel((string)get_param('from', ''));
@@ -804,19 +908,27 @@ function op_rename(): void
         fail(400, 'INVALID_PATH', 'Both from and to are required');
     }
 
-    $fromAbs = resolve_path($fromRel, true);
+    if ($fromRel === '.') {
+        fail(403, 'ROOT_PROTECTED', 'The agent root cannot be renamed');
+    }
+
+    // The source is taken as named, so renaming a link moves the link.
+    $fromAbs = resolve_path($fromRel, false);
+    if (!is_link($fromAbs) && !file_exists($fromAbs)) {
+        fail(404, 'NOT_FOUND', 'Path not found');
+    }
     $toAbs = resolve_path_for_create($toRel);
     ensure_parent_dir($toAbs);
     $overwrite = bool_param('overwrite', true);
-    if (file_exists($toAbs)) {
+    // Changing only the letter case on a case-insensitive file system finds
+    // the source itself at the target name, which is not a conflict. An
+    // existing file is replaced by rename() itself in one step.
+    if ((is_link($toAbs) || file_exists($toAbs)) && !same_file($fromAbs, $toAbs)) {
         if (!$overwrite) {
             fail(409, 'TARGET_EXISTS', 'Target exists and overwrite=false');
         }
-        if (is_dir($toAbs)) {
+        if (is_dir($toAbs) && !is_link($toAbs)) {
             fail(409, 'TARGET_IS_DIR', 'Target is a directory');
-        }
-        if (!@unlink($toAbs)) {
-            fail(500, 'UNLINK_FAILED', 'Failed to replace target');
         }
     }
     if (!@rename($fromAbs, $toAbs)) {
@@ -848,6 +960,9 @@ function op_hash(): void
 
 function op_shell_exec(): void
 {
+    if (!AGENT_ALLOW_SHELL) {
+        fail(403, 'SHELL_DISABLED', 'Shell execution is disabled in the agent');
+    }
     $cmd = trim((string)get_param('cmd', ''));
     if ($cmd === '') {
         fail(400, 'INVALID_COMMAND', 'Command is required');
@@ -966,7 +1081,6 @@ function require_auth(string $method, string $op): void
     if (!preg_match('/^[A-Za-z0-9._-]{8,128}$/', $nonce)) {
         fail(401, 'BAD_NONCE', 'Invalid nonce format');
     }
-    enforce_nonce_once($nonce, $ts);
 
     $base = strtoupper($method) . "\n" . $op . "\n" . $path . "\n" . $ts . "\n" . $nonce;
     if ($hmacPsk === '') {
@@ -976,6 +1090,9 @@ function require_auth(string $method, string $op): void
     if (!hash_equals($expected, strtolower($sig))) {
         fail(401, 'BAD_SIGNATURE', 'Signature mismatch');
     }
+    // Only a correctly signed request may record its nonce, so unsigned
+    // traffic cannot fill the cache or burn nonces of real requests.
+    enforce_nonce_once($nonce, $ts);
 }
 
 function resolve_agent_psk_plain(): string
@@ -1223,7 +1340,7 @@ function resolve_path(string $rel, bool $mustExist): string
             fail(404, 'NOT_FOUND', 'Path not found');
         }
         $real = normalize_abs($real);
-        if (!str_starts_with($real, $root)) {
+        if (!is_within_root($real, $root)) {
             fail(403, 'PATH_ESCAPE', 'Resolved path escapes root');
         }
         return $real;
@@ -1235,7 +1352,7 @@ function resolve_path(string $rel, bool $mustExist): string
         fail(404, 'PARENT_NOT_FOUND', 'Parent directory not found');
     }
     $parentReal = normalize_abs($parentReal);
-    if (!str_starts_with($parentReal, $root)) {
+    if (!is_within_root($parentReal, $root)) {
         fail(403, 'PATH_ESCAPE', 'Parent path escapes root');
     }
     return normalize_abs($target);
@@ -1249,19 +1366,45 @@ function resolve_path_for_create(string $rel): string
     }
     $target = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
     $target = normalize_abs($target);
-    if (!str_starts_with($target, $root)) {
+    if (!is_within_root($target, $root)) {
         fail(403, 'PATH_ESCAPE', 'Target path escapes root');
     }
-
-    $parent = dirname($target);
-    $parentReal = realpath($parent);
-    if ($parentReal !== false) {
-        $parentReal = normalize_abs($parentReal);
-        if (!str_starts_with($parentReal, $root)) {
-            fail(403, 'PATH_ESCAPE', 'Parent path escapes root');
-        }
+    if (!create_target_is_safe($target, $root)) {
+        fail(403, 'PATH_ESCAPE', 'Target path escapes root');
     }
     return $target;
+}
+
+// Whether $path is the root itself or lies under it. The separator matters:
+// "/var/www/html2" starts with "/var/www/html" but is outside it.
+function is_within_root(string $path, string $root): bool
+{
+    if ($path === $root) {
+        return true;
+    }
+    return str_starts_with($path, rtrim($root, '\\/') . DIRECTORY_SEPARATOR);
+}
+
+// Whether writing at $target stays inside the root once links are followed.
+// The nearest part of the path that already exists is resolved, since the
+// missing directories below it are created there; an existing link at the
+// target itself must point inside the root, a dangling one is refused.
+function create_target_is_safe(string $target, string $root): bool
+{
+    if (is_link($target)) {
+        $real = realpath($target);
+        return $real !== false && is_within_root(normalize_abs($real), $root);
+    }
+    $existing = dirname($target);
+    while (!file_exists($existing) && !is_link($existing)) {
+        $up = dirname($existing);
+        if ($up === $existing) {
+            return false;
+        }
+        $existing = $up;
+    }
+    $real = realpath($existing);
+    return $real !== false && is_within_root(normalize_abs($real), $root);
 }
 
 function ensure_parent_dir(string $absPath): void
@@ -1310,9 +1453,10 @@ function remove_tree(string $dir): void
         new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
         RecursiveIteratorIterator::CHILD_FIRST
     );
+    // Links inside the tree are removed as links, never descended into.
     foreach ($it as $entry) {
         $p = $entry->getPathname();
-        if ($entry->isDir()) {
+        if ($entry->isDir() && !$entry->isLink()) {
             if (!@rmdir($p)) {
                 fail(500, 'RMDIR_FAILED', 'Failed to remove directory in tree');
             }
@@ -1331,9 +1475,25 @@ function remove_tree(string $dir): void
 // Replay protection
 // ---------------------------------------------------------------------
 
+// The nonce cache lives in the system temp folder, out of reach of file
+// operations: inside the root a client could delete it and replay requests.
+// The root is used only where the temp folder is not writable (open_basedir).
+function nonce_cache_dir(): string
+{
+    $root = root_realpath();
+    $tmp = rtrim((string)sys_get_temp_dir(), '\\/');
+    if ($tmp !== '') {
+        $dir = $tmp . DIRECTORY_SEPARATOR . AGENT_REPLAY_DIR . '_' . substr(hash('sha256', $root), 0, 16);
+        if ((is_dir($dir) || @mkdir($dir, 0700, true)) && is_writable($dir)) {
+            return $dir;
+        }
+    }
+    return $root . DIRECTORY_SEPARATOR . AGENT_REPLAY_DIR;
+}
+
 function enforce_nonce_once(string $nonce, int $ts): void
 {
-    $base = root_realpath() . DIRECTORY_SEPARATOR . AGENT_REPLAY_DIR;
+    $base = nonce_cache_dir();
     if (!is_dir($base) && !@mkdir($base, 0700, true) && !is_dir($base)) {
         fail(500, 'NONCE_STORAGE_FAILED', 'Nonce cache directory creation failed');
     }
@@ -1410,7 +1570,8 @@ function collect_capabilities(array $ini): array
     $ops = [
         'LIST', 'STAT', 'GET', 'PUT', 'FINALIZE', 'DELETE', 'MKDIR', 'RMDIR', 'RENAME', 'HASH'
     ];
-    if (pick_shell_method($disabled) !== '') {
+    $shellMethod = AGENT_ALLOW_SHELL ? pick_shell_method($disabled) : '';
+    if ($shellMethod !== '') {
         $ops[] = 'SHELL_EXEC';
     }
     $ops[] = 'TAR_STREAM';
@@ -1427,7 +1588,7 @@ function collect_capabilities(array $ini): array
         'compression' => $compression,
         'hash_algorithms' => $preferredHashes,
         'disabled_functions' => array_keys($disabled),
-        'shell_method' => pick_shell_method($disabled),
+        'shell_method' => $shellMethod,
         'auth' => [
             'probe_public' => true,
             'psk_configured' => is_legacy_psk_configured(),

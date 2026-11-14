@@ -78,8 +78,12 @@ public:
 
     bool mkdir (const std::string& path)                          noexcept;
     bool remove(const std::string& path)                          noexcept;
+    // `exists` is set when the peer refused because newPath is taken and
+    // overwrite was not asked for.
     bool rename(const std::string& oldPath,
-                const std::string& newPath)                       noexcept;
+                const std::string& newPath,
+                bool               overwrite,
+                bool*              exists = nullptr)              noexcept;
 
 private:
     struct Impl;

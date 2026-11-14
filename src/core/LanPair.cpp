@@ -6,6 +6,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <iphlpapi.h>
+#include <shlobj.h>
 #include <bcrypt.h>
 #include <wincrypt.h>
 
@@ -86,10 +87,14 @@ std::string getHostNameSafe() {
 }
 
 std::filesystem::path secretsDir() {
-    const char* appData = std::getenv("APPDATA");
-    if (!appData || !*appData)
+    PWSTR appData = nullptr;
+    std::filesystem::path base;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, &appData)))
+        base = appData;
+    CoTaskMemFree(appData);
+    if (base.empty())
         return std::filesystem::temp_directory_path() / "sftpplug.secrets";
-    return std::filesystem::path(appData) / "GHISLER" / "sftpplug.secrets";
+    return base / "GHISLER" / "sftpplug.secrets";
 }
 
 std::optional<std::vector<uint8_t>> dpapiProtect(std::span<const uint8_t> plain) {
@@ -405,21 +410,7 @@ struct PairServer::Impl {
             if (auth.size() != 3 || auth[0] != "PAIR1" || auth[1] != "AUTH")
                 return false;
 
-            std::string combined;
-            if (clientPeerId < cfg.peerId)
-                combined = clientPeerId + "<>" + cfg.peerId;
-            else
-                combined = cfg.peerId + "<>" + clientPeerId;
-            std::vector<uint8_t> derivedSalt(16, 0);
-            auto h = hmacSha256(
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-            if (h && h->size() >= 16) {
-                for (size_t i = 0; i < 16; ++i) derivedSalt[i] = (*h)[i];
-            } else {
-                memcpy(derivedSalt.data(), "sftpplug-pair...", 16);
-            }
-            const auto derived = deriveKeyPbkdf2(cfg.password, std::span<const uint8_t>(derivedSalt.data(), derivedSalt.size()), kDerivedKeySize);
+            const auto derived = derivePairKey(cfg.password, clientPeerId, cfg.peerId);
 
             if (!derived) return false;
             key = *derived;
@@ -655,21 +646,7 @@ bool PairClient::connectAndAuthenticate(const PairClientConfig& cfg,
     const std::string serverProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + cfg.peerId + "|" + serverPeerId;
 
     if (!cfg.password.empty()) {
-        std::string combined;
-        if (cfg.peerId < serverPeerId)
-            combined = cfg.peerId + "<>" + serverPeerId;
-        else
-            combined = serverPeerId + "<>" + cfg.peerId;
-        std::vector<uint8_t> derivedSalt(16, 0);
-        auto h = hmacSha256(
-            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-        if (h && h->size() >= 16) {
-            for (size_t i = 0; i < 16; ++i) derivedSalt[i] = (*h)[i];
-        } else {
-            memcpy(derivedSalt.data(), "sftpplug-pair...", 16);
-        }
-        const auto derived = deriveKeyPbkdf2(cfg.password, std::span<const uint8_t>(derivedSalt.data(), derivedSalt.size()), kDerivedKeySize);
+        const auto derived = derivePairKey(cfg.password, cfg.peerId, serverPeerId);
         if (!derived) {
             closesocket(s);
             setErr(err, ERROR_INVALID_DATA, "PBKDF2 failed");

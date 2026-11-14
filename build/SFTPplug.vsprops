@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <_PropertySheetDisplayName>SFTPplug</_PropertySheetDisplayName>
@@ -19,27 +19,19 @@
     <ClCompile>
       <Optimization>Full</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <CompileAs>Default</CompileAs>
       <ForcedIncludeFiles>global.h</ForcedIncludeFiles>
-      <AdditionalIncludeDirectories Condition="'$(SFTP_ALLINONE)'!='1'">
+      <AdditionalIncludeDirectories>
         $(SrcDir)include;
         $(SrcDir)include\third_party;
         $(SrcDir);
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(SFTP_ALLINONE)'=='1'">
-        $(SrcDir)include;
-        $(SrcDir)include\third_party;
-        $(SrcDir);
-        %(AdditionalIncludeDirectories)
-      </AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4244;4267;4996;26812;26451</DisableSpecificWarnings>
-      <PreprocessorDefinitions Condition="'$(SFTP_ALLINONE)'!='1'">_USRDLL;_WIN32_WINNT=0x0600;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(SFTP_ALLINONE)'=='1'">_USRDLL;_WIN32_WINNT=0x0600;SFTP_ALLINONE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_USRDLL;_WIN32_WINNT=0x0601;WINVER=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>

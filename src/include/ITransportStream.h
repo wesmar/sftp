@@ -25,6 +25,8 @@ typedef SSIZE_T ssize_t;
 //     <  0  — unrecoverable error
 //
 // Use ITRANSPORT_EAGAIN to signal would-block from implementations.
+struct ISshSession;
+
 struct ITransportStream {
     virtual ~ITransportStream() = default;
 
@@ -35,8 +37,16 @@ struct ITransportStream {
     virtual ssize_t write(const void* buf, size_t len) = 0;
 
     // Block until the stream is readable or `timeoutMs` expires.
-    // Returns true if data is available.
+    // Used by paths that don't have a session yet (banner exchange, init).
     virtual bool waitReadable(DWORD timeoutMs) = 0;
+
+    // Block until the stream can make progress in the direction `sess`
+    // reports it's blocked on (libssh2_session_block_directions), or
+    // `timeoutMs` expires. The transport implementation decides which
+    // underlying signals (read/write) map to inner session unblocking —
+    // for nested transports (ProxyJump) inner OUTBOUND may unblock via
+    // either incoming window-update or outbound TCP drain.
+    virtual bool waitForSshIo(ISshSession* sess, DWORD timeoutMs) = 0;
 
     // Human-readable description for logging.
     virtual const char* describe() const = 0;

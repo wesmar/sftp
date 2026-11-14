@@ -1,0 +1,140 @@
+name: Release
+
+# Tag naming convention:
+#   v10.0.2.0-beta1 → prerelease
+#   v10.0.2.0-rc1   → prerelease
+#   v10.0.2.0       → stable release, marked latest
+#
+# Push a matching tag to trigger a fresh build + GitHub Release. The bin/
+# folder is intentionally NOT committed once this workflow is in use — the
+# canonical download lives on the release page.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  # Required to create a GitHub Release and attach the built ZIP.
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          # openssl, libssh2, argon2 sources live as submodules and are
+          # rebuilt from source on every run (cached below).
+          submodules: recursive
+          # Full history so `git describe` and CHANGELOG lookup work.
+          fetch-depth: 0
+
+      - name: Compute build metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $date = (Get-Date -Format "yyyy-MM-dd").ToString()
+          # Anything carrying a pre-release suffix stays off the "latest"
+          # download; only a bare version tag is published as stable.
+          $isPre = if ($tag -match '-(beta|rc)\d*$') { "true" } else { "false" }
+
+          # BuildInfo.h picks this file up via __has_include; no /D flag
+          # required. Everything the plugin surfaces about itself (startup
+          # log, F7 help trailer) is derived from these three defines.
+          $header = @"
+          #pragma once
+          #define SFTP_BUILD_TAG  "$tag"
+          #define SFTP_BUILD_SHA  "$sha"
+          #define SFTP_BUILD_DATE "$date"
+          "@
+          $header | Out-File -Encoding utf8 -NoNewline `
+            -FilePath src\include\build_info_gen.h
+
+          "tag=$tag"              >> $env:GITHUB_OUTPUT
+          "sha=$sha"              >> $env:GITHUB_OUTPUT
+          "date=$date"            >> $env:GITHUB_OUTPUT
+          "prerelease=$isPre"     >> $env:GITHUB_OUTPUT
+          Write-Host "Build metadata: tag=$tag sha=$sha date=$date prerelease=$isPre"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install NASM
+        # OpenSSL 3.x requires NASM for both x64 and x86 assembly. Not
+        # pre-installed on windows-2022. Chocolatey drops nasm.exe into
+        # C:\Program Files\NASM\, which matches build-deps.ps1's search
+        # path — no PATH tweaking needed.
+        shell: pwsh
+        run: choco install nasm -y --no-progress
+
+      - name: Build dependencies (OpenSSL, libssh2, argon2) — FULL from source
+        shell: pwsh
+        # Every release build compiles the third-party stack from scratch,
+        # deliberately NOT using any cache. Locally we skip this step
+        # between runs because the outputs sit in thirdparty/build/, but on
+        # the runner we want a clean-room rebuild for reproducibility — no
+        # stale artefact from a prior run, no accidental drift when a
+        # submodule commit changes. Cost: ~15-25 minutes on windows-latest
+        # (OpenSSL is the bulk), acceptable since releases are rare.
+        run: ./build-deps.ps1 -Clean
+
+      - name: Build plugin (Release x64 + x86)
+        shell: pwsh
+        # The help page is generated from src/help by a Python script, so the
+        # runner builds it like everything else — nothing is carried in the
+        # repository and nothing can go stale between an edit and a tag.
+        run: ./build.ps1
+
+      - name: Rename release artifact
+        id: zip
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $zipSrc = "bin\SFTPplug.zip"
+          $zipDst = "bin\SFTPplug-$tag.zip"
+          if (-not (Test-Path $zipSrc)) {
+            throw "Build did not produce $zipSrc"
+          }
+          Copy-Item $zipSrc $zipDst
+          "path=$zipDst" >> $env:GITHUB_OUTPUT
+
+      - name: Extract CHANGELOG section for release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          # Tags carry the `v` prefix; CHANGELOG headings do not.
+          $version = $tag.TrimStart('v')
+
+          $content = Get-Content -Raw CHANGELOG.md
+
+          # Prefer an exact-match section (`## 10.0.2.0-rc1 - date`).
+          $pattern = "(?ms)^## \s*$([regex]::Escape($version))\b.*?(?=^## |\z)"
+          $match = [regex]::Match($content, $pattern)
+
+          # Fall back to the base version section when no section exists for
+          # this specific pre-release — the CHANGELOG accumulates detail
+          # under the plain `## 10.0.2.0` heading until the stable release.
+          if (-not $match.Success) {
+            $stripped = $version -replace '-(beta|rc)\d*$', ''
+            $pattern = "(?ms)^## \s*$([regex]::Escape($stripped))\b.*?(?=^## |\z)"
+            $match = [regex]::Match($content, $pattern)
+          }
+
+          $body = if ($match.Success) { $match.Value.Trim() } else { "Release $tag" }
+          $body | Out-File -Encoding utf8 release-notes.md
+          "path=release-notes.md" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          files: ${{ steps.zip.outputs.path }}
+          body_path: ${{ steps.notes.outputs.path }}

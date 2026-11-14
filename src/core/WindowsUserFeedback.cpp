@@ -77,7 +77,7 @@ bool WindowsUserFeedback::RequestText(const std::string& title, const std::strin
         }
     } else if (RequestProc) {
         std::array<char, 1024> buf{};
-        if (RequestProc(PluginNumber, type, title.c_str(), prompt.c_str(), buf.data(), static_cast<int>(buf.size() - 1))) {
+        if (RequestInput(type, title.c_str(), prompt.c_str(), buf)) {
             returnedText = buf.data();
             return true;
         }

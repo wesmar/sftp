@@ -2,7 +2,7 @@ Secure FTP Plugin
 Copyright (C) Marek Wesolowski
 
 Help:
-- Open sftpplug.chm for full documentation.
+- Open SFTPplug-help.html for full documentation.
 - You can also open help from the plugin connection dialog via the Help button.
 
 Installation:
@@ -13,8 +13,10 @@ Installation:
 Package contents:
 - sftpplug.wfx64 (64-bit plugin binary)
 - sftpplug.wfx   (32-bit plugin binary)
-- sftpplug.chm   (offline help)
+- SFTPplug-help.html (offline help, opens in your browser)
 - sftp.php        (PHP Agent for HTTP transfer mode)
+- sftpplug.tpl    (connection template)
+- language\       (interface translations)
 - pluginst.inf    (TC auto-install descriptor)
 - readme.txt
 

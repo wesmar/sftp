@@ -103,7 +103,8 @@ inline std::wstring_view make_string_view(const wchar_t* str) noexcept {
     return str ? std::wstring_view(str) : std::wstring_view();
 }
 
-// Bezpieczne wstrzykiwanie do powłoki
+// The inside of a single-quoted POSIX shell word: each embedded quote becomes
+// '\'' and nothing else is ever interpreted. The caller adds the outer quotes.
 std::string ShellQuoteSingle(const std::string& s);
 std::wstring ShellQuoteSingleW(const std::wstring& s);
 
@@ -148,7 +149,6 @@ bool ParseAddress(LPCSTR serverstring, LPSTR addr, WORD* port, int defport);
 bool IsNumericIPv6(LPCSTR addr);
 
 // Wildcard matching
-bool MultiFileMatchW(LPCWSTR wild, LPCWSTR name);
 
 } // extern "C"
 

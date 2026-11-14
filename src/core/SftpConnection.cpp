@@ -3,6 +3,7 @@
 #include "global.h"
 #include <windows.h>
 #include <ws2tcpip.h>
+#include <mstcpip.h>
 #include <shellapi.h>
 #include <commdlg.h>
 #include <wincrypt.h>
@@ -15,20 +16,19 @@
 #include "ServerRegistry.h"
 #include "res/resource.h"
 #include "CoreUtils.h"
-#include "UtfConversion.h"
 #include "UnicodeHelpers.h"
-#include "FtpDirectoryParser.h"
 
 #include "SftpInternal.h"
 #include "SshBackendFactory.h"
 #include "WindowsUserFeedback.h"
+#include <algorithm>
 #include <array>
+#include <climits>
 #include <condition_variable>
 #include <new>
 #include <fstream>
 #include <iterator>
 #include <vector>
-#include "SessionImport.h"
 #include "PhpAgentClient.h"
 #include "PhpShellConsole.h"
 #include "ConnectionDialog.h"
@@ -36,17 +36,14 @@
 #include "ConnectionLifecycle.h"
 #include "ConnectionNetwork.h"
 #include "SshSessionInit.h"
+#include "PluginEntryPointsInternal.h"
 #include "ConnectionAuth.h"
-#include "SshLibraryLoader.h"
 #include "LanPairSession.h"
 #include "TrustedInstallerToken.h"
 #include "JumpHostConnection.h"
 
 #pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
-
-// SFTP_ALLINONE: Linker resolves libssh2 functions directly.
-// No dynamic LoadLibrary calls needed.
 
 #define CONN_LOG(fmt, ...) SFTP_LOG("CONN", fmt, ##__VA_ARGS__)
 
@@ -80,8 +77,6 @@ const bool SSH_ScpNeedBlockingMode = false;   // Need to use blocking mode for S
 const bool SSH_ScpNeedQuote = false;          // Need to use double quotes "" around names with spaces for SCP?
 const bool SSH_ScpCanSendKeepAlive = false;   // Declared in SftpInternal.h; keepalive not needed for SCP
 
-void EncryptString(LPCTSTR pszPlain, LPTSTR pszEncrypted, UINT cchEncrypted);
-
 
 bool EscapePressed() noexcept
 {
@@ -98,55 +93,64 @@ bool EscapePressed() noexcept
     return false;
 }
 
-void strlcpyansitoutf8(LPSTR utf8str, LPCSTR ansistr, size_t maxlen) noexcept
-{
-    std::array<WCHAR, 1024> utf16buf{};
-    MultiByteToWideChar(CP_ACP, 0, ansistr, -1, utf16buf.data(), static_cast<int>(utf16buf.size()));
-    ConvUTF16toUTF8(utf16buf.data(), 0, utf8str, maxlen);
-}
-
 void wcslcpytoutf8(LPSTR utf8str, LPCWSTR utf16str, size_t maxlen)
 {
-    ConvUTF16toUTF8(utf16str, 0, utf8str, maxlen);
+    // All or nothing, as for remote paths below.
+    if (ConvUTF16toUTF8(utf16str, 0, utf8str, maxlen) < 0 && utf8str && maxlen > 0)
+        utf8str[0] = '\0';
 }
 
-void CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept
+namespace {
+
+UINT RemoteCodePage(const tConnectSettings* cs) noexcept
 {
-    if (ConnectSettings->utf8names > 0) {
-        ConvUTF16toUTF8(instr, 0, outstr, outmax);
-    } else {
-        walcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
+    return cs->utf8names > 0 ? CP_UTF8 : static_cast<UINT>(cs->codepage);
+}
+
+} // namespace
+
+bool CopyStringW2A(pConnectSettings ConnectSettings, LPCWSTR instr, LPSTR outstr, size_t outmax) noexcept
+{
+    if (!outstr || outmax == 0)
+        return false;
+    outstr[0] = '\0';
+    if (!instr || !instr[0])
+        return true;
+    const int capacity = static_cast<int>((std::min)(outmax, static_cast<size_t>(INT_MAX)));
+    if (WideCharToMultiByte(RemoteCodePage(ConnectSettings), 0, instr, -1, outstr, capacity, nullptr, nullptr) > 0)
+        return true;
+    // A path cut short names another file - its parent directory, say - which
+    // no command may reach, so nothing is sent rather than a prefix.
+    outstr[0] = '\0';
+    SFTP_LOG("PATH", "Remote path longer than %zu bytes, not used", outmax - 1);
+    return false;
+}
+
+bool CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax) noexcept
+{
+    if (!outstr || outmax == 0)
+        return false;
+    outstr[0] = L'\0';
+    if (!instr || !instr[0])
+        return true;
+    const UINT codePage = RemoteCodePage(ConnectSettings);
+    const int need = MultiByteToWideChar(codePage, 0, instr, -1, nullptr, 0); // with the terminator
+    if (need <= 0)
+        return false;
+    if (static_cast<size_t>(need) <= outmax)
+        return MultiByteToWideChar(codePage, 0, instr, -1, outstr, need) > 0;
+    try {
+        std::wstring wide(static_cast<size_t>(need), L'\0');
+        MultiByteToWideChar(codePage, 0, instr, -1, wide.data(), need);
+        size_t n = outmax - 1;
+        if (n > 0 && IS_HIGH_SURROGATE(wide[n - 1]))
+            --n;
+        wmemcpy(outstr, wide.data(), n);
+        outstr[n] = L'\0';
+    } catch (...) {
+        outstr[0] = L'\0';
     }
-}
-
-void CopyStringA2W(pConnectSettings ConnectSettings, LPCSTR instr, LPWSTR outstr, size_t outmax, bool useCVT) noexcept
-{
-    if (ConnectSettings->utf8names > 0) {
-        if (useCVT)
-            ConvUTF8toUTF16(instr, 0, outstr, outmax);
-        else
-            awlcopyCP(CP_UTF8, outstr, instr, outmax - 1);
-    } else {
-        awlcopyCP(ConnectSettings->codepage, outstr, instr, outmax - 1);
-    }
-}
-
-extern "C"
-LPVOID myalloc(size_t count, LPVOID * abstract)
-{
-    return malloc(count);
-}
-
-extern "C"
-LPVOID myrealloc(LPVOID ptr, size_t count, LPVOID * abstract)
-{
-    return realloc(ptr, count);
-}
-
-extern "C"
-void myfree(LPVOID ptr, LPVOID * abstract)
-{
-    free(ptr);
+    return false;
 }
 bool ProgressLoop(LPCSTR progresstext, int start, int end, int * loopval, SYSTICKS * lasttime)
 {
@@ -221,6 +225,16 @@ void SetBlockingSocket(SOCKET s, bool blocking)
     ioctlsocket(s, FIONBIO, &arg);
 }
 
+// Keeps NAT and firewall mappings alive while a session sits idle: the
+// kernel probes after 60 s of silence and every 10 s after that, with no
+// SSH traffic and no thread of our own. A dead peer is noticed too.
+void EnableTcpKeepAlive(SOCKET s)
+{
+    tcp_keepalive ka{1, 60000, 10000};
+    DWORD bytes = 0;
+    WSAIoctl(s, SIO_KEEPALIVE_VALS, &ka, sizeof(ka), nullptr, 0, &bytes, nullptr, nullptr);
+}
+
 bool IsSocketError(SOCKET s)
 {
     fd_set fds;
@@ -228,6 +242,58 @@ bool IsSocketError(SOCKET s)
     FD_ZERO(&fds);
     FD_SET(s, &fds);
     return 1 == select(0, nullptr, nullptr, &fds, &timeout);
+}
+
+// True if the raw TCP endpoint has been closed by the peer (server reboot,
+// firewall reset, or half-closed FIN). Non-destructive: uses select+recv
+// with MSG_PEEK so any bytes in the receive buffer stay there for the next
+// legitimate read by libssh2.
+static bool IsTcpSocketDead(SOCKET s) noexcept
+{
+    if (s == INVALID_SOCKET) return true;
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(s, &rfds);
+    struct timeval tv = { 0, 0 };  // instant, no wait
+    const int selRet = select(0, &rfds, nullptr, nullptr, &tv);
+    if (selRet < 0)                  return true;   // select failed → treat as dead
+    if (selRet == 0)                 return false;  // no data pending, idle-but-alive
+
+    // Socket is readable — could be legit incoming data OR a FIN/RST. Peek
+    // one byte non-destructively. recv == 0 is the WinSock signal for a
+    // gracefully closed peer; a real error other than WOULDBLOCK is a hard
+    // dead connection.
+    char peek = 0;
+    const int rc = recv(s, &peek, 1, MSG_PEEK);
+    if (rc == 0)                     return true;
+    if (rc < 0) {
+        const int err = WSAGetLastError();
+        return err != WSAEWOULDBLOCK;
+    }
+    return false;  // real data present → alive
+}
+
+bool IsSessionAlive(pConnectSettings cs) noexcept
+{
+    if (!cs) return false;
+
+    // LAN Pair carries its own connected-state accessor.
+    if (IsLanPairTransport(cs))
+        return cs->lanSession && cs->lanSession->isConnected();
+
+    // PHP Agent uses HTTP-over-transport; no long-lived TCP to probe. If
+    // the client object exists we optimistically consider it alive — the
+    // next request will error normally and drive a reconnect through the
+    // agent's own retry path.
+    if (IsPhpAgentTransport(cs))
+        return true;
+
+    // Regular SSH / SCP path.
+    if (!cs->session)                return false;
+    if (cs->sock == INVALID_SOCKET)  return false;
+    if (IsTcpSocketDead(cs->sock))   return false;
+    return true;
 }
 
 bool IsSocketWritable(SOCKET s)
@@ -257,6 +323,39 @@ bool WaitForTransportReadable(pConnectSettings cs)
     if (cs->transport_stream)
         return cs->transport_stream->waitReadable(SOCKET_READ_POLL_MS);
     return IsSocketReadable(cs->sock);
+}
+
+// Block_directions-aware wait. Picks read/write/both based on what libssh2
+// says it's waiting on; falls back to read when libssh2 has no opinion.
+// For ProxyJump the transport stream handles the nested wait — inner
+// OUTBOUND can unblock via either incoming window-update (jump read) or
+// outbound jump-TCP drain (jump write).
+bool WaitForSshIo(pConnectSettings cs, DWORD timeoutMs)
+{
+    if (!cs)
+        return false;
+
+    if (cs->transport_stream)
+        return cs->transport_stream->waitForSshIo(cs->session.get(), timeoutMs);
+
+    if (cs->sock == INVALID_SOCKET)
+        return false;
+
+    const int dirs = cs->session ? cs->session->blockDirections() : 0;
+    fd_set rfds, wfds;
+    FD_ZERO(&rfds);
+    FD_ZERO(&wfds);
+
+    if (dirs & LIBSSH2_SESSION_BLOCK_INBOUND)
+        FD_SET(cs->sock, &rfds);
+    if (dirs & LIBSSH2_SESSION_BLOCK_OUTBOUND)
+        FD_SET(cs->sock, &wfds);
+    if (!dirs)
+        FD_SET(cs->sock, &rfds);
+
+    timeval tv = { static_cast<long>(timeoutMs / 1000),
+                   static_cast<long>((timeoutMs % 1000) * 1000) };
+    return select(0, &rfds, &wfds, nullptr, &tv) > 0;
 }
 
 extern "C"
@@ -296,7 +395,9 @@ int myrecv(SOCKET s, LPSTR buf, int len, int flags, LPCSTR progressmessage, int 
         }
         if (ProgressLoop(progressmessage, progressstart, progressstart + 10, ploop, plasttime))
             break;   /* User aborted. */
-        Sleep(SOCKET_POLL_MS);
+        // No Sleep here: IsSocketReadable() above already blocked up to
+        // SOCKET_READ_POLL_MS waiting for data; extra Sleep would just be
+        // dead wait.
     }
     return ret;
 }
@@ -489,20 +590,6 @@ int SftpConnect(pConnectSettings ConnectSettings)
         return SFTP_OK;
     }
 
-    if (!LoadSSHLib())
-        return SFTP_FAILED;
-    if (!loadAgent && ConnectSettings->useagent) {
-        std::array<char, 128> msgTemplate{};
-        LoadStr(msgTemplate, IDS_SSH2_TOO_OLD);
-        std::string msg = msgTemplate.data();
-        auto pos = msg.find("%s");
-        if (pos != std::string::npos)
-            msg.replace(pos, 2, LIBSSH2_VERSION);
-        if (ConnectSettings->feedback) {
-            ConnectSettings->feedback->ShowError(msg.c_str());
-        }
-        return SFTP_FAILED;
-    }
     std::array<char, 1024> buf{};
     std::array<char, 250> connecttoserver{};
     std::array<char, 250> progressbuf{};
@@ -542,22 +629,38 @@ int SftpConnect(pConnectSettings ConnectSettings)
 
     progress = PROG_SOCKET_CONNECT;
 
-    if (ConnectSettings->use_jump_host && !ConnectSettings->jump_host.empty()) {
+    // One resolver decides what this profile's jump host actually is, so the
+    // connect path cannot disagree with what the dialog shows. It refuses
+    // rather than returning an empty endpoint, which is what keeps a session
+    // with a dangling reference from quietly connecting past the bastion.
+    const JumpConfig jumpCfg = ResolveJumpConfig(ConnectSettings, inifilename);
+
+    if (jumpCfg.status != JumpConfigStatus::Disabled &&
+        jumpCfg.status != JumpConfigStatus::Ready) {
+        ShowStatus(jumpCfg.error.c_str());
+        if (ConnectSettings->feedback && !ConnectSettings->jump_refusal_shown) {
+            ConnectSettings->jump_refusal_shown = true;
+            ConnectSettings->feedback->ShowError(jumpCfg.error, "ProxyJump");
+        }
+        return fail(-25);
+    }
+
+    if (jumpCfg.status == JumpConfigStatus::Ready) {
         // -----------------------------------------------------------------
         // ProxyJump path:
         // 1. TCP + SSH to jump host
         // 2. direct-tcpip channel to target
         // 3. Target SSH session runs over channel (via SEND/RECV callbacks)
         // -----------------------------------------------------------------
-        JumpHostSettings jump;
-        jump.host        = ConnectSettings->jump_host;
-        jump.port        = ConnectSettings->jump_port;
-        jump.user        = ConnectSettings->jump_user;
-        jump.password    = ConnectSettings->jump_password;
-        jump.pubkeyfile  = ConnectSettings->jump_pubkeyfile;
-        jump.privkeyfile = ConnectSettings->jump_privkeyfile;
-        jump.useagent    = ConnectSettings->jump_useagent;
-        jump.fingerprint = ConnectSettings->jump_fingerprint;
+        // Force-create the SSH backend before ConnectViaJumpHost. The direct
+        // path lazily creates it inside InitializeSshSession() which runs
+        // AFTER the jump host stage, so on a cold start (first connection of
+        // the session is via ProxyJump) g_sshBackend is still null and the
+        // jump session creation dereferences nullptr.
+        if (!g_sshBackend)
+            g_sshBackend = CreateSshBackend();
+
+        JumpHostSettings jump = jumpCfg.endpoint;
 
         // Target is the server configured in the profile (resolved already
         // in connecttoserver/connecttoport above).
@@ -569,8 +672,11 @@ int SftpConnect(pConnectSettings ConnectSettings)
         if (!stream)
             return fail(-25);
 
-        // Update the in-memory fingerprint copy (may have been set on first connect).
-        ConnectSettings->jump_fingerprint = jump.fingerprint;
+        // Mirror a fingerprint accepted on first connect. Only for a manually
+        // configured jump host: this field describes that host, whereas a
+        // referenced session keeps its own key under its own section.
+        if (ConnectSettings->jump_session_ref.empty())
+            ConnectSettings->jump_fingerprint = jump.fingerprint;
         ConnectSettings->transport_stream = std::move(stream);
         // cs->sock has been set to the jump socket by ConnectViaJumpHost.
 
@@ -604,7 +710,7 @@ int SftpConnect(pConnectSettings ConnectSettings)
     if (!EnsureUserNameIfMissing(ConnectSettings))
         return fail(-110);
 
-    hr = PerformAuthentication(ConnectSettings, progress, loop, lasttime, progressbuf.data(), loadAgent);
+    hr = PerformAuthentication(ConnectSettings, progress, loop, lasttime, progressbuf.data());
     if (hr != 0) return fail(hr);
 
     ShowStatusId(IDS_LOG_POST_AUTH_INIT, nullptr, true);
@@ -632,14 +738,17 @@ int SftpConnect(pConnectSettings ConnectSettings)
     return SFTP_OK;
 }
 
-void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t maxlen, LPCSTR inifilename)
+void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t maxlen, LPCSTR iniFile)
 {
     std::array<char, MAX_PATH> displayNameA{};
     std::array<char, MAX_PATH> server{};
     walcopy(displayNameA.data(), DisplayName, displayNameA.size() - 1);
-    GetPrivateProfileString(displayNameA.data(), "server", "", server.data(), server.size() - 1, inifilename);
-    // LAN Pair: base path is always root.
-    if (_strnicmp(server.data(), "lanpair://", 10) == 0) {
+    GetPrivateProfileString(displayNameA.data(), "server", "", server.data(), static_cast<DWORD>(server.size()), iniFile);
+    // LAN Pair and PHP Agent: base path is always root. A PHP Agent server is
+    // a URL whose path names the script, not a start folder.
+    if (_strnicmp(server.data(), "lanpair://", 10) == 0 ||
+        _strnicmp(server.data(), "http://", 7) == 0 ||
+        _strnicmp(server.data(), "https://", 8) == 0) {
         wcslcpy(RelativePath, L"/", maxlen);
         return;
     }
@@ -658,86 +767,73 @@ void SftpGetServerBasePathW(LPCWSTR DisplayName, LPWSTR RelativePath, size_t max
 int codepagelist[kCodepageListCount] = {-1, -2, 0, 1, 2, 1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258,
                                         936, 950, 932, 949, 874, 437, 850, 20866, -3, -4};
 
-bool SftpConfigureServer(LPCSTR DisplayName, LPCSTR inifilename)
+bool SftpConfigureServer(LPCSTR DisplayName, LPCSTR iniFile)
 {
     tConnectSettings ConnectSettings{};
     ConnectSettings.dialogforconnection = false;
-    return ShowConnectDialog(&ConnectSettings, DisplayName, inifilename);
+    return ShowConnectDialog(&ConnectSettings, DisplayName, iniFile);
 }
 
 int SftpCloseConnection(pConnectSettings ConnectSettings)
 {
-    int rc;
-    if (ConnectSettings) {
-        // LAN Pair: disconnect file session immediately.
-        if (ConnectSettings->lanSession) {
-            ConnectSettings->lanSession->disconnect();
-            ConnectSettings->lanSession.reset();
-        }
-        // Fast teardown path: during full disconnect do not perform graceful shell
-        // shutdown (can block UI on restrictive SCP servers). Session disconnect
-        // below will close remote channels anyway.
-        if (ConnectSettings->scpShellChannel) {
-            ConnectSettings->scpShellChannel.reset();
-            ConnectSettings->scpShellMsgBuf.clear();
-            ConnectSettings->scpShellErrBuf.clear();
-        }
-        if (ConnectSettings->scponly) {
-            // Fast close for SCP-only sessions: skip graceful shutdown loops that can block UI.
-            ConnectSettings->sftpsession.reset();
-            if (ConnectSettings->session) {
-                ConnectSettings->session->free();
-                ConnectSettings->session.reset();
-            }
-            if (ConnectSettings->sock != INVALID_SOCKET) {
-                closesocket(ConnectSettings->sock);
-                ConnectSettings->sock = INVALID_SOCKET;
-            }
-            ConnectSettings->transport_stream.reset();
-            ConnectSettings->feedback.reset();
-            return SFTP_FAILED;
-        }
-        SYSTICKS starttime = get_sys_ticks();
-        bool doabort = false;
-        if (ConnectSettings->sftpsession) {
-            do {
-                rc = ConnectSettings->sftpsession->shutdown();
-                if (EscapePressed())
-                    doabort = true;
-                if (doabort && get_ticks_between(starttime) > DISCONNECT_ABORT_MS)
-                    break;
-                if (get_ticks_between(starttime) > DISCONNECT_TIMEOUT_MS)
-                    break;
-                if (rc == LIBSSH2_ERROR_EAGAIN)
-                    WaitForTransportReadable(ConnectSettings);  // Sleep to avoid 100% CPU usage.
-            } while (rc == LIBSSH2_ERROR_EAGAIN);
-            ConnectSettings->sftpsession.reset();
-        }
-        if (ConnectSettings->session) {
-            do {
-                rc = ConnectSettings->session->disconnect("Disconnect");
-                if (EscapePressed())
-                    doabort = true;
-                if (doabort && get_ticks_between(starttime) > DISCONNECT_ABORT_MS)
-                    break;
-                if (get_ticks_between(starttime) > DISCONNECT_TIMEOUT_MS)
-                    break;
-                if (rc == LIBSSH2_ERROR_EAGAIN)
-                    WaitForTransportReadable(ConnectSettings);  // Sleep to avoid 100% CPU usage.
-            } while (rc == LIBSSH2_ERROR_EAGAIN);
-            ConnectSettings->session->free();
-            ConnectSettings->session.reset();
-        }
-        // Release the transport stream (jump channel + jump SSH session) AFTER
-        // the target session is freed above and BEFORE the jump socket closes.
-        ConnectSettings->transport_stream.reset();
-        if (ConnectSettings->sock != INVALID_SOCKET) {
-            Sleep(RECONNECT_SLEEP_MS);
-            closesocket(ConnectSettings->sock);
-            ConnectSettings->sock = INVALID_SOCKET;
-        }
-        ConnectSettings->feedback.reset();
+    if (!ConnectSettings)
+        return SFTP_FAILED;
+
+    // 1. LAN Pair (own transport, not SSH) — quick disconnect.
+    if (ConnectSettings->lanSession) {
+        ConnectSettings->lanSession->disconnect();
+        ConnectSettings->lanSession.reset();
     }
+
+    // 2. SCP shell channel (only present in scponly mode). Destructor of
+    //    Libssh2Channel sends SSH_MSG_CHANNEL_CLOSE/free with bounded retry.
+    if (ConnectSettings->scpShellChannel) {
+        ConnectSettings->scpShellChannel.reset();
+        ConnectSettings->scpShellMsgBuf.clear();
+        ConnectSettings->scpShellErrBuf.clear();
+    }
+
+    // 3. SFTP subsystem (only present in SFTP mode). ~Libssh2SftpSession()
+    //    sends SFTP_FXP_SHUTDOWN with a bounded retry.
+    ConnectSettings->sftpsession.reset();
+
+    // 4. SSH session — send SSH_MSG_DISCONNECT once. RFC 4253 §11.1: server
+    //    must not reply, so there is nothing to wait for. EAGAIN here means
+    //    the SSH packet did not fit in libssh2's send buffer; retry briefly
+    //    just to push it into the OS socket buffer (TCP itself handles wire
+    //    delivery from there).
+    if (ConnectSettings->session) {
+        SYSTICKS t0 = get_sys_ticks();
+        int rc;
+        do {
+            rc = ConnectSettings->session->disconnect("Disconnect");
+            if (rc != LIBSSH2_ERROR_EAGAIN)
+                break;
+            if (get_ticks_between(t0) > 200)
+                break;   // 200 ms cap — DISCONNECT is ~50 bytes, must fit by now.
+            if (ConnectSettings->sock != INVALID_SOCKET) {
+                fd_set wfds;
+                FD_ZERO(&wfds);
+                FD_SET(ConnectSettings->sock, &wfds);
+                timeval tv = { 0, 20000 };  // 20 ms
+                select(0, nullptr, &wfds, nullptr, &tv);
+            }
+        } while (true);
+        ConnectSettings->session.reset();   // ~Libssh2Session() frees the struct.
+    }
+
+    // 5. ProxyJump transport (jump channel + jump session) — destructors
+    //    cascade and tear down the inner session/channel cleanly.
+    ConnectSettings->transport_stream.reset();
+
+    // 6. TCP socket — graceful close: the OS flushes any pending DISCONNECT
+    //    bytes before sending FIN. No artificial Sleep needed.
+    if (ConnectSettings->sock != INVALID_SOCKET) {
+        closesocket(ConnectSettings->sock);
+        ConnectSettings->sock = INVALID_SOCKET;
+    }
+
+    ConnectSettings->feedback.reset();
     return SFTP_FAILED;
 }
 
@@ -785,7 +881,7 @@ bool ReconnectSFTPChannelIfNeeded(pConnectSettings ConnectSettings)
                 if (ProgressLoop("Reconnect SFTP channel", 0, 100, &loop, &starttime))
                     break;
                 {
-                    auto sftpPtr = ConnectSettings->session->sftpInit();
+                    auto sftpPtr = ConnectSettings->session->sftpInit(ConnectSettings->sftpservercommand);
                     if (sftpPtr) {
                         ConnectSettings->sftpsession = std::move(sftpPtr);
                     } else if (ConnectSettings->session->lastErrno() != LIBSSH2_ERROR_EAGAIN) {

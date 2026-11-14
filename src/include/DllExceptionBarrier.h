@@ -57,6 +57,21 @@ namespace sftp {
 void ShutdownSymbols() noexcept;
 
 // ---------------------------------------------------------------------------
+// InstallCrashHandler() / UninstallCrashHandler() — process-wide top-level
+// SEH filter that captures unhandled hardware exceptions (AccessViolation,
+// stack overflow, etc.) and writes the exception code, faulting address and
+// stack trace to the SFTP log file before the host process dies.
+//
+// Required because DllExceptionBarrier only catches C++ exceptions. Native
+// crashes inside libssh2 / OpenSSL / our callbacks bypass it entirely.
+//
+// Call InstallCrashHandler from DllMain DLL_PROCESS_ATTACH;
+// UninstallCrashHandler from DLL_PROCESS_DETACH (before ShutdownSymbols).
+// ---------------------------------------------------------------------------
+void InstallCrashHandler() noexcept;
+void UninstallCrashHandler() noexcept;
+
+// ---------------------------------------------------------------------------
 // DllExceptionBarrier — stack-local RAII exception firewall.
 //
 // One instance per exported Fs* function. Non-copyable and non-moveable:

@@ -55,8 +55,8 @@
 12051=Necunoscut
 12052=Redirecționare trimitere HTTPS la HTTP
 12053=Introduceți CD-ROM-ul
-130=F7 - help.txt
-131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nAlt+Enter:\tModificați opțiunile\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
+130=F7 - ajutor.txt
+131=Ajutor modul plugin:\r\nF7:\tCreați o nouă conexiune (TC afișează Director nou – introduceți numele conexiunii)\r\nF8/Del:\tȘtergeți conexiunea\r\nEnter:\tConectați\r\nDeconectare:\tDin interiorul sesiunii, sau F8 pe rândul ei din [Active Sessions]. Butonul din bară o lasă deschisă din rădăcina pluginului.\r\nAlt+Enter:\tModificați opțiunile\r\nF3/F4:\tAfișează setările ca INI (modificare cu Alt+Enter)\r\n\r\nSesiuni în foldere:\r\nF7 într-un folder:\tCreează sesiunea în acel folder\r\nF7 cu numele folder/x:\tCreează sesiunea în folderul indicat\r\nF6 în \\folder\\nume:\tMută o sesiune într-un folder\r\nF6 pe un folder:\tRedenumește toate sesiunile; referințele jump host se actualizează\r\nF5 sau tragere:\tCopiază sesiunea sau folderul (duplicat)\r\nF8 pe un folder:\tȘterge folderul și toate sesiunile din el\r\n\r\nModuri de transfer:\r\nSSH (SFTP/SCP):\tImplicit și cel mai rapid când accesul SSH funcționează\r\nFolosire SCP pentru date:\tCând SFTP este blocat sau instabil\r\nNumai SCP:\tDezactivează complet SFTP (gazde vechi)\r\nForțare transfer shell:\tForțează transferul prin shell (dd/base64)\r\nPHP Agent (HTTP):\tFără cont SSH; folosește sftp.php încărcat\r\nPHP Shell (HTTP):\tPseudo-terminal HTTP prin sftp.php
 132=Conexiune rapidă
 144=Ajutor
 146=Aici puteți configura modul în care serverul trimite numele fișierelor cu caractere accentuate. Dacă alegeți 'detectare automată', pluginul va citi variabilele de mediu (de ex. LANG) și va trimite comanda 'locale' pentru a determina codificarea caracterelor folosită de server. Este posibil să nu funcționeze cu toate serverele, deci dacă știți că serverul folosește UTF-8 sau numele fișierelor se afișează cu caractere greșite în loc de accente, selectați 'da' manual.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Chirilică KOI8-R (20866)
 241=Altele (introduceți manual)
-242=Biblioteca libssh2.dll este prea veche pentru funcția Pageant!\nVersiunea minimă necesară este %s.
 243=Eroare la conectarea la agentul SSH (Pageant)!\nPuteți plasa un fișier de scurtătură numit pageant.lnk în directorul pluginului pentru a lansa Pageant, de ex. indicând spre\nc:\\path\\pageant.exe keyfilename
 244=Eroare la preluarea identității de la agentul SSH!
 245=Autentificarea prin agent a eșuat!
@@ -206,7 +205,7 @@
 288=Schimbare parolă...
 289=Protejare parolă cu manager de parole (TC>=7.5)
 290=Certificat client pentru &autentificare:
-291=Fișier cheie publică (*.pub):
+291=Certificat (*-cert.pub), opțional:
 292=Fișier cheie privată (*.pem;*.ppk):
 293=Comprimare cu &ZLIB (poate să nu funcționeze pe unele servere)
 294=Înregistrare listă completă directoare (&debug)
@@ -222,8 +221,6 @@
 304=Gazdă intermediară:
 305=Folosire &gazdă intermediară
 306=Setări proxy:
-307=Eliminare proxy
-308=Import...
 309=Setări proxy
 310=Setări proxy
 311=Gazdă proxy:
@@ -240,28 +237,12 @@
 318=Port:
 319=Nume utilizator:
 320=&Parolă:
-321=Fișier cheie publică (*.pub):
+321=Certificat (*-cert.pub), opțional:
 322=Fișier cheie privată (*.pem;*.ppk):
 323=Folosire agent SSH &(Pageant) pentru autentificarea gazdei intermediare
-12056=Importă sesiuni PuTTY
-12057=Importă sesiuni WinSCP
-12058=Importă sesiuni PuTTY Portable
-12059=Au fost găsite {} sesiuni {} (registru):
-12060=Au fost găsite {} sesiuni în {}:
-12061=&Selectează tot
-12062=&Deselectează tot
-12063=&Importă
-12064=Anulare
-12065=Nicio sesiune importată.
-12066=Nicio sesiune găsită în {}.
 324=Ajutor
 325=Anulare
 326=Flux TAR
-12067=Importă tot ({})
-12068=Importă din folderul PuTTY Portable...
-12069=Importați din folderul portabil WinSCP...
-12070=Importă sesiuni KiTTY Portable
-12071=Importă din folderul KiTTY Portable...
 
 327=Sistem:
 328=Metodă:
@@ -274,7 +255,7 @@
 335=Punctul de acces al agentului PHP nu a fost găsit (HTTP 404).\nVerificați URL-ul, numele fișierului și încărcați sftp.php pe server.
 336=Agentul PHP nu este configurat pe server (HTTP 503).\nSetați AGENT_PSK / AGENT_PSK_SHA256 în sftp.php și reîncărcați.
 337=Date de autentificare incorecte pentru PHP Agent (HTTP {}).
-338=Eroare de cerere HTTP {} pentru PHP Agent.
+338=Cererea PHP Agent a eșuat pentru {} (HTTP {}).
 339=PHP Agent a respins conexiunea: {}
 340=Validarea PHP Agent a eșuat: {}
 341=Date de autentificare incorecte pentru PHP Agent.
@@ -291,7 +272,6 @@
 352=Utilizator autentificat fără parolă.
 353=Timp depășit la autentificarea interactivă prin tastatură.
 354=Timp depășit la autentificarea prin parolă.
-355=Se încarcă biblioteca SSH...
 356=LAN Pair: localizare partener prin descoperire...
 357=LAN Pair: conectat.
 358=Mod PHP Agent
@@ -353,16 +333,8 @@
 414=PHP Agent: actualizare locală sftp.php omisă (fișier lipsă sau doar citire).
 415=Trimitere TAR:
 416=Trimitere TAR eșuată
-417=Selectați fișierul cheii publice
+417=Selectați fișierul certificatului
 418=Selectați fișierul cheii private
-419=Selectați folderul PuTTY Portable
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} sesiune/sesiuni importată/importate.
-423={} sesiune/sesiuni importată/importate.
-{} {} omisă/omise.
-424=sesiune/sesiuni neacceptată/neacceptate
-425=sesiune/sesiuni WinSCP neacceptată/neacceptate
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Pagină de cod
@@ -374,12 +346,6 @@
 12094=LAN Pair: personificarea TrustedInstaller a esuat. Este posibil ca procesul sa nu ruleze ca Administrator.
 12095=LAN Pair: conectare la {}...
 12096=LAN Pair: conexiune eșuată
-12097=PuTTY
-12098=WinSCP
-12099=Altele
-12100=Selectați folderul portabil WinSCP
-12101=WinSCP.ini nu a fost găsit în folderul selectat.
-12102=Selectați folderul portabil KiTTY
 12103=LAN Pair: acest computer este configurat ca Donator. Receptorul de la distanță trebuie să se conecteze aici.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -395,10 +361,48 @@
 12081=Eșec la încărcarea parolei proxy!
 12082=Adresă server nevalidă.
 12083=Memorie insuficientă la crearea setărilor conexiunii.
-12084=Nu au fost importate sesiuni (tip de protocol neacceptat).
-12085=putty.reg nu a fost găsit în folderul selectat sau în subfolderele sale.
-12086=Eșec la citirea sau analizarea putty.reg.
-12087=Folderul Sessions nu a fost găsit în directorul KiTTY Portable selectat.
 12088=Există deja o sesiune cu acest nume.\nAlegeți un alt nume de sesiune.
+12118=Această sesiune aparține altui program și nu poate fi editată aici.\nApăsați F3 pentru a-i vedea setările sau F5 pentru a o copia în lista proprie.
+12119= Sesiune LAN Pair: 
+12120=Aceste setări provin din sesiunea '{}' și sunt doar pentru citire. Alegeți (manual) în lista de jump host pentru a configura unul aici.
+12121=Această sesiune ajunge la gazdă prin ceva ce nu a fost importat împreună cu ea: un proxy, un jump host sau un tunel. Conectarea acum ar merge direct la țintă, ocolind tocmai ceea ce a fost pus în cale, așa că este refuzată.
+12122=Sesiunea era setată să se conecteze printr-un proxy, dar fișierul nu conține descrierea acestuia. Sesiunea a fost importată fără proxy și se va conecta direct, așa că verificați setarea de proxy înainte de a o folosi.
+12123=Plugin-ul poate recrea acest proxy: copiați sesiunea în propria listă cu F5 și proxy-ul vine odată cu ea. Parola, dacă este necesară, va fi cerută la prima conectare.
+12124=Mutare: sursa a fost păstrată, deoarece copierea a fost reluată peste un fișier deja existent
+12125=Sursa și destinația sunt același fișier: ambele sesiuni indică același cont pe același server, la aceeași cale. Copierea unui fișier peste el însuși l-ar trunchia, așa că operația este refuzată.
+12126=Serverul nu a pornit o sesiune SFTP. Dacă oferă doar un shell — de exemplu dropbear pe o cameră sau un router —, activați „Folosire SCP pentru totul (fără SFTP)” pentru această sesiune.
+12127=Serverul acceptă doar autentificarea cu cheie, iar această sesiune nu are niciuna de oferit. Setați un fișier de cheie privată pentru sesiune sau folosiți Pageant cu cheia încărcată.
+12128=Proprietăți
+12129=Proprietățile fișierului
+12130=Nume:
+12131=Proprietar:
+12132=Grup:
+12133=Permisiuni:
+12134=Dimensiune:
+12135=Ultima modificare:
+12136=Răspunsul comenzii stat pe server
+12137=Serverul nu a rulat comanda stat. Ce raportează protocolul SFTP:
 12089=SFTP
-
+12104=(manual)
+12105= (lipsește)
+12106=Sesiunea de salt '{}' nu a fost găsită printre sesiunile salvate
+12107=Sesiunea de salt '{}' are propria configurație de gazdă de salt — gazdele de salt înlănțuite sau ciclice nu sunt acceptate. Alegeți o sesiune care se conectează direct la bastion.
+12109=Plugin SFTP - import sesiune
+12110=Nu se poate deschide fișierul sursă pentru citire.
+12111=Nu se poate importa sesiunea: fișierul sursă este gol.
+12112=Nu se poate importa sesiunea: fișierul sursă nu conține secțiuni INI.\r\nSe aștepta un fișier cu cel puțin o [secțiune] și o cheie `server=`.
+12113=Nu se poate importa sesiunea: nu s-a găsit nicio secțiune INI cu o cheie `server=` necompletată.
+12114=Nu se poate importa sesiunea: calea de destinație este goală.
+12115=Nu se poate importa sesiunea: scrierea în sftpplug.ini a eșuat.
+12116=Salt...
+12117=Gazda de salt este activată pentru această sesiune, dar niciuna nu este configurată. Alegeți o sesiune de salt sau completați datele gazdei.
+12138=Limită de timp sesiune (min):
+12139=(0 = fără limită)
+12140=Auto
+12141=Fișierul .ppk cere parametri Argon2 peste limitele sigure.
+12142=Fișierul .ppk conține o cheie ale cărei părți nu se potrivesc.
+12143=Eroare la descărcare
+12144=Fișierul nu a putut fi descărcat:
+12145=Omite
+12146=Omite tot
+12147=Omis după o eroare la descărcare:

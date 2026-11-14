@@ -56,7 +56,7 @@
 12052=HTTPS-zu-HTTP-Formularumleitung
 12053=CD-ROM einlegen
 130=F7 - hilfe.txt
-131=Plugin-Hilfe:\r\nF7:\tNeue Verbindung erstellen (TC zeigt Neuer Ordner – Verbindungsname eingeben)\r\nF8/Entf:\tVerbindung löschen\r\nEingabe:\tVerbinden\r\nAlt+Eingabe:\tOptionen ändern\r\n\r\nÜbertragungsmodi:\r\nSSH (SFTP/SCP):\tStandard, am schnellsten wenn SSH verfügbar\r\nSCP für Daten:\tVerwenden wenn SFTP blockiert/instabil\r\nNur SCP:\tSFTP vollständig deaktivieren (ältere Hosts)\r\nShell-Transfer erzwingen:\tShell-basierte Übertragung erzwingen (dd/base64)\r\nPHP-Agent (HTTP):\tKein SSH-Konto nötig; sftp.php hochladen\r\nPHP-Shell (HTTP):\tPseudo-Terminal über HTTP via sftp.php
+131=Plugin-Hilfe:\r\nF7:\tNeue Verbindung erstellen (TC zeigt Neuer Ordner – Verbindungsname eingeben)\r\nF8/Entf:\tVerbindung löschen\r\nEingabe:\tVerbinden\r\nTrennen:\tAus der Sitzung heraus, oder F8 auf ihrer Zeile in [Active Sessions]. Die Schaltfläche in der Leiste lässt sie vom Plugin-Stamm aus offen.\r\nAlt+Eingabe:\tOptionen ändern\r\nF3/F4:\tEinstellungen als INI anzeigen (ändern mit Alt+Eingabe)\r\n\r\nSitzungen in Ordnern:\r\nF7 in einem Ordner:\tErstellt die Sitzung in diesem Ordner\r\nF7 mit Name folder/x:\tErstellt die Sitzung im angegebenen Ordner\r\nF6 zu \\Ordner\\Name:\tVerschiebt eine Sitzung in einen Ordner\r\nF6 auf einem Ordner:\tBenennt alle Sitzungen darin um; Jump-Host-Verweise folgen\r\nF5 oder Ziehen:\tKopiert Sitzung oder Ordner (Duplikat)\r\nF8 auf einem Ordner:\tLöscht den Ordner und alle Sitzungen darin\r\n\r\nÜbertragungsmodi:\r\nSSH (SFTP/SCP):\tStandard, am schnellsten wenn SSH verfügbar\r\nSCP für Daten:\tVerwenden wenn SFTP blockiert/instabil\r\nNur SCP:\tSFTP vollständig deaktivieren (ältere Hosts)\r\nShell-Transfer erzwingen:\tShell-basierte Übertragung erzwingen (dd/base64)\r\nPHP-Agent (HTTP):\tKein SSH-Konto nötig; sftp.php hochladen\r\nPHP-Shell (HTTP):\tPseudo-Terminal über HTTP via sftp.php
 132=Schnellverbindung
 144=Hilfe
 146=Hier können Sie konfigurieren, wie der Server Dateinamen mit Sonderzeichen sendet. Wenn Sie 'Automatisch erkennen' wählen, liest das Plugin Umgebungsvariablen (wie LANG) und sendet den Befehl 'locale', um die Zeichenkodierung des Servers zu ermitteln. Dies funktioniert möglicherweise nicht mit allen Servern. Wenn Sie wissen, dass Ihr Server UTF-8 verwendet, oder Dateinamen mit seltsamen Zeichen statt Umlauten erscheinen, wählen Sie bitte manuell 'Ja'.
@@ -154,7 +154,6 @@
 239=DOS-LATIN1 (850)
 240=Kyrillisch KOI8-R (20866)
 241=Andere (manuell eingeben)
-242=Bibliothek libssh2.dll ist zu alt für Pageant-Funktionen!\nMindestens erforderliche Version ist %s.
 243=Verbindung zum SSH-Agenten (Pageant) fehlgeschlagen!\nSie können eine Verknüpfungsdatei namens pageant.lnk im Plugin-Verzeichnis ablegen, um Pageant zu starten, z.B. mit Verweis auf\nc:\\pfad\\pageant.exe schlüsseldatei
 244=Identitäten konnten nicht vom SSH-Agenten angefordert werden!
 245=Agenten-Authentifizierung fehlgeschlagen!
@@ -194,17 +193,6 @@
 280=Pairing-Passwort:
 12054=LAN Pair Peer gefunden.\nRolle wählen:\n\nJa = Sender\nNein = Empfänger\nAbbrechen = keine Änderung
 12055=Sitzungs-Timeout: [__] Min (0=kein Limit)
-12056=PuTTY-Sitzungen importieren
-12057=WinSCP-Sitzungen importieren
-12058=Portable PuTTY-Sitzungen importieren
-12059={} {}-Sitzungen gefunden (Registrierung):
-12060={} Sitzungen gefunden in {}:
-12061=&Alle auswählen
-12062=&Alle abwählen
-12063=&Importieren
-12064=Abbrechen
-12065=Keine Sitzungen importiert.
-12066=Keine Sitzungen gefunden in {}.
 281=LAN Pair Empfanger läuft bereits.
 282=LAN Pair akzeptiert: {} ({})
 283=LAN Pair: Lausche. Rollendialog erscheint bei Peer-Erkennung.
@@ -217,7 +205,7 @@
 288=Passwort ändern...
 289=Passwort mit Passwort-Manager schützen (TC>=7.5)
 290=Client-Zertifikat zur &Authentifizierung:
-291=Datei mit öffentlichem Schlüssel (*.pub):
+291=Zertifikat (*-cert.pub), optional:
 292=Datei mit privatem Schlüssel (*.pem;*.ppk):
 293=Mit &ZLIB komprimieren (funktioniert möglicherweise nicht auf allen Servern)
 294=Vollständige Verzeichnislisten protokollieren (&Debug)
@@ -233,8 +221,6 @@
 304=Jump-Host:
 305=&Jump-Host verwenden
 306=Proxy-Einstellungen:
-307=Proxy löschen
-308=Importieren...
 309=Proxy-Einstellungen
 310=Proxy-Einstellungen
 311=Proxy-Host:
@@ -251,18 +237,13 @@
 318=Port:
 319=Benutzername:
 320=&Passwort:
-321=Datei mit öffentlichem Schlüssel (*.pub):
+321=Zertifikat (*-cert.pub), optional:
 322=Datei mit privatem Schlüssel (*.pem;*.ppk):
 323=SSH-&Agent (Pageant) für Jump-Host-Authentifizierung verwenden
 
 324=Hilfe
 325=Abbrechen
 326=TAR-Stream
-12067=Alle importieren ({})
-12068=Aus PuTTY Portable-Ordner importieren...
-12069=Aus portablem WinSCP-Ordner importieren...
-12070=KiTTY Portable-Sitzungen importieren
-12071=Aus KiTTY Portable-Ordner importieren...
 
 327=System:
 328=Methode:
@@ -275,7 +256,7 @@
 335=PHP-Agent-Endpunkt nicht gefunden (HTTP 404).\nURL und Dateiname prüfen und sftp.php hochladen.
 336=PHP-Agent ist auf dem Server nicht konfiguriert (HTTP 503).\nAGENT_PSK / AGENT_PSK_SHA256 in sftp.php setzen und erneut hochladen.
 337=Falsche Anmeldedaten für PHP Agent (HTTP {}).
-338=HTTP-Anfehler {} für PHP Agent.
+338=PHP-Agent-Anfrage für {} fehlgeschlagen (HTTP {}).
 339=PHP Agent hat die Verbindung abgelehnt: {}
 340=PHP Agent Validierung fehlgeschlagen: {}
 341=Falsche Anmeldedaten für PHP Agent.
@@ -292,7 +273,6 @@
 352=Benutzer ohne Passwort authentifiziert.
 353=Zeitüberschreitung bei der interaktiven Tastatur-Authentifizierung.
 354=Zeitüberschreitung bei der Passwort-Authentifizierung.
-355=SSH-Bibliothek wird geladen...
 356=LAN Pair: Suche nach Partner per Erkennung...
 357=LAN Pair: verbunden.
 358=PHP Agent Modus
@@ -354,16 +334,8 @@
 414=PHP Agent: lokales sftp.php-Update übersprungen (Datei fehlt oder schreibgeschützt).
 415=TAR-Upload:
 416=TAR-Upload fehlgeschlagen
-417=Öffentliche Schlüsseldatei auswählen
+417=Zertifikatsdatei auswählen
 418=Private Schlüsseldatei auswählen
-419=PuTTY-Portable-Ordner auswählen
-420=PuTTY ({})...
-421=WinSCP ({})...
-422={} Sitzung(en) importiert.
-423={} Sitzung(en) importiert.
-{} {} übersprungen.
-424=nicht unterstützte Sitzung(en)
-425=nicht unterstützte WinSCP-Sitzung(en)
 426=SOCKS4a: 
 427=SOCKS5: 
 428=Zeichensatz
@@ -375,12 +347,6 @@
 12094=LAN Pair: TrustedInstaller-Identitaetswechsel fehlgeschlagen. Der Prozess laeuft moeglicherweise nicht als Administrator.
 12095=LAN Pair: verbinde mit {}...
 12096=LAN Pair: Verbindung fehlgeschlagen
-12097=PuTTY
-12098=WinSCP
-12099=Andere
-12100=Portablen WinSCP-Ordner auswählen
-12101=WinSCP.ini wurde im ausgewählten Ordner nicht gefunden.
-12102=Portablen KiTTY-Ordner auswählen
 12103=LAN Pair: Dieser Computer ist als Geber konfiguriert. Der entfernte Empfänger muss sich hier verbinden.
 450=Windows (CR/LF)
 451=Unix (LF)
@@ -396,10 +362,48 @@
 12081=Proxy-Passwort konnte nicht geladen werden!
 12082=Ungültige Serveradresse.
 12083=Nicht genügend Arbeitsspeicher beim Erstellen der Verbindungseinstellungen.
-12084=Keine Sitzungen importiert (nicht unterstützter Protokolltyp).
-12085=putty.reg wurde im ausgewählten Ordner oder dessen Unterordnern nicht gefunden.
-12086=putty.reg konnte nicht gelesen oder verarbeitet werden.
-12087=Der Ordner Sessions wurde im ausgewählten KiTTY Portable-Verzeichnis nicht gefunden.
 12088=Eine Verbindung mit diesem Namen existiert bereits.\nBitte einen anderen Namen wählen.
+12118=Diese Sitzung gehört einem anderen Programm und kann hier nicht bearbeitet werden.\nF3 zeigt ihre Einstellungen, F5 kopiert sie in Ihre eigene Sitzungsliste.
+12119= LAN-Pair-Sitzung: 
+12120=Diese Einstellungen stammen aus der Sitzung '{}' und werden nur angezeigt. Wählen Sie (manuell) in der Jump-Host-Liste, um hier einen Host einzutragen.
+12121=Diese Sitzung erreicht ihren Host über etwas, das nicht mit importiert wurde: einen Proxy, einen Jump-Host oder einen Tunnel. Eine Verbindung ginge jetzt direkt zum Ziel, vorbei an genau dem, was dazwischengesetzt wurde, und wird deshalb abgelehnt.
+12122=Die Sitzung sollte über einen Proxy verbinden, doch die Datei enthält keine Beschreibung davon. Die Sitzung wurde ohne den Proxy importiert und verbindet direkt; prüfen Sie daher ihre Proxy-Einstellung, bevor Sie sie verwenden.
+12123=Diesen Proxy kann das Plugin nachbilden: Kopieren Sie die Sitzung mit F5 in Ihre eigene Liste, dann wird der Proxy mitübernommen. Ein eventuell nötiges Passwort wird bei der ersten Verbindung abgefragt.
+12124=Verschieben: Die Quelle wurde behalten, weil das Kopieren auf einer bereits vorhandenen Datei fortgesetzt wurde
+12125=Quelle und Ziel sind dieselbe Datei: Beide Sitzungen zeigen auf dasselbe Konto auf demselben Server und denselben Pfad. Eine Datei auf sich selbst zu kopieren würde sie abschneiden, daher wird dies abgelehnt.
+12126=Der Server hat keine SFTP-Sitzung gestartet. Bietet er nur eine Shell an – etwa Dropbear auf einer Kamera oder einem Router –, aktivieren Sie für diese Sitzung „SCP für alles verwenden (kein SFTP)“.
+12127=Der Server akzeptiert nur die Anmeldung mit einem Schlüssel, und diese Sitzung hat keinen anzubieten. Legen Sie für die Sitzung eine private Schlüsseldatei fest oder verwenden Sie Pageant mit geladenem Schlüssel.
+12128=Eigenschaften
+12129=Dateieigenschaften
+12130=Name:
+12131=Besitzer:
+12132=Gruppe:
+12133=Berechtigungen:
+12134=Größe:
+12135=Zuletzt geändert:
+12136=Antwort von stat auf dem Server
+12137=Der Server hat keinen stat-Befehl ausgeführt. Angaben des SFTP-Protokolls:
 12089=SFTP
-
+12104=(manuell)
+12105= (fehlt)
+12106=Sprungsitzung '{}' wurde in den gespeicherten Sitzungen nicht gefunden
+12107=Sprungsitzung '{}' hat eine eigene Sprunghost-Konfiguration — verkettete oder zyklische Sprunghosts werden nicht unterstützt. Wählen Sie eine Sitzung, die sich direkt mit dem Bastion-Host verbindet.
+12109=SFTP-Plugin - Sitzungsimport
+12110=Die Quelldatei kann nicht zum Lesen geöffnet werden.
+12111=Sitzung kann nicht importiert werden: die Quelldatei ist leer.
+12112=Sitzung kann nicht importiert werden: die Quelldatei enthält keine INI-Abschnitte.\r\nErwartet wird eine Datei mit mindestens einem [Abschnitt] und einem `server=`-Schlüssel.
+12113=Sitzung kann nicht importiert werden: kein INI-Abschnitt mit einem nicht leeren `server=`-Schlüssel gefunden.
+12114=Sitzung kann nicht importiert werden: der Zielpfad ist leer.
+12115=Sitzung kann nicht importiert werden: Schreiben in sftpplug.ini fehlgeschlagen.
+12116=Sprung...
+12117=Für diese Sitzung ist ein Sprunghost aktiviert, aber keiner konfiguriert. Wählen Sie eine Sprungsitzung oder füllen Sie die Sprunghost-Daten aus.
+12138=Sitzungs-Timeout (Min.):
+12139=(0 = unbegrenzt)
+12140=Auto
+12141=Die .ppk-Datei verlangt Argon2-Parameter über den sicheren Grenzen.
+12142=Die .ppk-Datei enthält einen Schlüssel, dessen Teile nicht zusammenpassen.
+12143=Downloadfehler
+12144=Die Datei konnte nicht heruntergeladen werden:
+12145=Überspringen
+12146=Alle überspringen
+12147=Nach einem Downloadfehler übersprungen:

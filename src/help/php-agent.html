@@ -21,10 +21,14 @@
   <li>You choose a password for the connection.</li>
   <li>The plugin stores a <b>salted SHA-256 hash</b> of that password into your local <code>sftp.php</code>. The password itself is never written to any file.</li>
   <li>You upload that modified <code>sftp.php</code> to your web server.</li>
-  <li>When you connect, the plugin signs every request with HMAC-SHA256 using your password. The server verifies the signature against the stored hash. The password never travels over the network in any readable form.</li>
+  <li>When you connect, the plugin sends the password in the <code>X-SFTP-AUTH</code> header of every request. The server hashes it with the stored salt and compares the result with the stored hash.</li>
 </ol>
 
-<p>This means: even if someone reads <code>sftp.php</code> on the server, they cannot recover your password — they only see a hash.</p>
+<p>This means: someone who reads <code>sftp.php</code> on the server sees only a hash and cannot log in with it. The hash is a single salted SHA-256, so a short or common password can still be guessed from it offline — use a long random one.</p>
+
+<div class="warn">
+  <b>Use HTTPS.</b> The password travels with every request, protected only by the connection itself. Over HTTPS, TLS encrypts it. Over plain <code>http://</code> anyone on the network path can read it and use it — including to run commands through PHP Shell.
+</div>
 
 <h2>Step-by-step deployment</h2>
 
@@ -41,7 +45,7 @@
 </table>
 
 <div class="note">
-  <b>URL format:</b> Always use <code>https://</code> in production. Plain <code>http://</code> is allowed for local testing only — over HTTP all traffic is unencrypted.
+  <b>URL format:</b> Always use <code>https://</code> in production. Plain <code>http://</code> is for local testing only — over HTTP all traffic, the password included, is unencrypted.
 </div>
 
 <h3>Step 2 — Save the session</h3>
@@ -76,7 +80,7 @@
 <p>Expected responses:</p>
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Response</th><th>Meaning</th></tr>
-  <tr><td>HTTP 200 with JSON containing <code>"status":"ok"</code></td><td>All good — proceed to connect</td></tr>
+  <tr><td>HTTP 200 with JSON containing <code>"ok":true</code></td><td>All good — proceed to connect</td></tr>
   <tr><td>HTTP 401 Unauthorized</td><td>Script is running but waiting for auth — this is also OK (plugin will authenticate)</td></tr>
   <tr><td>HTTP 503 Service Unavailable</td><td>PSK not configured — you uploaded the wrong file (without hash). Repeat from Step 2.</td></tr>
   <tr><td>HTTP 404 Not Found</td><td>Wrong URL or file not uploaded yet</td></tr>
@@ -93,11 +97,11 @@
   <tr><th>Location</th><th>What is stored</th><th>Is the password exposed?</th></tr>
   <tr><td><code>sftpplug.ini</code> (on your PC)</td><td>Password encrypted with Windows DPAPI (user-account bound)</td><td>No — DPAPI ciphertext only</td></tr>
   <tr><td><code>sftp.php</code> (on server)</td><td><code>AGENT_PSK_SALT</code> (random) + <code>AGENT_PSK_SHA256</code> = SHA-256(salt + password)</td><td>No — one-way hash only</td></tr>
-  <tr><td>Network traffic (HTTPS)</td><td>HMAC-SHA256 signature per request + timestamp + nonce</td><td>No — signature only; replay attacks blocked</td></tr>
+  <tr><td>Network traffic</td><td>Password in the <code>X-SFTP-AUTH</code> header of every request</td><td>Over HTTPS — no, TLS encrypts it. Over HTTP — <b>yes</b>, readable and reusable by anyone on the path</td></tr>
 </table>
 
 <div class="note">
-  <b>In short:</b> Your password never appears in plain text in any file or on the network. Even if someone obtains <code>sftp.php</code> from the server, they cannot reverse the hash to get your password.
+  <b>In short:</b> No file holds your password in plain text, and the hash in <code>sftp.php</code> is not enough to log in. On the network the password is only as safe as the connection: HTTPS is required for anything beyond local testing.
 </div>
 
 <h2>URL formats</h2>
@@ -166,6 +170,10 @@ http://192.168.1.10/sftp.php         (local testing only — no encryption)
   <li>Command history (Up/Down arrows)</li>
 </ul>
 <p>Uses the same <code>sftp.php</code> file — no separate deployment needed.</p>
+
+<div class="warn">
+  <b>The shell is not confined to the agent root.</b> File operations stay inside the folder <code>sftp.php</code> lives in (<code>AGENT_ROOT</code>), but shell commands run as the web server user and reach everything that user can. Anyone holding the password gets that access. If you do not need the shell, open <code>sftp.php</code> and set <code>const AGENT_ALLOW_SHELL = false;</code> — the agent then refuses <code>SHELL_EXEC</code> and the password gives file access only.
+</div>
 
 <h2>Server requirements</h2>
 <ul>

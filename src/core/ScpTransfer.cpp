@@ -14,6 +14,7 @@
 #include "IUserFeedback.h"
 #include "ScpTransfer.h"
 #include "ScpTransferInternal.h"
+#include "TextConversion.h"
 #include "res/resource.h"
 #include "LngLoader.h"
 
@@ -36,30 +37,6 @@ static std::string LngStrA(UINT id, const char* fallback)
 constexpr int SFTP_SCP_CHANNEL_OPEN_TIMEOUT_MS = 20000;
 constexpr int64_t SFTP_SPEED_STATS_MIN_BYTES = 300LL * 1000LL * 1000LL;
 constexpr int RECV_BLOCK_SIZE = 32768;
-constexpr int SCP_IO_POLL_SLEEP_MS = 10;
-
-// Helper: wait for SCP I/O with timeout
-template<typename F>
-bool ScpWaitFor(pConnectSettings cs, bool forWrite, DWORD timeoutMs, F&& op)
-{
-    const auto start = std::chrono::steady_clock::now();
-    int rc;
-    do {
-        rc = op();
-        if (rc >= 0)
-            return true;
-        if (rc != LIBSSH2_ERROR_EAGAIN)
-            return false;
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed > timeoutMs)
-            return false;
-        if (forWrite)
-            IsSocketWritable(cs->sock);
-        else
-            IsSocketReadable(cs->sock);
-    } while (true);
-}
 
 // RAII for SCP channel with automatic cleanup
 class ScpChannel {
@@ -70,12 +47,12 @@ public:
     ~ScpChannel() {
         if (channel_) {
             // Attempt graceful shutdown
-            ScpWaitFor(cs_, true, SFTP_SCP_WRITE_IDLE_TIMEOUT_MS,
-                       [this] { return channel_->sendEof(); });
-            ScpWaitFor(cs_, false, SFTP_SCP_READ_IDLE_TIMEOUT_MS,
-                       [this] { return channel_->waitEof(); });
+            WaitForOperation([this] { return channel_->sendEof(); },
+                             SFTP_SCP_WRITE_IDLE_TIMEOUT_MS, cs_);
+            WaitForOperation([this] { return channel_->waitEof(); },
+                             SFTP_SCP_READ_IDLE_TIMEOUT_MS, cs_);
             channel_->channelClose();
-            channel_->channelFree();
+            // ~Libssh2Channel() in unique_ptr scope-exit handles channelFree.
         }
     }
 
@@ -88,22 +65,23 @@ public:
     bool WriteAll(const char* data, size_t len, DWORD timeoutMs) {
         size_t sent = 0;
         while (sent < len) {
-            if (!ScpWaitFor(cs_, true, timeoutMs, [&] {
-                    int w = static_cast<int>(channel_->write(data + sent, len - sent));
-                    if (w > 0) sent += w;
-                    return w;
-                })) {
+            int rc = WaitForOperation([&] {
+                int w = static_cast<int>(channel_->write(data + sent, len - sent));
+                if (w > 0) sent += w;
+                return w;
+            }, timeoutMs, cs_);
+            if (rc < 0)
                 return false;
-            }
         }
         return true;
     }
 
     bool ReadByte(char& out, DWORD timeoutMs) {
-        return ScpWaitFor(cs_, false, timeoutMs, [&] {
+        int rc = WaitForOperation([&] {
             int r = static_cast<int>(channel_->read(&out, 1));
             return r == 1 ? 1 : r;
-        });
+        }, timeoutMs, cs_);
+        return rc >= 0;
     }
 
     bool ReadLine(std::string& out, DWORD timeoutMs) {
@@ -111,12 +89,12 @@ public:
         const auto start = std::chrono::steady_clock::now();
         while (true) {
             char ch = 0;
-            if (!ScpWaitFor(cs_, false, timeoutMs, [&] {
-                    int r = static_cast<int>(channel_->read(&ch, 1));
-                    return r == 1 ? 1 : r;
-                })) {
+            int rc = WaitForOperation([&] {
+                int r = static_cast<int>(channel_->read(&ch, 1));
+                return r == 1 ? 1 : r;
+            }, timeoutMs, cs_);
+            if (rc < 0)
                 return false;
-            }
             if (ch == '\n')
                 return true;
             if (ch != '\r')
@@ -176,22 +154,6 @@ bool ParseScpCLine(const std::string& line, int64_t& outSize, std::string& outNa
 
 } // anonymous namespace
 
-int ConvertCrLfToLf(LPSTR data, size_t len)
-{
-    if (!data || len == 0)
-        return 0;
-
-    size_t out = 0;
-    for (size_t i = 0; i < len; ++i) {
-        const char ch = data[i];
-        if (ch == '\r' && i + 1 < len && data[i + 1] == '\n') {
-            continue;
-        }
-        data[out++] = ch;
-    }
-    return static_cast<int>(out);
-}
-
 void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS starttime)
 {
     if (bytesTransferred < SFTP_SPEED_STATS_MIN_BYTES)
@@ -207,36 +169,20 @@ void ShowTransferSpeedIfLarge(LPCSTR prefix, int64_t bytesTransferred, SYSTICKS 
     ShowStatus(std::format("{} speed: {:.2f} MiB/s", prefix ? prefix : "Transfer", mibPerSec).c_str());
 }
 
-bool ScpWaitIo(pConnectSettings cs, bool forWrite)
-{
-    if (!cs || cs->sock == INVALID_SOCKET)
-        return false;
-    return forWrite ? IsSocketWritable(cs->sock) : IsSocketReadable(cs->sock);
-}
-
 bool ScpWriteAll(ISshChannel* channel, pConnectSettings cs, const char* data, size_t len, DWORD timeoutMs)
 {
     if (!channel || !data || !cs)
         return false;
 
     size_t sent = 0;
-    const auto start = std::chrono::steady_clock::now();
     while (sent < len) {
-        const int rc = static_cast<int>(channel->write(data + sent, len - sent));
-        if (rc > 0) {
-            sent += static_cast<size_t>(rc);
-            continue;
-        }
-        if (rc != LIBSSH2_ERROR_EAGAIN)
+        int rc = WaitForOperation([&] {
+            int w = static_cast<int>(channel->write(data + sent, len - sent));
+            if (w > 0) sent += static_cast<size_t>(w);
+            return w;
+        }, timeoutMs, cs);
+        if (rc < 0)
             return false;
-        if (EscapePressed())
-            return false;
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed > static_cast<long long>(timeoutMs))
-            return false;
-        ScpWaitIo(cs, true);
-        Sleep(SCP_IO_POLL_SLEEP_MS);
     }
     return true;
 }
@@ -246,22 +192,11 @@ bool ScpReadByte(ISshChannel* channel, pConnectSettings cs, char* outByte, DWORD
     if (!channel || !cs || !outByte)
         return false;
 
-    const auto start = std::chrono::steady_clock::now();
-    while (true) {
-        const int rc = static_cast<int>(channel->read(outByte, 1));
-        if (rc == 1)
-            return true;
-        if (rc != LIBSSH2_ERROR_EAGAIN)
-            return false;
-        if (EscapePressed())
-            return false;
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed > static_cast<long long>(timeoutMs))
-            return false;
-        ScpWaitIo(cs, false);
-        Sleep(SCP_IO_POLL_SLEEP_MS);
-    }
+    int rc = WaitForOperation([&] {
+        int r = static_cast<int>(channel->read(outByte, 1));
+        return r == 1 ? 1 : r;
+    }, timeoutMs, cs);
+    return rc == 1;
 }
 
 bool ScpReadLine(ISshChannel* channel, pConnectSettings cs, std::string& outLine, DWORD timeoutMs)
@@ -324,13 +259,42 @@ bool PrepareScpTransferSession(pConnectSettings cs)
 
 std::string BuildScpPathArgument(const std::string& path)
 {
+    // The path reaches `scp` as it is. Making it relative would tie every
+    // transfer to wherever the login left the shell, which is the same reason
+    // listing could not leave the home directory.
     if (path.empty()) return {};
-    std::string scpTarget = path;
-    if (path[0] == '/')
-        scpTarget = (path.size() == 1) ? "." : path.substr(1);
-    if (SSH_ScpNeedQuote && scpTarget.find(' ') != std::string::npos)
-        return "\"" + scpTarget + "\"";
-    return scpTarget;
+    if (SSH_ScpNeedQuote && path.find(' ') != std::string::npos)
+        return "\"" + path + "\"";
+    return path;
+}
+
+// Whether an scp download was refused because the file is not there. Asked
+// over SFTP, which "SCP for data" keeps open beside scp; without it there is
+// no telling, and the answer is no. `filename` is the scp argument, which
+// carries quotes when the path holds a space.
+static bool ScpSourceIsMissing(pConnectSettings cs, const char* filename)
+{
+    if (!cs || !filename)
+        return false;
+    if (!cs->sftpsession || cs->scponly) {
+        SFTP_LOG("SCP", "missing-check: no SFTP session to ask (sftp=%d scponly=%d)",
+                 cs->sftpsession ? 1 : 0, cs->scponly ? 1 : 0);
+        return false;
+    }
+    std::string path = filename;
+    if (path.size() >= 2 && path.front() == '"' && path.back() == '"')
+        path = path.substr(1, path.size() - 2);
+
+    LIBSSH2_SFTP_ATTRIBUTES attr{};
+    int rc = 0;
+    do {
+        rc = cs->sftpsession->lstat(path.c_str(), &attr);
+        if (rc == LIBSSH2_ERROR_EAGAIN)
+            IsSocketReadable(cs->sock);
+    } while (rc == LIBSSH2_ERROR_EAGAIN);
+    const unsigned long fx = (rc == LIBSSH2_ERROR_SFTP_PROTOCOL) ? cs->sftpsession->lastError() : 0;
+    SFTP_LOG("SCP", "missing-check '%s': lstat rc=%d fx=%lu", path.c_str(), rc, fx);
+    return fx == LIBSSH2_FX_NO_SUCH_FILE || fx == LIBSSH2_FX_NO_SUCH_PATH;
 }
 
 bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
@@ -371,7 +335,15 @@ bool OpenScpDownloadChannel(pConnectSettings cs, const char* filename,
                 }
                 break;
             } else if (err == LIBSSH2_ERROR_SCP_PROTOCOL) {
-                if (cs->feedback) {
+                // The commonest refusal is a file that is not there — Shift+F4
+                // on a new name asks for one first — which is not scp failing
+                // to run. libssh2 reads scp's own message and drops it, so the
+                // question goes to SFTP, which this mode keeps open: a missing
+                // file gets a status line, anything else the dialog.
+                if (ScpSourceIsMissing(cs, filename)) {
+                    SFTP_LOG("SCP", "Download refused: '%s' does not exist", filename);
+                    ShowStatus("SCP: no such file");
+                } else if (cs->feedback) {
                     cs->feedback->ShowError(
                         LngStrA(IDS_SCP_EXEC_FAILED, "Cannot execute SCP to start transfer. Please make sure that SCP is installed on the server and path to it is included in PATH.\n\nYou may also try SFTP instead of SCP (uncheck 'Use SCP for all' in connection settings).").c_str(),
                         LngStrA(IDS_SCP_PROTOCOL_ERROR, "SCP Protocol Error").c_str());
@@ -408,22 +380,28 @@ int ShellScpDownloadFile(pConnectSettings cs,
 
     std::string cmd = "scp -f ";
     cmd += remotePathArg;
+    SFTP_LOG("SCP", "download command: %s", cmd.c_str());
     if (!SendChannelCommandNoEof(cs->session.get(), channel.get(), cmd.c_str(), cs->sock)) {
+        SFTP_LOG("SCP", "download: sending the command failed");
         return SFTP_READFAILED;
     }
 
+    // `scp -f` sends nothing until it is asked to: the first byte goes out
+    // from here, and what comes back is already the file's header, beginning
+    // with 'C'. There is no acknowledgement to read in this direction — the
+    // loop below reads that header, and handles the 1 and 2 error codes a
+    // failing scp would send in its place.
     ScpChannel scp(std::move(channel), cs);
-    std::string err;
-    if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS) ||
-        !scp.ReadAck(err, SFTP_SCP_READ_IDLE_TIMEOUT_MS)) {
-        if (!err.empty()) ShowStatus(err.c_str());
+    if (!scp.SendAck(SFTP_SCP_WRITE_IDLE_TIMEOUT_MS)) {
+        SFTP_LOG("SCP", "download: could not ask for the file");
         return SFTP_READFAILED;
     }
 
     int64_t remoteSize = hintedFileSize;
     bool gotDataHeader = false;
-    bool lastWasCr = false;
+    text_conversion::LfToCrLf toCrLf;
     std::vector<char> dataBuf(SFTP_MAX_READ_SIZE * 2);
+    std::vector<char> converted;
     const auto start = std::chrono::steady_clock::now();
 
     while (true) {
@@ -473,12 +451,16 @@ int ShellScpDownloadFile(pConnectSettings cs,
             int rc = static_cast<int>(scp.get()->read(dataBuf.data(), want));
             if (rc > 0) {
                 remaining -= rc;
-                int wlen = rc;
-                if (textMode)
-                    wlen = ConvertCrToCrLf(dataBuf.data(), static_cast<size_t>(rc), &lastWasCr);
+                const char* out = dataBuf.data();
+                size_t outLen = static_cast<size_t>(rc);
+                if (textMode) {
+                    converted.clear();
+                    outLen = toCrLf.Convert(dataBuf.data(), outLen, converted);
+                    out = converted.data();
+                }
                 DWORD written = 0;
-                if (!WriteFile(localfile, dataBuf.data(), static_cast<DWORD>(wlen), &written, nullptr) ||
-                    written != static_cast<DWORD>(wlen)) {
+                if (!WriteFile(localfile, out, static_cast<DWORD>(outLen), &written, nullptr) ||
+                    written != static_cast<DWORD>(outLen)) {
                     return SFTP_WRITEFAILED;
                 }
                 *outSizeLoaded += rc;

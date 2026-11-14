@@ -115,6 +115,8 @@
 #define FS_ATTR_UNIXMODE  0x80000000   // for Unix systems: set the dwReserved0 parameter to the Unix file mode (permissions).
 
 
+#pragma warning(push)
+#pragma warning(disable: 4201) // nameless struct: part of the plugin API
 typedef struct {
     union {
         struct {
@@ -129,6 +131,7 @@ typedef struct {
     };
     DWORD Attr;
 } RemoteInfoStruct, *PRemoteInfoStruct;
+#pragma warning(pop)
 
 typedef struct {
     int   size;

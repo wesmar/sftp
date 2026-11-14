@@ -1,0 +1,39 @@
+# Disposable PHP agents for testing the plugin's PHP Agent transport.
+# The agent is the repository's own src/agent/sftp.php, mounted read-only,
+# so what runs here is exactly what ships. Its root (AGENT_ROOT) is the
+# folder it sits in, which is the data folder of each service.
+#
+#   docker compose up -d      start both
+#   docker compose down       stop and remove them
+#
+# The PSK comes from the environment, which the agent prefers over the hash
+# fields in the file; use the same value as the session password in TC.
+
+x-agent: &agent
+  environment:
+    TC_SFTP_AGENT_PSK: "test-psk-change-me"
+  # The data folder is a bind mount; on a Linux host it belongs to the user
+  # who created it, so Apache's user is given the folder itself to write in.
+  # Docker Desktop's Windows mounts refuse chown and need none, so a refusal
+  # does not stop the server.
+  command: sh -c "chown www-data:www-data /var/www/html 2>/dev/null; exec apache2-foreground"
+  restart: "no"
+
+services:
+  php83:
+    <<: *agent
+    image: php:8.3-apache
+    ports:
+      - "8083:80"
+    volumes:
+      - ./data-php83:/var/www/html
+      - ../../src/agent/sftp.php:/var/www/html/sftp.php:ro
+
+  php74:
+    <<: *agent
+    image: php:7.4-apache
+    ports:
+      - "8074:80"
+    volumes:
+      - ./data-php74:/var/www/html
+      - ../../src/agent/sftp.php:/var/www/html/sftp.php:ro

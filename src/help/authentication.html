@@ -95,9 +95,23 @@
 <h3>Passphrase handling</h3>
 <ul>
   <li>Passphrase is prompted at connection time</li>
-  <li>It is not stored in the session (by design)</li>
-  <li>To avoid the prompt, load the key into Pageant — Pageant caches the unlocked key for the session</li>
+  <li>Once entered, it is kept in memory for the rest of the connection, so automatic reconnects do not ask again</li>
+  <li>It is not written to the session profile (by design) and is never sent to the server</li>
+  <li>To avoid the prompt entirely, load the key into Pageant — Pageant caches the unlocked key for the session</li>
 </ul>
+
+<h3>Storing a password and a passphrase together</h3>
+<p>
+  A session holds one password field. When you need both an account password
+  and a key passphrase, put both in it, each in quotes and separated by a comma:
+</p>
+<pre>"account password","key passphrase"</pre>
+<p>
+  The first value is sent to the server, the second only unlocks the private key.
+  Leave the first empty (<code>"","key passphrase"</code>) for key-only logins.
+  A field that does not have this exact shape is treated as a plain account
+  password, so ordinary passwords need no quoting.
+</p>
 
 <h2>Using Pageant (SSH Agent)</h2>
 

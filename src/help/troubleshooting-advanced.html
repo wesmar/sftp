@@ -224,17 +224,15 @@ Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
 <h4>Causes</h4>
 <ul>
   <li>Password doesn't match PSK in sftp.php</li>
-  <li>Timestamp too far from server time</li>
-  <li>Nonce replay detected</li>
-  <li>Signature computation error</li>
+  <li>An old sftp.php on the server, generated for a different password</li>
+  <li>A proxy or CDN in front of the server drops the <code>X-SFTP-Auth</code> header</li>
 </ul>
 
 <h4>Solutions</h4>
 <ol>
   <li>Regenerate sftp.php with correct password</li>
   <li>Upload new sftp.php to server</li>
-  <li>Check system time synchronization</li>
-  <li>Verify HMAC-SHA256 implementation</li>
+  <li>Make sure custom request headers reach PHP unchanged</li>
 </ol>
 
 <h3>HTTP 404 Not Found</h3>
@@ -445,10 +443,9 @@ XFER: Complete
 <p><b>Cause:</b> Stale shell session after PHP→SCP mode switch, TC interpreted FS_EXEC_YOURSELF as "download file".</p>
 <p><b>Fix:</b> Added reconnect+retry logic and safety net in FsGetFileW. Update to latest version.</p>
 
-<h3>Debug Logging Performance</h3>
-<p><b>Symptom:</b> Slow file transfers in Release build.</p>
-<p><b>Cause:</b> Debug logging was enabled by default, creating C:\temp\sftpplug.log on every operation.</p>
-<p><b>Fix:</b> Debug logging now disabled in Release builds (LOG_ENABLED=0 in global.h). No action needed.</p>
+<h3>Diagnostic Log</h3>
+<p>The plugin keeps no log unless asked to. To record one for a bug report, add <code>DebugLog=1</code> to the <code>[Configuration]</code> section of <code>sftpplug.ini</code> (or set the environment variable <code>SFTPPLUG_DEBUGLOG=1</code>) and restart Total Commander.</p>
+<p>The log goes to <code>%LOCALAPPDATA%\SFTPplug\sftpplug.log</code>, a folder of your own user profile. It leaves out passwords and key material. Remove the setting again once the log is recorded: logging slows transfers down.</p>
 
 <h2>Getting Help</h2>
 

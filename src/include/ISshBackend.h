@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <cstdint>
+#include <string_view>
 #include <basetsd.h>
 
 #if defined(_MSC_VER) && !defined(HAVE_SSIZE_T)
@@ -110,7 +111,7 @@ struct ISftpSession {
 struct ISshSession {
     virtual ~ISshSession() = default;
 
-    virtual int startup(int sock) = 0;
+    virtual int handshake(libssh2_socket_t sock) = 0;
     virtual void setBlocking(int blocking) = 0;
     virtual int getBlocking() = 0;
     virtual int disconnect(const char* desc) = 0;
@@ -126,6 +127,11 @@ struct ISshSession {
     virtual int userauthPubkeyFromFile(const char* user, unsigned ulen,
                                        const char* pub, const char* priv,
                                        const char* passphrase) = 0;
+    // Private key held in memory (PEM or OpenSSH); the public key is derived
+    // from it. Used for converted PuTTY keys so nothing decrypted touches disk.
+    virtual int userauthPubkeyFromMemory(const char* user, unsigned ulen,
+                                         const char* privData, size_t privLen,
+                                         const char* passphrase) = 0;
     virtual int userauthKeyboardInteractive(
         const char* user, unsigned ulen,
         LIBSSH2_USERAUTH_KBDINT_RESPONSE_FUNC((*responseCb))) = 0;
@@ -134,7 +140,11 @@ struct ISshSession {
     virtual int sessionFlag(int flag, int value) = 0;
     virtual int blockDirections() = 0;
 
-    virtual std::unique_ptr<ISftpSession> sftpInit() = 0;
+    // Starts SFTP. An empty serverCommand requests the standard "sftp"
+    // subsystem; otherwise the command is executed instead (OpenSSH's
+    // `sftp -s`), for servers such as OpenWrt/Dropbear without the subsystem.
+    // Pass the same command on every EAGAIN retry.
+    virtual std::unique_ptr<ISftpSession> sftpInit(std::string_view serverCommand) = 0;
     virtual std::unique_ptr<ISshChannel> openChannel() = 0;
     virtual std::unique_ptr<ISshChannel> scpRecv2(const char* path,
                                                    libssh2_struct_stat* sb) = 0;
@@ -156,9 +166,8 @@ struct ISshSession {
         const char* shost, int sport) = 0;
 
     virtual void** abstractPtr() = 0;
-    virtual void* callbackSet(int cbtype, void* cb) = 0;
+    virtual void setCallback(int cbtype, libssh2_cb_generic* cb) = 0;
     virtual int trace(int bitmask) = 0;
-    virtual int bannerSet(const char* banner) = 0;
 };
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@
 #include <chrono>
 #include <mutex>
 #include <algorithm>
+#include <memory>
 #include <thread>
 #include <vector>
 #include <string>
@@ -285,21 +286,7 @@ AuthResult pair1Connect(
 
         if (!forceNew) {
             if (!password.empty()) {
-                std::string combined;
-                if (localPeerId < serverPeerId)
-                    combined = localPeerId + "<>" + serverPeerId;
-                else
-                    combined = serverPeerId + "<>" + localPeerId;
-                std::vector<uint8_t> salt(16, 0);
-                auto h = hmacSha256(
-                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                    std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-                if (h && h->size() >= 16) {
-                    for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-                } else {
-                    memcpy(salt.data(), "sftpplug-pair...", 16);
-                }
-                auto derived = deriveKeyPbkdf2(password, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                auto derived = derivePairKey(password, localPeerId, serverPeerId);
                 if (derived) {
                     key = *derived;
                     std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
@@ -402,25 +389,7 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
 {
     using namespace lanpair_internal;
 
-    std::string combined;
-    if (localPeerId < remotePeerId)
-        combined = localPeerId + "<>" + remotePeerId;
-    else
-        combined = remotePeerId + "<>" + localPeerId;
-
-    std::vector<uint8_t> salt(16, 0);
-    auto h = hmacSha256(
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-    if (h && h->size() >= 16) {
-        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-    } else {
-        memcpy(salt.data(), "sftpplug-pair...", 16);
-    }
-
-    auto key = deriveKeyPbkdf2(password,
-                               std::span<const uint8_t>(salt.data(), salt.size()),
-                               kDerivedKeySize);
+    auto key = derivePairKey(password, localPeerId, remotePeerId);
     if (!key) return false;
 
     const std::string raw(reinterpret_cast<const char*>(key->data()), key->size());
@@ -659,9 +628,16 @@ bool LanPairSession::getFile(const std::string& remotePath,
         return false;
     }
 
+    // The peer sends from `offset` on, so writing resumes right there, at the
+    // end of what the local file already holds.
     if (resume && offset > 0) {
         LARGE_INTEGER li{}; li.QuadPart = offset;
-        SetFilePointerEx(hLocal, li, nullptr, FILE_END);
+        if (!SetFilePointerEx(hLocal, li, nullptr, FILE_BEGIN)) {
+            CloseHandle(hLocal);
+            impl_->close();
+            if (fsResult) *fsResult = FS_FILE_WRITEERROR;
+            return false;
+        }
     }
 
     constexpr size_t kChunk = 65536;
@@ -692,7 +668,10 @@ bool LanPairSession::getFile(const std::string& remotePath,
 
     if (!ok) {
         impl_->close();
-        DeleteFileW(localPath);
+        // A file being resumed was there before this transfer and is the
+        // user's; only one this transfer created is taken away.
+        if (!resume)
+            DeleteFileW(localPath);
         return false;
     }
 
@@ -785,12 +764,23 @@ bool LanPairSession::remove(const std::string& path) noexcept {
 }
 
 bool LanPairSession::rename(const std::string& oldPath,
-                            const std::string& newPath) noexcept {
+                            const std::string& newPath,
+                            bool               overwrite,
+                            bool*              exists) noexcept {
+    if (exists) *exists = false;
     if (!isConnected()) return false;
+    // The trailing flag says whether a taken destination may be replaced.
+    // A peer that predates it ignores the extra token and replaces as it
+    // always did.
     const std::string line = "REN " + b64EncodeStr(oldPath)
-                           + " "   + b64EncodeStr(newPath);
+                           + " "   + b64EncodeStr(newPath)
+                           + (overwrite ? " 1" : " 0");
     const auto resp = impl_->cmd(line);
-    return !resp.empty() && resp[0] == "OK";
+    if (!resp.empty() && resp[0] == "OK")
+        return true;
+    if (exists && resp.size() >= 2 && resp[0] == "ERR" && resp[1] == "exists")
+        *exists = true;
+    return false;
 }
 
 // ============================================================
@@ -808,8 +798,16 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     std::string         password_;
     std::atomic<bool>   trustedInstaller_{false};
 
-    std::mutex               clientThreadsMu_;
-    std::vector<std::thread> clientThreads_;
+    // A finished std::thread stays joinable until someone joins it, so the
+    // thread object cannot say on its own whether the work is over. The flag
+    // does, and the accept loop uses it to clear out the ones that are done.
+    struct ClientWorker {
+        std::thread                        thread;
+        std::shared_ptr<std::atomic<bool>> done;
+    };
+
+    std::mutex                clientThreadsMu_;
+    std::vector<ClientWorker> clientThreads_;
 
     static constexpr char kDefaultPeerId[] = "lanfilesrv";
 
@@ -883,21 +881,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             if (key.empty()) {
                 std::lock_guard<std::mutex> lk(passwordMu_);
                 if (!password_.empty()) {
-                    std::string combined;
-                    if (serverPeerId_ < clientPeerId)
-                        combined = serverPeerId_ + "<>" + clientPeerId;
-                    else
-                        combined = clientPeerId + "<>" + serverPeerId_;
-                    std::vector<uint8_t> salt(16, 0);
-                    auto h = hmacSha256(
-                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>("LANPAIR"), 7),
-                        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(combined.data()), combined.size()));
-                    if (h && h->size() >= 16) {
-                        for (size_t i = 0; i < 16; ++i) salt[i] = (*h)[i];
-                    } else {
-                        memcpy(salt.data(), "sftpplug-pair...", 16);
-                    }
-                    auto derived = deriveKeyPbkdf2(password_, std::span<const uint8_t>(salt.data(), salt.size()), kDerivedKeySize);
+                    auto derived = derivePairKey(password_, serverPeerId_, clientPeerId);
                     if (derived) key = *derived;
                 }
             }
@@ -972,7 +956,10 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             } else if (cmd == "DEL" && parts.size() >= 2) {
                 cmdDel(s, b64DecodeStr(parts[1]));
             } else if (cmd == "REN" && parts.size() >= 3) {
-                cmdRen(s, b64DecodeStr(parts[1]), b64DecodeStr(parts[2]));
+                // Replacing needs the flag spelled out; a client too old to
+                // send it never asked the user, so it gets a refusal.
+                const bool replace = parts.size() >= 4 && parts[3] == "1";
+                cmdRen(s, b64DecodeStr(parts[1]), b64DecodeStr(parts[2]), replace);
             } else {
                 sendLine(s, "ERR unknown-command");
             }
@@ -1133,11 +1120,16 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
     }
 
     void cmdRen(SOCKET s, const std::string& oldPath,
-                          const std::string& newPath) noexcept {
+                          const std::string& newPath, bool replace) noexcept {
         const std::wstring wold = utf8ToWide(normPath(oldPath));
         const std::wstring wnew = utf8ToWide(normPath(newPath));
-        sendLine(s, MoveFileExW(wold.c_str(), wnew.c_str(), MOVEFILE_REPLACE_EXISTING)
-                        ? "OK" : "ERR rename-failed");
+        if (MoveFileExW(wold.c_str(), wnew.c_str(), replace ? MOVEFILE_REPLACE_EXISTING : 0)) {
+            sendLine(s, "OK");
+            return;
+        }
+        const DWORD err = GetLastError();
+        sendLine(s, (!replace && (err == ERROR_ALREADY_EXISTS || err == ERROR_FILE_EXISTS))
+                        ? "ERR exists" : "ERR rename-failed");
     }
 
     void handleClient(SOCKET client) {
@@ -1180,25 +1172,35 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
 
             {
                 std::lock_guard<std::mutex> lk(clientThreadsMu_);
+                for (auto& w : clientThreads_) {
+                    if (w.done->load(std::memory_order_acquire) && w.thread.joinable())
+                        w.thread.join();
+                }
                 clientThreads_.erase(
                     std::remove_if(clientThreads_.begin(), clientThreads_.end(),
-                                   [](std::thread& t) { return !t.joinable(); }),
+                                   [](const ClientWorker& w) { return !w.thread.joinable(); }),
                     clientThreads_.end());
             }
 
             auto self = shared_from_this();
+            auto done = std::make_shared<std::atomic<bool>>(false);
             std::lock_guard<std::mutex> lk(clientThreadsMu_);
-            clientThreads_.emplace_back([self, client] {
-                sftp::DllExceptionBarrier barrier;
-                sftp::dll_invoke_void(barrier, [self, client] { self->handleClient(client); });
-            });
+            clientThreads_.push_back(ClientWorker{
+                std::thread([self, client, done] {
+                    {
+                        sftp::DllExceptionBarrier barrier;
+                        sftp::dll_invoke_void(barrier, [self, client] { self->handleClient(client); });
+                    }
+                    done->store(true, std::memory_order_release);
+                }),
+                std::move(done)});
         }
     }
 
     void joinClientThreads() {
         std::lock_guard<std::mutex> lk(clientThreadsMu_);
-        for (auto& t : clientThreads_)
-            if (t.joinable()) t.join();
+        for (auto& w : clientThreads_)
+            if (w.thread.joinable()) w.thread.join();
         clientThreads_.clear();
     }
 };
