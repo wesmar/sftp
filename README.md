@@ -2,7 +2,7 @@
 
 ![SFTP Plugin](images/sftp01.jpg)
 
-**Version 10.3.0.0** — C++20 SFTP/SCP/PHP/LAN plugin for Total Commander x64 and x86, maintained by **Marek Wesołowski** ([kvc.pl](https://kvc.pl)).
+**Version 10.3.0.0** — C++20 SFTP, SCP, PHP Agent, and LAN Pair plugin for Total Commander x64 and x86.
 
 Complete C-to-C++20 rewrite of the original SFTP plugin by Christian Ghisler. Transport, authentication, and session subsystems use an interface-driven backend abstraction over statically linked **OpenSSL 4.1.0** and **libssh2 1.11.1**, compiled under `/W4 /WX`, Control Flow Guard, and CET. At runtime, the plugin selects native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair based on server capabilities.
 
@@ -573,13 +573,14 @@ Remote `locale` command output is parsed to determine the server's character enc
 
 ## Verification and Test Suites
 
-All three automated suites execute for both `x64` and `Win32` targets:
+Verification uses three automated test suites targeting both `x64` and `Win32` Release builds, plus a containerized PHP Agent harness:
 
-| Suite | Runner | Scope |
-|-------|--------|-------|
-| **Unit tests** | `tests\run-unit-tests.ps1` | 34 test suites across 325,471 assertions covering PPK v2/v3 parsing and OpenSSL Argon2id decryption, UTF-8/CRLF text conversion, ECMA-48 terminal filtering, LAN Pair cryptography, password storage, and wildcard matching. |
-| **UI layout tests** | `tests\run-ui-tests.ps1` | Renders all 7 plugin dialog variants across 16 languages under Per-Monitor V2 DPI and checks for clipped text, overlapping controls, and out-of-bounds geometry. |
-| **Integration tests** | `tests\run-integration-tests.ps1` | Exercises `PluginHarness.cpp` against a live OpenSSH server across 5 transfer modes: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text mode. |
+| Suite | Runner | Scope and Methodology |
+|-------|--------|-----------------------|
+| **Unit tests** | `tests\run-unit-tests.ps1` | 34 test suites and 325,471 assertions per architecture. Validates PPK v2/v3 parsing and OpenSSL 4.1.0 Argon2id decryption against deterministic RSA, ECDSA P-256/P-384/P-521, and Ed25519 fixtures in `tests\fixtures\ppk`, UTF-8 and CRLF conversion, ECMA-48 control-sequence stripping, LAN Pair PAIR1/PBKDF2 cryptography, DPAPI/legacy password codecs, wildcard matching, and batch download error state transitions. |
+| **UI layout tests** | `tests\run-ui-tests.ps1` | Instantiates all 7 Win32 dialog templates, including `download-error`, across all 16 localizations under Per-Monitor V2 DPI scaling. Computes rendered glyph extents against control bounding boxes to fail on clipped text, overlapping controls, or out-of-bounds geometry. |
+| **Integration tests** | `tests\run-integration-tests.ps1` | Loads the compiled `.wfx` plugin via `PluginHarness.cpp` against a live OpenSSH server across 5 transfer paths: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text conversion. |
+| **PHP Agent harness** | `tools\php-agent-test\docker-compose.yml` | Reproduces HTTP TAR upload, TAR streaming download, and `SHELL_EXEC` workflows against a local PHP container. |
 
 ---
 
@@ -827,5 +828,4 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 ### Acknowledgements
 
 * Based on the original SFTP plugin by **Christian Ghisler**.
-* Maintained and re-engineered in C++20 by **Marek Wesołowski** ([kvc.pl](https://kvc.pl), [`wesmar/sftp`](https://github.com/wesmar/sftp)).
 * Incorporates major upstream improvements, fixes, and features from **`zvldz`** (`zvldz/totalcmd_sftp`), **`numbereleven-a`** (`numbereleven-a/sftp`), and **`bukephalos`**.
