@@ -19,6 +19,7 @@
 #include <windows.h>
 #include <bcrypt.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cwchar>
@@ -26,12 +27,14 @@
 #include <map>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
-// Total Commander's plugin header uses an anonymous union.
 #include "fsplugin.h"
+#include "../res/resource.h"
 
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "user32.lib")
 
 namespace {
 
@@ -52,6 +55,7 @@ struct Plugin {
     int (WINAPI* GetFileW)(LPCWSTR, LPWSTR, int, RemoteInfoStruct*) = nullptr;
     int (WINAPI* RenMovFileW)(LPCWSTR, LPCWSTR, BOOL, BOOL, RemoteInfoStruct*) = nullptr;
     int (WINAPI* ExecuteFileW)(HWND, LPWSTR, LPCWSTR) = nullptr;
+    void (WINAPI* StatusInfo)(LPCSTR, int, int) = nullptr;
     BOOL (WINAPI* Disconnect)(LPCSTR) = nullptr;
 
     template <class F> bool Bind(F& fn, const char* name)
@@ -73,7 +77,8 @@ struct Plugin {
                Bind(FindFirstW, "FsFindFirstW") && Bind(FindNextW, "FsFindNextW") && Bind(FindClose, "FsFindClose") &&
                Bind(MkDirW, "FsMkDirW") && Bind(RemoveDirW, "FsRemoveDirW") && Bind(DeleteFileW, "FsDeleteFileW") &&
                Bind(PutFileW, "FsPutFileW") && Bind(GetFileW, "FsGetFileW") && Bind(RenMovFileW, "FsRenMovFileW") &&
-               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(Disconnect, "FsDisconnect");
+               Bind(ExecuteFileW, "FsExecuteFileW") && Bind(StatusInfo, "FsStatusInfo") &&
+               Bind(Disconnect, "FsDisconnect");
     }
 } g_plugin;
 
@@ -231,6 +236,67 @@ RemoteInfoStruct InfoFor(const std::wstring& dir, const std::wstring& name)
     return ri;
 }
 
+bool LocalFileExists(const std::wstring& path)
+{
+    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+// Answers the plugin's own dialogs the way a user does: a thread watches for
+// a dialog of this process that carries `buttonId`, clicks it, and waits
+// until that dialog is gone before looking for the next one.
+class DialogResponder {
+public:
+    explicit DialogResponder(int buttonId) : button_(buttonId), watcher_([this] { Watch(); }) {}
+    ~DialogResponder()
+    {
+        stop_ = true;
+        watcher_.join();
+    }
+    DialogResponder(const DialogResponder&) = delete;
+    DialogResponder& operator=(const DialogResponder&) = delete;
+
+    int Answered() const { return answered_.load(); }
+
+private:
+    struct Search {
+        int button;
+        HWND found;
+    };
+
+    static BOOL CALLBACK Visit(HWND h, LPARAM param)
+    {
+        auto* search = reinterpret_cast<Search*>(param);
+        DWORD pid = 0;
+        GetWindowThreadProcessId(h, &pid);
+        if (pid == GetCurrentProcessId() && IsWindowVisible(h) && GetDlgItem(h, search->button)) {
+            search->found = h;
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    void Watch()
+    {
+        while (!stop_) {
+            Search search{button_, nullptr};
+            EnumWindows(&Visit, reinterpret_cast<LPARAM>(&search));
+            if (search.found) {
+                ++answered_;
+                PostMessageW(search.found, WM_COMMAND, MAKEWPARAM(button_, BN_CLICKED),
+                             reinterpret_cast<LPARAM>(GetDlgItem(search.found, button_)));
+                while (!stop_ && IsWindow(search.found))
+                    Sleep(10);
+            }
+            Sleep(20);
+        }
+    }
+
+    const int button_;
+    std::atomic<bool> stop_{false};
+    std::atomic<int> answered_{0};
+    std::thread watcher_; // last: starts once everything above exists
+};
+
 std::wstring NewTempDir(const wchar_t* tag)
 {
     wchar_t base[MAX_PATH] = {};
@@ -361,6 +427,39 @@ int wmain(int argc, wchar_t** argv)
         char octal[8];
         std::snprintf(octal, sizeof(octal), "%03lo", static_cast<unsigned long>(mode));
         Check(rc == FS_EXEC_OK && mode == 0640, std::string("chmod 640 is reported back as ") + octal);
+    }
+
+    {
+        // A multi-file download meets files it cannot read: the first one
+        // asks, "Skip all" answers for the rest, and the batch goes on.
+        DialogResponder responder(IDC_DOWNLOAD_SKIP_ALL);
+        const std::string dirA = Narrow(dir); // FsStatusInfo takes the ANSI path
+        auto get = [&](const wchar_t* name, int flags) {
+            std::wstring target = back + name;
+            RemoteInfoStruct ri = InfoFor(dir, name);
+            const int rc = g_plugin.GetFileW((dir + L"\\" + name).c_str(), target.data(), flags, &ri);
+            return std::pair<int, std::wstring>(rc, back + name);
+        };
+
+        g_plugin.StatusInfo(dirA.c_str(), FS_STATUS_START, FS_STATUS_OP_GET_MULTI);
+        const auto first = get(L"missing-1.bin", FS_COPYFLAGS_OVERWRITE);
+        Check(first.first == FS_FILE_OK && responder.Answered() == 1 && !LocalFileExists(first.second),
+              "a failed file in a batch asks once; skipping leaves nothing behind (rc=" + std::to_string(first.first) + ")");
+        const auto second = get(L"missing-2.bin", FS_COPYFLAGS_OVERWRITE);
+        Check(second.first == FS_FILE_OK && responder.Answered() == 1 && !LocalFileExists(second.second),
+              "\"Skip all\" answers the next failure without asking (rc=" + std::to_string(second.first) + ")");
+        const auto good = get(L"renamed.bin", FS_COPYFLAGS_OVERWRITE);
+        Check(good.first == FS_FILE_OK && Sha256File(good.second) == expectedHash[samples[0].name],
+              "the batch goes on: the next file arrives intact (rc=" + std::to_string(good.first) + ")");
+        const auto moved = get(L"missing-3.bin", FS_COPYFLAGS_OVERWRITE | FS_COPYFLAGS_MOVE);
+        Check(moved.first == FS_FILE_READERROR && responder.Answered() == 1,
+              "a move keeps its read error, so its source is never deleted (rc=" + std::to_string(moved.first) + ")");
+        g_plugin.StatusInfo(dirA.c_str(), FS_STATUS_END, FS_STATUS_OP_GET_MULTI);
+
+        const auto single = get(L"missing-4.bin", FS_COPYFLAGS_OVERWRITE);
+        Check(single.first == FS_FILE_READERROR && responder.Answered() == 1,
+              "outside a batch the read error stands and nothing asks (rc=" + std::to_string(single.first) + ")");
+        DeleteFileW(good.second.c_str());
     }
 
     if (textChecks) {

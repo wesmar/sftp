@@ -23,8 +23,6 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
 - **Per-Monitor V2 DPI, Mica titlebar, and dynamic language layout.** All plugin
   dialogs (`Connection`, `Jump Host`, `Proxy`, `Properties`, `Download Error`)
   scale cleanly across DPI changes and auto-size controls for all 16 languages.
-- **Encrypted LAN Pair & HMAC-signed PHP Agent.** LAN Pair now uses
-  authenticated encryption; `sftp.php` requests are HMAC-signed.
 - **Faster shell fallback uploads.** Multi-line `base64` chunking sends up to
   49,152 bytes per command on large files, cutting transfer overhead sharply.
 - **Hardened C++20 build & automated test suite.** Built with `/std:c++20`,
@@ -52,6 +50,42 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
 - **Empty public key field in `SftpAuthPubKey`.** Passes `nullptr` to libssh2
   so the public key is derived from the private key instead of failing on
   `fopen("")`.
+- **Wildcard lists (text-mode extensions).** A pattern longer than 259
+  characters no longer ends the process, and case is folded for every
+  language, not only for ASCII (`*.ĄB` now matches `x.ąb`).
+- **`ls -l` parsing in SCP-only mode.** Only symbolic links lose their
+  ` -> target` part; a regular file whose name contains ` -> ` keeps it.
+- **Post-login command.** Its output is shown whole, including non-ASCII text
+  at the end of a line, and the progress dialog shows its text again.
+
+### Security
+
+- **Stack protection (`/GS`) is on.** The build had it switched off.
+- **Remote paths are sent whole or not at all.** A path too long for its buffer
+  used to be cut short, which can name its parent directory; it is now refused.
+- **SOCKS proxies.** SOCKS4/SOCKS5 requests can no longer overrun their buffer;
+  a SOCKS5 server refusing every authentication method is recognised, and a
+  reply with an unknown address type or a long bound name is no longer
+  misread as success.
+- **Stored passwords.** A password whose DPAPI form exceeded 1024 bytes was
+  silently saved with the old XOR obfuscation instead; one longer than 259
+  characters was read back empty. Both now round-trip through DPAPI.
+- **PuTTY keys.** The `.ppk` MAC is checked for unencrypted keys too, Argon2
+  parameters are bounded, the rebuilt key is checked for consistency, and the
+  decrypted key never touches the disk (it is handed to libssh2 from memory).
+- **No configuration planting.** OpenSSL ignores `openssl.cnf` and the
+  `OPENSSL_CONF` variable, so no file on the machine can change its behaviour.
+- **Diagnostic log off by default**, and written to
+  `%LOCALAPPDATA%\SFTPplug\sftpplug.log` instead of the shared `C:\temp`.
+
+### Known limitations
+
+- **LAN Pair traffic is not encrypted.** Pairing derives a shared key, but the
+  transfers themselves travel in the clear: use LAN Pair only on a network you
+  trust. Authenticated encryption is planned.
+- **The PHP Agent client authenticates with the shared key in a request
+  header.** `sftp.php` can verify HMAC-signed requests, but the plugin does not
+  sign them yet: reach the agent over HTTPS only.
 
 ## 10.0.2.2 — 2026-11-03
 

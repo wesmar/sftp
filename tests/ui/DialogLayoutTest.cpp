@@ -7,6 +7,7 @@
 
 #define NOMINMAX
 #include <windows.h>
+#include <dwmapi.h>
 #include <gdiplus.h>
 
 #include <algorithm>
@@ -307,8 +308,11 @@ int wmain(int argc, wchar_t** argv)
                 continue;
             }
             SetWindowPos(h, nullptr, 40, 40, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW | SWP_NOACTIVATE);
-            UpdateWindow(h);
+            RedrawWindow(h, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
             Pump();
+            // The screenshot reads what the compositor holds: wait until the
+            // frame just painted has reached it, or the picture comes out blank.
+            DwmFlush();
 
             std::vector<std::string> report;
             const int bad = Check(h, report);

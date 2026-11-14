@@ -52,7 +52,7 @@ Complete C-to-C++20 rewrite of the original SFTP plugin by Christian Ghisler. Tr
 | **Password** | Standard password auth. |
 | **Keyboard-Interactive** | Includes automated password-change-request handling. |
 | **PEM / OpenSSH** | Traditional private key formats, passed directly to libssh2. |
-| **PPK v2 / v3 (native)** | Built-in PuTTY key file parser. No external tools. BCrypt + Argon2d/i/id + AES-256-CBC. |
+| **PPK v2 / v3 (native)** | Built-in PuTTY key file parser on OpenSSL: Argon2d/i/id, AES-256-CBC, HMAC. No external tools; the decoded key never touches the disk. |
 | **Pageant** | SSH Agent integration. Auto-launch from `pageant.lnk` in the plugin directory. |
 | **Fallback chain** | Automatic progression: Pageant → key file → keyboard-interactive → password. |
 
@@ -209,11 +209,11 @@ Converts PuTTY Private Key files to traditional PEM format for libssh2 — no ex
 
 | Component | Implementation |
 |-----------|---------------|
-| KDF | Argon2d / Argon2i / Argon2id — statically linked (argon2, /MT) |
+| KDF | Argon2d / Argon2i / Argon2id — OpenSSL `EVP_KDF`, memory, passes and lanes bounded |
 | Encryption | AES-256-CBC |
 | MAC | HMAC-SHA-256 over `(algorithm ‖ encryption ‖ comment ‖ public_blob ‖ private_blob_plain)` |
 | MAC key source | Argon2 output bytes 48–79 (encrypted keys); empty string (unencrypted keys) |
-| Key derivation | Windows BCrypt `BCRYPT_SHA256_ALGORITHM` with HMAC flag |
+| Crypto | OpenSSL 4.1 (`EVP_KDF`, `EVP_Q_mac`, `EVP_Decrypt*`); the key is rebuilt with `EVP_PKEY_fromdata` and checked with `EVP_PKEY_pairwise_check` |
 | Output | Traditional PEM, passed to `libssh2_userauth_publickey_frommemory` |
 
 **PPK v2** uses SHA-1-based key derivation, also fully handled natively.
@@ -577,68 +577,46 @@ Verification uses three automated test suites targeting both `x64` and `Win32` R
 
 | Suite | Runner | Scope and Methodology |
 |-------|--------|-----------------------|
-| **Unit tests** | `tests\run-unit-tests.ps1` | 34 test suites and 325,471 assertions per architecture. Validates PPK v2/v3 parsing and OpenSSL 4.1.0 Argon2id decryption against deterministic RSA, ECDSA P-256/P-384/P-521, and Ed25519 fixtures in `tests\fixtures\ppk`, UTF-8 and CRLF conversion, ECMA-48 control-sequence stripping, LAN Pair PAIR1/PBKDF2 cryptography, DPAPI/legacy password codecs, wildcard matching, and batch download error state transitions. |
+| **Unit tests** | `tests\run-unit-tests.ps1` | 34 test cases and 325,471 assertions per architecture. Validates PPK v2/v3 parsing and OpenSSL 4.1.0 Argon2id decryption against deterministic RSA, ECDSA P-256/P-384/P-521, and Ed25519 fixtures in `tests\fixtures\ppk`, UTF-8 and CRLF conversion, ECMA-48 control-sequence stripping, LAN Pair PAIR1/PBKDF2 cryptography, DPAPI/legacy password codecs, and wildcard matching. |
 | **UI layout tests** | `tests\run-ui-tests.ps1` | Instantiates all 7 Win32 dialog templates, including `download-error`, across all 16 localizations under Per-Monitor V2 DPI scaling. Computes rendered glyph extents against control bounding boxes to fail on clipped text, overlapping controls, or out-of-bounds geometry. |
-| **Integration tests** | `tests\run-integration-tests.ps1` | Loads the compiled `.wfx` plugin via `PluginHarness.cpp` against a live OpenSSH server across 5 transfer paths: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text conversion. |
+| **Integration tests** | `tests\run-integration-tests.ps1` | Loads the compiled `.wfx` plugin via `PluginHarness.cpp` against a live OpenSSH server across 5 transfer paths: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text conversion — and the *Skip / Skip all* batch prompt, answered through its own dialog the way a user would. |
 | **PHP Agent harness** | `tools\php-agent-test\docker-compose.yml` | Reproduces HTTP TAR upload, TAR streaming download, and `SHELL_EXEC` workflows against a local PHP container. |
 
 ---
 
 ## Build System
 
-`build.ps1` (project root) compiles the plugin using MSBuild with the MSVC v145 toolset. Both x64 and x86 targets are built by default and packaged together in a single ZIP.
+Two scripts at the project root. Both find Visual Studio, the MSVC toolset and the Windows SDK on their own (`tools\Toolchain.psm1`), choosing the ones whose compiler, assembler and libraries actually exist on disk; no version number is written into them.
 
-**Default (all languages in one binary, x64 + x86):**
-
-```powershell
-.\build.ps1
-```
-
-**Single-language builds (smaller binary):**
+**1. Dependencies** — once, and again whenever a pin changes:
 
 ```powershell
-.\build.ps1 -en   # English
-.\build.ps1 -pl   # Polish
-.\build.ps1 -de   # German
-.\build.ps1 -fr   # French
-.\build.ps1 -es   # Spanish
+.\build-deps.ps1              # OpenSSL 4.1.0 + libssh2 1.11.1, x64 and x86
+.\build-deps.ps1 -Arch x64    # one architecture
+.\build-deps.ps1 -Clean       # rebuild from scratch
 ```
 
-Single-language mode strips unused RC language blocks before compile and restores them afterward. Both x64 and x86 are still built.
+- OpenSSL comes as the release tarball, checked against a pinned SHA-256 and the OpenSSL release key in `thirdparty\keys\`. It is built with `no-autoload-config`, so no `openssl.cnf` on a user's machine is ever read.
+- libssh2 is the `thirdparty\libssh2` submodule plus Debian's CVE patches (`thirdparty\patches\libssh2-1.11.1\series`).
+- Both are linked statically with `/MT`. `src\lib\deps-manifest.json` records the pins and the SHA-256 of every library built; `build.ps1` refuses libraries that do not match it.
+- Needs a native Perl (Strawberry), NASM and CMake. Paths that are not found automatically go into `build.local.psd1` (see `build.local.example.psd1`).
 
-**Output after a successful build:**
-- `bin\SFTPplug.zip` — only file remaining in `bin\`; auto-deployed to TC plugin directory
-- ZIP contains both `SFTPplug.wfx64` (x64) and `SFTPplug.wfx` (x86)
-- ZIP file timestamp is set to `2030-01-01 00:00:00` (dependency-free release marker)
-- Intermediate files (`build\bin\`, `build\.intermediates\`) are fully removed
-
-**Release configuration:**
-- Standard: `stdcpp20` (C++20), `stdc17` (C17)
-- Optimization: `MaxSpeed`
-- Runtime library: `MultiThreaded` (`/MT`, static CRT — no VC++ Redistributable required)
-- Whole program optimization: enabled
-- `NDEBUG` defined → `SFTP_DEBUG_ENABLED=0`, `SFTP_DEBUG_TO_FILE=0`
-
-**Debug configuration:**
-- `SFTP_DEBUG_ENABLED=1` → `OutputDebugString` output
-- `SFTP_DEBUG_TO_FILE=0` by default; set to 1 manually for file logging to `C:\temp\sftpplug_debug.log`
-
-**Rebuilding dependency libraries (`third_party/build.ps1`):**
-
-All dependency static libs (argon2 and libssh2) can be rebuilt from source:
+**2. The plugin:**
 
 ```powershell
-.\third_party\build.ps1           # Build all (argon2 + libssh2, x64 + x86)
-.\third_party\build.ps1 -argon    # argon2 only
-.\third_party\build.ps1 -libssh2  # libssh2 only
-.\third_party\build.ps1 -x64only  # x64 only
-.\third_party\build.ps1 -x86only  # x86 only
+.\build.ps1                 # x64 + x86, help page, bin\SFTPplug.zip, deploy into Total Commander
+.\build.ps1 -NoDeploy       # leave Total Commander alone
+.\build.ps1 -X64Only        # 64-bit only
+.\build.ps1 -NoHelp -NoZip  # plugin binaries only
 ```
 
-Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x86.lib`, `libssh2_x64.lib`, `libssh2_x86.lib`). The script verifies `/MT` (`LIBCMT`) linkage in every output lib before copying.
+- Release build: C++20, `/W4 /WX` with no warning switched off, `/permissive-`, `/GS`, Control Flow Guard, CET shadow stack (x64), static CRT.
+- The plugins land in `build\bin\x64_Release` and `build\bin\Win32_Release`; the package and the help page in `bin\`. The help page needs Python 3.
+- Deploying asks Total Commander to close (it is never killed), copies the plugin into `plugins\wfx\SFTPplug` and starts Total Commander again.
+
+**Diagnostic log:** off in every build. `DebugLog=1` under `[Configuration]` in `sftpplug.ini`, or `SFTPPLUG_DEBUGLOG=1` in the environment, writes `%LOCALAPPDATA%\SFTPplug\sftpplug.log`.
 
 ---
-
 ## System Requirements
 
 | Component | Requirement |
@@ -648,8 +626,8 @@ Output libs are placed in `src\lib\` (suffixed: `argon2_a_x64.lib`, `argon2_a_x8
 | Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
 | libssh2 | Statically linked (1.11.1), built against OpenSSL |
-| OpenSSL | Statically linked (3.5.9) — the crypto backend libssh2 runs on |
-| **Dependencies** | None — OpenSSL, libssh2 and argon2 are statically linked with `/MT`, so no VC++ Redistributable is required |
+| OpenSSL | Statically linked (4.1.0) — the crypto backend of libssh2 and of the PPK decoder |
+| **Dependencies** | None — OpenSSL and libssh2 are statically linked with `/MT`, so no VC++ Redistributable is required |
 | Windows APIs | BCrypt, DPAPI (CryptProtectData), WinHTTP, DbgHelp, Winsock2 |
 
 ---
@@ -660,8 +638,8 @@ Distribution archive: `SFTPplug.zip`
 
 | File | Purpose |
 |------|---------|
-| `SFTPplug.wfx64` | x64 plugin binary (statically links libssh2 and Argon2, `/MT`) |
-| `SFTPplug.wfx` | x86 plugin binary (statically links libssh2 and Argon2, `/MT`) |
+| `SFTPplug.wfx64` | x64 plugin binary (OpenSSL and libssh2 statically linked, `/MT`) |
+| `SFTPplug.wfx` | x86 plugin binary (OpenSSL and libssh2 statically linked, `/MT`) |
 | `pluginst.inf` | Total Commander auto-install descriptor (`file=` x86, `file64=` x64) |
 | `sftp.php` | PHP Agent script for HTTP transfer and shell modes |
 | `SFTPplug-help.html` | Full offline documentation, one self-contained page |
@@ -682,7 +660,7 @@ Distribution archive: `SFTPplug.zip`
 | `language\ja.lng` | Japanese |
 | `language\zh-cn.lng` | Simplified Chinese |
 
-No external DLLs required. libssh2 and Argon2 are both rebuilt from source with `/MT` (static CRT) and statically linked into the binary — no VC++ Redistributable needed on the target system.
+No external DLLs required. OpenSSL and libssh2 are built from verified sources with `/MT` (static CRT) and linked into the binary — no VC++ Redistributable needed on the target system.
 
 Open `SFTPplug.zip` in Total Commander and press Enter to trigger the plugin install prompt.
 
@@ -737,7 +715,7 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 ### Completed
 
 - ISshBackend abstraction layer
-- Native PPK v2/v3 conversion (BCrypt + Argon2, no tools)
+- Native PPK v2/v3 conversion (OpenSSL, no tools)
 - Shell DD/base64 fallback transfer
 - LAN Pair transport (PAIR1 auth, LAN2 protocol, UDP discovery, DPAPI trust, TOFU)
 - LAN Pair session timeout (configurable, enforced at session level)
@@ -802,10 +780,14 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - **Password and key passphrase in one field** — write them as
   `"password","passphrase"` and the plugin keeps them apart; the
   passphrase unlocks the key and never goes to the server.
-- **Transparency** — argon2 (used internally for PuTTY PPK v3 key files) is now built from public source instead of a pre-compiled blob
+- **Transparency** — Argon2 for PuTTY PPK v3 key files is computed by OpenSSL, built from its verified release source; no pre-compiled blob remains
 
 ### In Progress
 
+- LAN Pair transfer encryption (X25519 key agreement, password-authenticated,
+  AEAD on every frame); until then LAN Pair belongs on trusted networks
+- PHP Agent request signing in the plugin (the agent already verifies
+  HMAC-signed requests); until then reach the agent over HTTPS only
 - Unicode end to end — the connection dialog, settings and import cache
   still go through ANSI WinAPI, so paths and names with characters
   outside the system code page can be lost
@@ -823,7 +805,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 
 ---
 
-**Highlights:** OpenSSL 4.1.0 + libssh2 1.11.1, C++20 `/W4 /WX` with CFG/CET, `DllExceptionBarrier` (ABI protection), `ConnectionGuard` RAII, Per-Monitor V2 DPI + Mica dialogs, **Skip / Skip all / Cancel** batch download prompt, encrypted LAN Pair + HMAC-signed PHP Agent, 16-language localization (EN + 15 `.lng`), **`[Imports]` magic folder** (SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY / `~/.ssh/config`), **PHP Agent TAR upload+download**, automated unit/UI/integration test suites, no external DLLs or VC++ Redistributable required.
+**Highlights:** OpenSSL 4.1.0 + libssh2 1.11.1, C++20 `/W4 /WX` with CFG/CET, `DllExceptionBarrier` (ABI protection), `ConnectionGuard` RAII, Per-Monitor V2 DPI + Mica dialogs, **Skip / Skip all / Cancel** batch download prompt, 16-language localization (EN + 15 `.lng`), **`[Imports]` magic folder** (SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY / `~/.ssh/config`), **PHP Agent TAR upload+download**, automated unit/UI/integration test suites, no external DLLs or VC++ Redistributable required.
 
 ### Acknowledgements
 
