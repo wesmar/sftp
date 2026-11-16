@@ -182,7 +182,7 @@
 268=Koppelen...
 269=Shell...
 270=LAN Pair
-271=Koppelwachtwoord (optioneel – leeg = gebruik opgeslagen vertrouwenssleutel).
+271=Voer het koppelwachtwoord in (op beide computers hetzelfde).
 272=LAN Pair-ontvanger gestopt.
 273=Starten van ontvanger mislukt: {}
 274=LAN Pair-ontvanger gestart (poort 45846). Klik nogmaals op Koppelen... om te stoppen.
@@ -406,3 +406,4 @@
 12145=Overslaan
 12146=Alles overslaan
 12147=Overgeslagen na een downloadfout:
+12148=De PHP-agent op de server is te oud voor deze pluginversie: hij accepteert geen ondertekende verzoeken. Upload de sftp.php die bij de plugin hoort.

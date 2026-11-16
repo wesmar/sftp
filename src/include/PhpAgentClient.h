@@ -8,7 +8,10 @@
 // PHP Agent transport operations.
 // All functions return SFTP_OK / SFTP_* error codes used by the plugin.
 
-int PhpAgentProbe(pConnectSettings cs);
+// Reads the agent's public PROBE: chunk size, clock and the signing scheme.
+// On failure `outErrorText` says why when there is more to say than that it
+// failed (an agent too old to accept signed requests).
+int PhpAgentProbe(pConnectSettings cs, std::string& outErrorText);
 int PhpAgentValidateAuth(pConnectSettings cs, std::string& outErrorText);
 int PhpAgentListDirectoryW(pConnectSettings cs, LPCWSTR remoteDir, std::vector<WIN32_FIND_DATAW>& outEntries);
 int PhpAgentDownloadFileW(pConnectSettings cs,

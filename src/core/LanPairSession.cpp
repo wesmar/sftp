@@ -1,13 +1,14 @@
 // ============================================================
 // LanPairSession.cpp
-// File-transfer session layer on top of the PAIR1 auth protocol.
-// After PAIR1 the same TCP socket is kept open and a simple
-// line-based command protocol (LAN2) is spoken on it.
+// File-transfer session layer on top of the PAIR3 handshake
+// (LanPairProtocol.h). After it the same TCP connection, now
+// encrypted, carries a simple line-based command protocol (LAN2).
 // ============================================================
 
 #include "LanPairSession.h"
 #include "LanPair.h"
 #include "LanPairInternal.h"
+#include "LanPairProtocol.h"
 #include "DllExceptionBarrier.h"
 #include "TrustedInstallerToken.h"
 
@@ -50,35 +51,6 @@ namespace {
 
 // Pull in all shared crypto / socket primitives.
 using namespace lanpair_internal;
-
-// ---- role helpers (local: use lanpair::PairRole with full qualifier) ----
-
-std::string roleToString(lanpair::PairRole role) {
-    switch (role) {
-    case lanpair::PairRole::Donor:    return "donor";
-    case lanpair::PairRole::Receiver: return "receiver";
-    default:                      return "dual";
-    }
-}
-
-lanpair::PairRole roleFromString(const std::string& s) {
-    if (s == "donor")    return lanpair::PairRole::Donor;
-    if (s == "receiver") return lanpair::PairRole::Receiver;
-    return lanpair::PairRole::Dual;
-}
-
-// ---- socket helpers only needed here ----
-
-bool recvAll(SOCKET s, uint8_t* buf, size_t len) {
-    size_t got = 0;
-    while (got < len) {
-        const int n = recv(s, reinterpret_cast<char*>(buf + got),
-                           static_cast<int>(len - got), 0);
-        if (n <= 0) return false;
-        got += static_cast<size_t>(n);
-    }
-    return true;
-}
 
 // ---- base64 ----
 
@@ -181,201 +153,65 @@ std::wstring utf8ToWide(const std::string& utf8) {
     return out;
 }
 
-// ---- PAIR1 client-side auth ----
-// Returns an open, authenticated socket plus the shared key on success.
-// On failure, sock == INVALID_SOCKET.
-
-struct AuthResult {
-    SOCKET               sock = INVALID_SOCKET;
-    std::vector<uint8_t> key;
-};
-
-AuthResult pair1Connect(
+// ---- PAIR3 client side ----
+// Connects and runs the PAIR3 handshake (LanPairProtocol.h). The key comes
+// from the password when there is one, otherwise from DPAPI, where an
+// earlier session left it - and it is stored only once the peer has proved
+// it knows the same key.
+std::unique_ptr<lanpair_proto::Channel> pair3Connect(
     const std::string& targetIp,
     uint16_t           targetPort,
     const std::string& localPeerId,
     const std::string& remotePeerId,
     const std::string& password,
-    lanpair::PairError* err,
-    bool               forceNew = false) noexcept
+    lanpair::PairError* err) noexcept
 {
-    AuthResult result;
-
     SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (s == INVALID_SOCKET) {
         if (err) { err->code = WSAGetLastError(); err->message = "Cannot create socket"; }
-        return result;
+        return nullptr;
     }
-
+    auto ch = std::make_unique<lanpair_proto::Channel>(s);
     setSocketTimeout(s, 8000);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(targetPort);
     if (inet_pton(AF_INET, targetIp.c_str(), &addr.sin_addr) != 1) {
-        closesocket(s);
         if (err) { err->code = ERROR_INVALID_ADDRESS; err->message = "Invalid target IP"; }
-        return result;
+        return nullptr;
     }
-
-    if (connect(s, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) {
-        const int code = WSAGetLastError();
-        closesocket(s);
-        if (err) { err->code = code; err->message = "connect() failed"; }
-        return result;
+    if (::connect(s, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0) {
+        if (err) { err->code = WSAGetLastError(); err->message = "connect() failed"; }
+        return nullptr;
     }
-
     const BOOL keepAlive = TRUE;
     setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
                reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
 
-    std::array<uint8_t, kNonceSize> clientNonce{};
-    if (!randomBytes(clientNonce.data(), clientNonce.size())) {
-        closesocket(s);
-        if (err) { err->code = GetLastError(); err->message = "randomBytes failed"; }
-        return result;
-    }
-    const std::string clientNonceHex = hexEncode(clientNonce.data(), clientNonce.size());
-
-    std::ostringstream hello;
-    hello << "PAIR1 HELLO " << localPeerId << " "
-          << roleToString(lanpair::PairRole::Donor) << " " << clientNonceHex;
-    if (!sendLine(s, hello.str())) {
-        closesocket(s);
-        if (err) { err->code = WSAGetLastError(); err->message = "Cannot send HELLO"; }
-        return result;
-    }
-
-    std::string line;
-    if (!recvLine(s, &line)) {
-        closesocket(s);
-        if (err) { err->code = WSAGetLastError(); err->message = "No CHALLENGE received"; }
-        return result;
-    }
-    const auto ch = splitBySpace(line);
-    if (ch.size() != 7 || ch[0] != "PAIR1" || ch[1] != "CHALLENGE") {
-        closesocket(s);
-        if (err) { err->code = ERROR_INVALID_DATA; err->message = "Invalid CHALLENGE"; }
-        return result;
-    }
-
-    const std::string serverPeerId = ch[2];
-    if (!remotePeerId.empty() && serverPeerId != remotePeerId) {
-        closesocket(s);
-        if (err) { err->code = ERROR_ACCESS_DENIED; err->message = "Peer ID mismatch"; }
-        return result;
-    }
-
-    const auto salt        = hexDecode(ch[5]);
-    const auto serverNonce = hexDecode(ch[6]);
-    if (!salt || !serverNonce ||
-        salt->size() != kSaltSize || serverNonce->size() != kNonceSize) {
-        closesocket(s);
-        if (err) { err->code = ERROR_INVALID_DATA; err->message = "Bad challenge nonce/salt"; }
-        return result;
-    }
-
-    const std::string proofMaterial    = "C|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
-    const std::string srvProofMaterial = "S|" + clientNonceHex + "|" + ch[6] + "|" + localPeerId + "|" + serverPeerId;
-
-    std::vector<uint8_t> key;
-
-    auto sendAuthAndGetKey = [&]() -> bool {
-        std::string trustSecret;
-        const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
-
-        if (!forceNew) {
-            if (!password.empty()) {
-                auto derived = derivePairKey(password, localPeerId, serverPeerId);
-                if (derived) {
-                    key = *derived;
-                    std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
-                    lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-                }
-            }
-
-            if (key.empty() && lanpair::DpapiSecretStore::loadSecret(trustKey, &trustSecret, nullptr)) {
-                key.assign(trustSecret.begin(), trustSecret.end());
-            }
+    std::optional<lanpair_proto::KeyBytes> usedKey;
+    const auto keyFor = [&](const std::string& serverId) -> std::optional<lanpair_proto::KeyBytes> {
+        if (!password.empty()) {
+            usedKey = derivePairKey(password, localPeerId, serverId);
+            return usedKey;
         }
-
-        if (!key.empty()) {
-            auto proof = hmacSha256(key,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(proofMaterial.data()),
-                    proofMaterial.size()));
-            if (!proof) return false;
-            std::ostringstream auth;
-            auth << "PAIR1 AUTH " << hexEncode(proof->data(), proof->size());
-            return sendLine(s, auth.str());
+        std::string stored;
+        if (lanpair::DpapiSecretStore::loadSecret(trustKeyForClient(serverId, localPeerId), &stored, nullptr) &&
+            !stored.empty()) {
+            usedKey = lanpair_proto::KeyBytes(stored.begin(), stored.end());
+            SecureZeroMemory(stored.data(), stored.size());
         }
-
-        return sendLine(s, "PAIR1 TRUSTNEW");
+        return usedKey;
     };
-
-    if (!sendAuthAndGetKey()) {
-        closesocket(s);
-        if (err) { err->code = WSAGetLastError(); err->message = "Cannot send AUTH"; }
-        return result;
+    lanpair_proto::PeerInfo server;
+    if (!lanpair_proto::ClientHandshake(*ch, localPeerId, lanpair::PairRole::Donor, remotePeerId, keyFor,
+                                        &server, err))
+        return nullptr;
+    if (usedKey && !password.empty()) {
+        const std::string raw(usedKey->begin(), usedKey->end());
+        lanpair::DpapiSecretStore::saveSecret(trustKeyForClient(server.peerId, localPeerId), raw, nullptr);
     }
-
-    if (!recvLine(s, &line)) {
-        closesocket(s);
-        if (err) { err->code = WSAGetLastError(); err->message = "No OK response"; }
-        return result;
-    }
-    const auto ok = splitBySpace(line);
-    if (ok.size() < 3 || ok[0] != "PAIR1" || (ok[1] != "OK" && ok[1] != "OKTRUST")) {
-        closesocket(s);
-        if (err) { err->code = ERROR_ACCESS_DENIED;
-                   err->message = line.empty() ? "Auth failed" : line; }
-        return result;
-    }
-
-    if (ok[1] == "OKTRUST") {
-        if (ok.size() != 4) {
-            closesocket(s);
-            if (err) { err->code = ERROR_INVALID_DATA; err->message = "Bad OKTRUST"; }
-            return result;
-        }
-        auto trustBytes = hexDecode(ok[3]);
-        if (!trustBytes || trustBytes->empty()) {
-            closesocket(s);
-            if (err) { err->code = ERROR_INVALID_DATA; err->message = "Bad trust token"; }
-            return result;
-        }
-        key.assign(trustBytes->begin(), trustBytes->end());
-        const std::string trustKey = trustKeyForClient(serverPeerId, localPeerId);
-        std::string raw(reinterpret_cast<const char*>(trustBytes->data()), trustBytes->size());
-        lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-    }
-
-    auto expectedSrvProof = hmacSha256(key,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(srvProofMaterial.data()),
-            srvProofMaterial.size()));
-    if (!expectedSrvProof ||
-        hexEncode(expectedSrvProof->data(), expectedSrvProof->size()) != ok[2]) {
-        closesocket(s);
-        if (err) { err->code = ERROR_ACCESS_DENIED; err->message = "Server proof mismatch"; }
-        return result;
-    }
-
-    result.sock = s;
-    result.key  = std::move(key);
-    return result;
-}
-
-// ---- LAN2 command helpers ----
-
-bool lan2SendCmd(SOCKET s, const std::string& cmd) {
-    return sendLine(s, cmd);
-}
-
-std::vector<std::string> lan2ReadResponse(SOCKET s) {
-    std::string line;
-    if (!recvLine(s, &line)) return {};
-    return splitBySpace(line);
+    return ch;
 }
 
 } // anonymous namespace
@@ -404,7 +240,7 @@ bool PrepareLanPairTrustKeys(const std::string& localPeerId,
 
 struct LanPairSession::Impl {
     lanpair_internal::WsaScope wsa;
-    SOCKET   sock_       = INVALID_SOCKET;
+    std::unique_ptr<lanpair_proto::Channel> ch_;
     bool     connected_  = false;
     int      timeoutMin_ = 0;
     std::chrono::steady_clock::time_point sessionStart_ = std::chrono::steady_clock::now();
@@ -417,10 +253,10 @@ struct LanPairSession::Impl {
     }
 
     void close() noexcept {
-        if (sock_ != INVALID_SOCKET) {
-            sendLine(sock_, "QUIT"); // best-effort
-            closesocket(sock_);
-            sock_ = INVALID_SOCKET;
+        if (ch_) {
+            if (connected_)
+                ch_->sendLine("QUIT"); // best-effort
+            ch_.reset();
         }
         connected_ = false;
     }
@@ -429,10 +265,17 @@ struct LanPairSession::Impl {
     // Returns empty vector on I/O failure or session timeout.
     std::vector<std::string> cmd(const std::string& line) noexcept {
         if (isTimedOut()) { close(); return {}; }
-        if (!sendLine(sock_, line)) { close(); return {}; }
+        if (!ch_->sendLine(line)) { close(); return {}; }
         std::string resp;
-        if (!recvLine(sock_, &resp)) { close(); return {}; }
+        if (!ch_->recvLine(&resp)) { close(); return {}; }
         return splitBySpace(resp);
+    }
+
+    bool recvLine(std::string* out) noexcept {
+        if (ch_ && ch_->recvLine(out))
+            return true;
+        close();
+        return false;
     }
 };
 
@@ -462,51 +305,29 @@ std::unique_ptr<LanPairSession> LanPairSession::connect(
         return nullptr;
     }
 
-    SFTP_LOG("LAN2", "connect() -> pair1Connect %s:%u local=%s remote=%s",
+    SFTP_LOG("LAN2", "connect() -> PAIR3 %s:%u local=%s remote=%s",
              targetIp.c_str(), targetPort, localPeerId.c_str(), remotePeerId.c_str());
-    AuthResult ar = pair1Connect(targetIp, targetPort,
-                                 localPeerId, remotePeerId, password, err);
-    if (ar.sock == INVALID_SOCKET) {
-        const bool trustUnknown = err && err->message.find("trust-unknown") != std::string::npos;
-        if (trustUnknown) {
-            // Server couldn't verify our stored key (e.g. DPAPI context mismatch after
-            // enabling TrustedInstaller).  Delete the stale client-side key and retry
-            // with TRUSTNEW so the peer issues a fresh shared secret.
-            SFTP_LOG("LAN2", "trust-unknown: deleting stale client key, retrying with TRUSTNEW");
-            lanpair::DpapiSecretStore::deleteSecret(
-                trustKeyForClient(remotePeerId, localPeerId), nullptr);
-            lanpair::PairError retryErr;
-            ar = pair1Connect(targetIp, targetPort,
-                              localPeerId, remotePeerId, password, &retryErr, true);
-            if (ar.sock != INVALID_SOCKET) {
-                if (err) { err->code = 0; err->message.clear(); }
-            } else {
-                if (err) *err = retryErr;
-            }
-        }
-        if (ar.sock == INVALID_SOCKET) {
-            SFTP_LOG("LAN2", "pair1Connect FAILED: %s", err ? err->message.c_str() : "?");
-            return nullptr;
-        }
+    auto ch = pair3Connect(targetIp, targetPort, localPeerId, remotePeerId, password, err);
+    if (!ch) {
+        SFTP_LOG("LAN2", "PAIR3 FAILED: %s", err ? err->message.c_str() : "?");
+        return nullptr;
     }
-    SFTP_LOG("LAN2", "pair1Connect OK, sending LAN2 HELLO");
+    SFTP_LOG("LAN2", "PAIR3 OK, sending LAN2 HELLO");
 
-    if (!sendLine(ar.sock, "LAN2 HELLO")) {
-        closesocket(ar.sock);
+    std::string ready;
+    if (!ch->sendLine("LAN2 HELLO")) {
         if (err) { err->code = WSAGetLastError(); err->message = "Cannot send LAN2 HELLO"; }
         return nullptr;
     }
-    std::string ready;
-    if (!recvLine(ar.sock, &ready) || splitBySpace(ready).size() < 2
-        || splitBySpace(ready)[0] != "LAN2" || splitBySpace(ready)[1] != "READY") {
+    const auto readyTokens = ch->recvLine(&ready) ? splitBySpace(ready) : std::vector<std::string>{};
+    if (readyTokens.size() < 2 || readyTokens[0] != "LAN2" || readyTokens[1] != "READY") {
         SFTP_LOG("LAN2", "No LAN2 READY, got: %s", ready.c_str());
-        closesocket(ar.sock);
         if (err) { err->code = ERROR_INVALID_DATA; err->message = "No LAN2 READY response"; }
         return nullptr;
     }
 
     SFTP_LOG("LAN2", "LAN2 session established OK");
-    impl->sock_      = ar.sock;
+    impl->ch_        = std::move(ch);
     impl->connected_ = true;
     return std::unique_ptr<LanPairSession>(new LanPairSession(std::move(impl)));
 }
@@ -541,7 +362,7 @@ bool LanPairSession::listRoots(std::vector<std::string>& roots) noexcept {
     const int count = std::atoi(resp[1].c_str());
     for (int i = 0; i < count; ++i) {
         std::string line;
-        if (!recvLine(impl_->sock_, &line)) { impl_->close(); return false; }
+        if (!impl_->recvLine(&line)) return false;
         roots.push_back(std::move(line));
     }
     return true;
@@ -564,7 +385,7 @@ bool LanPairSession::listDirectory(const std::string&     path,
     const int count = std::atoi(resp[1].c_str());
     for (int i = 0; i < count; ++i) {
         std::string line;
-        if (!recvLine(impl_->sock_, &line)) { impl_->close(); return false; }
+        if (!impl_->recvLine(&line)) return false;
         // Format: <F|D> <size> <mtime_uint64> <attrs_hex> <b64_name>
         const auto parts = splitBySpace(line);
         if (parts.size() < 5) continue;
@@ -648,7 +469,7 @@ bool LanPairSession::getFile(const std::string& remotePath,
     while (remaining > 0) {
         const size_t want = static_cast<size_t>(
             std::min<int64_t>(remaining, static_cast<int64_t>(kChunk)));
-        if (!recvAll(impl_->sock_, buf.data(), want)) {
+        if (!impl_->ch_->recvAll(buf.data(), want)) {
             ok = false;
             if (fsResult) *fsResult = FS_FILE_READERROR;
             break;
@@ -729,7 +550,7 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
             if (fsResult) *fsResult = FS_FILE_READERROR;
             break;
         }
-        if (!sendAll(impl_->sock_, buf.data(), bytesRead)) {
+        if (!impl_->ch_->sendAll(buf.data(), bytesRead)) {
             ok = false;
             if (fsResult) *fsResult = FS_FILE_WRITEERROR;
             break;
@@ -741,7 +562,7 @@ bool LanPairSession::putFile(LPCWSTR            localPath,
     if (!ok) { impl_->close(); return false; }
 
     std::string doneResp;
-    if (!recvLine(impl_->sock_, &doneResp) || splitBySpace(doneResp)[0] != "DONE") {
+    if (!impl_->ch_->recvLine(&doneResp) || doneResp.rfind("DONE", 0) != 0) {
         impl_->close();
         if (fsResult) *fsResult = FS_FILE_WRITEERROR;
         return false;
@@ -819,149 +640,73 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         }
     }
 
-    bool authenticateClient(SOCKET s, std::string& clientPeerId) {
-        std::string line;
-        if (!recvLine(s, &line)) return false;
-
-        const auto hello = splitBySpace(line);
-        if (hello.size() != 5 || hello[0] != "PAIR1" || hello[1] != "HELLO")
+    // PAIR3: the client proves the pair key and gets an encrypted channel.
+    // The key stored for this peer comes first - pairing keeps it current -
+    // and the password set for this server stands in when there is none.
+    bool authenticateClient(lanpair_proto::Channel& ch, std::string& clientPeerId) {
+        std::optional<lanpair_proto::KeyBytes> usedKey;
+        bool fromPassword = false;
+        const auto keyFor = [&](const std::string& peerId) -> std::optional<lanpair_proto::KeyBytes> {
+            std::string stored;
+            if (lanpair::DpapiSecretStore::loadSecret(trustKeyForServer(serverPeerId_, peerId), &stored, nullptr) &&
+                !stored.empty()) {
+                usedKey = lanpair_proto::KeyBytes(stored.begin(), stored.end());
+                SecureZeroMemory(stored.data(), stored.size());
+                return usedKey;
+            }
+            std::lock_guard<std::mutex> lk(passwordMu_);
+            if (!password_.empty()) {
+                usedKey = derivePairKey(password_, serverPeerId_, peerId);
+                fromPassword = usedKey.has_value();
+            }
+            return usedKey;
+        };
+        lanpair_proto::PeerInfo client;
+        if (!lanpair_proto::ServerHandshake(ch, serverPeerId_, serverPeerId_, lanpair::PairRole::Receiver,
+                                            keyFor, &client))
             return false;
-
-        clientPeerId              = hello[2];
-        const auto clientNonceHex = hello[4];
-        const auto clientNonce    = hexDecode(clientNonceHex);
-        if (!clientNonce || clientNonce->size() != kNonceSize) return false;
-
-        std::array<uint8_t, kSaltSize>  salt{};
-        std::array<uint8_t, kNonceSize> serverNonce{};
-        if (!randomBytes(salt.data(), salt.size()) ||
-            !randomBytes(serverNonce.data(), serverNonce.size()))
-            return false;
-
-        std::ostringstream ch;
-        ch << "PAIR1 CHALLENGE "
-           << serverPeerId_ << " "
-           << escapeToken(serverPeerId_) << " "
-           << roleToString(lanpair::PairRole::Receiver) << " "
-           << hexEncode(salt.data(), salt.size()) << " "
-           << hexEncode(serverNonce.data(), serverNonce.size());
-        if (!sendLine(s, ch.str())) return false;
-
-        if (!recvLine(s, &line)) return false;
-        const auto auth = splitBySpace(line);
-
-        const std::string serverNonceHex = hexEncode(serverNonce.data(), serverNonce.size());
-        const std::string material    = "C|" + clientNonceHex + "|" + serverNonceHex
-                                      + "|" + clientPeerId + "|" + serverPeerId_;
-        const std::string materialSrv = "S|" + clientNonceHex + "|" + serverNonceHex
-                                      + "|" + clientPeerId + "|" + serverPeerId_;
-
-        std::vector<uint8_t> key;
-        std::string issuedTrustHex;
-
-        const std::string trustKey = trustKeyForServer(serverPeerId_, clientPeerId);
-
-        if (auth.size() == 3 && auth[0] == "PAIR1" && auth[1] == "AUTH") {
-            const auto verifyProof = [&](const std::vector<uint8_t>& k) -> bool {
-                const auto expected = hmacSha256(k,
-                    std::span<const uint8_t>(
-                        reinterpret_cast<const uint8_t*>(material.data()), material.size()));
-                return expected && hexEncode(expected->data(), expected->size()) == auth[2];
-            };
-
-            std::string storedSecret;
-            if (lanpair::DpapiSecretStore::loadSecret(trustKey, &storedSecret, nullptr)) {
-                key.assign(storedSecret.begin(), storedSecret.end());
-            }
-
-            if (!key.empty() && !verifyProof(key)) {
-                key.clear();
-            }
-
-            if (key.empty()) {
-                std::lock_guard<std::mutex> lk(passwordMu_);
-                if (!password_.empty()) {
-                    auto derived = derivePairKey(password_, serverPeerId_, clientPeerId);
-                    if (derived) key = *derived;
-                }
-            }
-
-            if (key.empty()) {
-                sendLine(s, "PAIR1 FAIL trust-unknown");
-                return false;
-            }
-
-            if (!verifyProof(key)) {
-                sendLine(s, "PAIR1 FAIL bad-auth");
-                return false;
-            }
-
-            // Ensure key is cached in DPAPI for future fast connections
-            std::string raw(reinterpret_cast<const char*>(key.data()), key.size());
-            lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-
-        } else if (auth.size() == 2 && auth[0] == "PAIR1" && auth[1] == "TRUSTNEW") {
-            std::array<uint8_t, kDerivedKeySize> fresh{};
-            if (!randomBytes(fresh.data(), fresh.size())) return false;
-            key.assign(fresh.begin(), fresh.end());
-            issuedTrustHex = hexEncode(fresh.data(), fresh.size());
-            std::string raw(reinterpret_cast<const char*>(fresh.data()), fresh.size());
-            lanpair::DpapiSecretStore::saveSecret(trustKey, raw, nullptr);
-        } else {
-            sendLine(s, "PAIR1 FAIL bad-auth");
-            return false;
+        if (fromPassword) {
+            const std::string raw(usedKey->begin(), usedKey->end());
+            lanpair::DpapiSecretStore::saveSecret(trustKeyForServer(serverPeerId_, client.peerId), raw, nullptr);
         }
-
-        const auto serverProof = hmacSha256(key,
-            std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(materialSrv.data()), materialSrv.size()));
-        if (!serverProof) return false;
-
-        std::ostringstream ok;
-        if (!issuedTrustHex.empty()) {
-            ok << "PAIR1 OKTRUST "
-               << hexEncode(serverProof->data(), serverProof->size())
-               << " " << issuedTrustHex;
-        } else {
-            ok << "PAIR1 OK " << hexEncode(serverProof->data(), serverProof->size());
-        }
-        return sendLine(s, ok.str());
+        clientPeerId = client.peerId;
+        return true;
     }
 
-    void serveCommands(SOCKET s) {
+    void serveCommands(lanpair_proto::Channel& ch) {
         std::string line;
-        while (recvLine(s, &line)) {
+        while (ch.recvLine(&line)) {
             const auto parts = splitBySpace(line);
             if (parts.empty()) continue;
 
             const std::string& cmd = parts[0];
 
             if (cmd == "QUIT") {
-                sendLine(s, "BYE");
+                ch.sendLine("BYE");
                 break;
             } else if (cmd == "ROOTS") {
-                cmdRoots(s);
+                cmdRoots(ch);
             } else if (cmd == "LIST" && parts.size() >= 2) {
-                cmdList(s, b64DecodeStr(parts[1]));
+                cmdList(ch, b64DecodeStr(parts[1]));
             } else if (cmd == "GET" && parts.size() >= 3) {
                 const int64_t offset = static_cast<int64_t>(
                     std::strtoll(parts[2].c_str(), nullptr, 10));
-                cmdGet(s, b64DecodeStr(parts[1]), offset);
+                cmdGet(ch, b64DecodeStr(parts[1]), offset);
             } else if (cmd == "PUT" && parts.size() >= 3) {
                 const int64_t size = static_cast<int64_t>(
                     std::strtoll(parts[2].c_str(), nullptr, 10));
-                cmdPut(s, b64DecodeStr(parts[1]), size);
+                cmdPut(ch, b64DecodeStr(parts[1]), size);
             } else if (cmd == "MKDIR" && parts.size() >= 2) {
-                cmdMkdir(s, b64DecodeStr(parts[1]));
+                cmdMkdir(ch, b64DecodeStr(parts[1]));
             } else if (cmd == "DEL" && parts.size() >= 2) {
-                cmdDel(s, b64DecodeStr(parts[1]));
+                cmdDel(ch, b64DecodeStr(parts[1]));
             } else if (cmd == "REN" && parts.size() >= 3) {
                 // Replacing needs the flag spelled out; a client too old to
                 // send it never asked the user, so it gets a refusal.
                 const bool replace = parts.size() >= 4 && parts[3] == "1";
-                cmdRen(s, b64DecodeStr(parts[1]), b64DecodeStr(parts[2]), replace);
+                cmdRen(ch, b64DecodeStr(parts[1]), b64DecodeStr(parts[2]), replace);
             } else {
-                sendLine(s, "ERR unknown-command");
+                ch.sendLine("ERR unknown-command");
             }
         }
     }
@@ -977,7 +722,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         return res.substr(i);
     }
 
-    void cmdRoots(SOCKET s) {
+    void cmdRoots(lanpair_proto::Channel& ch) {
         const DWORD mask = GetLogicalDrives();
         std::vector<std::string> drives;
         for (int i = 0; i < 26; ++i) {
@@ -988,11 +733,11 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         }
         std::ostringstream oss;
         oss << "OK " << drives.size();
-        sendLine(s, oss.str());
-        for (const auto& d : drives) sendLine(s, d);
+        ch.sendLine(oss.str());
+        for (const auto& d : drives) ch.sendLine(d);
     }
 
-    void cmdList(SOCKET s, const std::string& path) {
+    void cmdList(lanpair_proto::Channel& ch, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         std::wstring glob = wpath;
         if (!glob.empty() && glob.back() != L'\\') glob += L'\\';
@@ -1001,7 +746,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         WIN32_FIND_DATAW fd{};
         HANDLE h = FindFirstFileW(glob.c_str(), &fd);
         if (h == INVALID_HANDLE_VALUE) {
-            sendLine(s, "ERR not-found");
+            ch.sendLine("ERR not-found");
             return;
         }
 
@@ -1031,32 +776,32 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
 
         std::ostringstream hdr;
         hdr << "OK " << lines.size();
-        sendLine(s, hdr.str());
-        for (const auto& l : lines) sendLine(s, l);
+        ch.sendLine(hdr.str());
+        for (const auto& l : lines) ch.sendLine(l);
     }
 
-    void cmdGet(SOCKET s, const std::string& path, int64_t offset) {
+    void cmdGet(lanpair_proto::Channel& ch, const std::string& path, int64_t offset) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-        if (h == INVALID_HANDLE_VALUE) { sendLine(s, "ERR not-found"); return; }
+        if (h == INVALID_HANDLE_VALUE) { ch.sendLine("ERR not-found"); return; }
 
         LARGE_INTEGER sz{};
-        if (!GetFileSizeEx(h, &sz)) { CloseHandle(h); sendLine(s, "ERR stat-failed"); return; }
+        if (!GetFileSizeEx(h, &sz)) { CloseHandle(h); ch.sendLine("ERR stat-failed"); return; }
 
         if (offset > 0) {
             LARGE_INTEGER li{}; li.QuadPart = offset;
             if (!SetFilePointerEx(h, li, nullptr, FILE_BEGIN)) {
-                CloseHandle(h); sendLine(s, "ERR seek-failed"); return;
+                CloseHandle(h); ch.sendLine("ERR seek-failed"); return;
             }
         }
 
         const int64_t dataSize = sz.QuadPart - offset;
-        if (dataSize < 0) { CloseHandle(h); sendLine(s, "ERR bad-offset"); return; }
+        if (dataSize < 0) { CloseHandle(h); ch.sendLine("ERR bad-offset"); return; }
 
         std::ostringstream resp;
         resp << "OK " << dataSize;
-        if (!sendLine(s, resp.str())) { CloseHandle(h); return; }
+        if (!ch.sendLine(resp.str())) { CloseHandle(h); return; }
 
         constexpr size_t kChunk = 65536;
         std::vector<uint8_t> buf(kChunk);
@@ -1066,23 +811,23 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
                 std::min<int64_t>(remaining, static_cast<int64_t>(kChunk)));
             DWORD bytesRead = 0;
             if (!ReadFile(h, buf.data(), want, &bytesRead, nullptr) || bytesRead == 0) break;
-            if (!sendAll(s, buf.data(), bytesRead)) break;
+            if (!ch.sendAll(buf.data(), bytesRead)) break;
             remaining -= static_cast<int64_t>(bytesRead);
         }
         CloseHandle(h);
     }
 
-    void cmdPut(SOCKET s, const std::string& path, int64_t size) {
+    void cmdPut(lanpair_proto::Channel& ch, const std::string& path, int64_t size) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         HANDLE h = CreateFileW(wpath.c_str(), GENERIC_WRITE, 0, nullptr,
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
         if (h == INVALID_HANDLE_VALUE) {
             // Client sends data only AFTER receiving "OK", so nothing to drain here.
-            sendLine(s, "ERR open-failed");
+            ch.sendLine("ERR open-failed");
             return;
         }
 
-        sendLine(s, "OK");
+        ch.sendLine("OK");
 
         constexpr size_t kChunk = 65536;
         std::vector<uint8_t> buf(kChunk);
@@ -1091,7 +836,7 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
         while (remaining > 0) {
             const size_t want = static_cast<size_t>(
                 std::min<int64_t>(remaining, static_cast<int64_t>(kChunk)));
-            if (!recvAll(s, buf.data(), want)) { ok = false; break; }
+            if (!ch.recvAll(buf.data(), want)) { ok = false; break; }
             DWORD written = 0;
             if (!WriteFile(h, buf.data(), static_cast<DWORD>(want),
                            &written, nullptr) || written != static_cast<DWORD>(want)) {
@@ -1100,15 +845,15 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             remaining -= static_cast<int64_t>(want);
         }
         CloseHandle(h);
-        sendLine(s, ok ? "DONE" : "ERR write-failed");
+        ch.sendLine(ok ? "DONE" : "ERR write-failed");
     }
 
-    void cmdMkdir(SOCKET s, const std::string& path) {
+    void cmdMkdir(lanpair_proto::Channel& ch, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
-        sendLine(s, CreateDirectoryW(wpath.c_str(), nullptr) ? "OK" : "ERR mkdir-failed");
+        ch.sendLine(CreateDirectoryW(wpath.c_str(), nullptr) ? "OK" : "ERR mkdir-failed");
     }
 
-    void cmdDel(SOCKET s, const std::string& path) {
+    void cmdDel(lanpair_proto::Channel& ch, const std::string& path) {
         const std::wstring wpath = utf8ToWide(normPath(path));
         const DWORD attr = GetFileAttributesW(wpath.c_str());
         bool ok = false;
@@ -1116,52 +861,49 @@ struct LanFileServer::Impl : public std::enable_shared_from_this<Impl> {
             ok = (RemoveDirectoryW(wpath.c_str()) != 0);
         else
             ok = (DeleteFileW(wpath.c_str()) != 0);
-        sendLine(s, ok ? "OK" : "ERR delete-failed");
+        ch.sendLine(ok ? "OK" : "ERR delete-failed");
     }
 
-    void cmdRen(SOCKET s, const std::string& oldPath,
+    void cmdRen(lanpair_proto::Channel& ch, const std::string& oldPath,
                           const std::string& newPath, bool replace) noexcept {
         const std::wstring wold = utf8ToWide(normPath(oldPath));
         const std::wstring wnew = utf8ToWide(normPath(newPath));
         if (MoveFileExW(wold.c_str(), wnew.c_str(), replace ? MOVEFILE_REPLACE_EXISTING : 0)) {
-            sendLine(s, "OK");
+            ch.sendLine("OK");
             return;
         }
         const DWORD err = GetLastError();
-        sendLine(s, (!replace && (err == ERROR_ALREADY_EXISTS || err == ERROR_FILE_EXISTS))
+        ch.sendLine((!replace && (err == ERROR_ALREADY_EXISTS || err == ERROR_FILE_EXISTS))
                         ? "ERR exists" : "ERR rename-failed");
     }
 
     void handleClient(SOCKET client) {
-        if (trustedInstaller_.load(std::memory_order_relaxed)) {
-            AcquireTrustedInstallerToken();
-        }
-
+        lanpair_proto::Channel ch(client); // closes the socket when done
         const BOOL keepAlive = TRUE;
         setsockopt(client, SOL_SOCKET, SO_KEEPALIVE,
                    reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive));
         setSocketTimeout(client, 300000); // 5 minutes for file operations
 
+        // The handshake runs as the user, whose DPAPI holds the pair keys;
+        // TrustedInstaller, when enabled, is for the file operations only.
         std::string clientPeerId;
-        if (!authenticateClient(client, clientPeerId)) {
-            closesocket(client);
+        if (!authenticateClient(ch, clientPeerId))
             return;
-        }
 
         std::string helloLine;
-        if (!recvLine(client, &helloLine)) { closesocket(client); return; }
+        if (!ch.recvLine(&helloLine)) return;
         const auto hp = splitBySpace(helloLine);
-        if (hp.size() < 2 || hp[0] != "LAN2" || hp[1] != "HELLO") {
-            closesocket(client);
+        if (hp.size() < 2 || hp[0] != "LAN2" || hp[1] != "HELLO")
             return;
-        }
+        if (!ch.sendLine("LAN2 READY")) return;
 
-        if (!sendLine(client, "LAN2 READY")) { closesocket(client); return; }
-
-        serveCommands(client);
-        closesocket(client);
+        // RevertToSelf, not ReleaseTrustedInstallerToken: that one clears a
+        // process-wide flag other threads may still be impersonating under.
+        const bool ti = trustedInstaller_.load(std::memory_order_relaxed) && AcquireTrustedInstallerToken();
+        serveCommands(ch);
+        if (ti)
+            RevertToSelf();
     }
-
     void runAcceptLoop() {
         while (running_.load(std::memory_order_relaxed)) {
             sockaddr_in from{};
@@ -1214,7 +956,8 @@ LanFileServer::LanFileServer()
 
 LanFileServer::~LanFileServer() { stop(); }
 
-bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
+bool LanFileServer::start(uint16_t port, lanpair::PairError* err,
+                          const char* bindAddress, const std::string& peerId) noexcept {
     stop();
 
     if (!impl_->wsa.ok()) {
@@ -1225,7 +968,7 @@ bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
     impl_->port_ = port;
     char host[256] = {};
     gethostname(host, static_cast<int>(sizeof(host) - 1));
-    impl_->serverPeerId_ = host[0] ? std::string(host) : Impl::kDefaultPeerId;
+    impl_->serverPeerId_ = !peerId.empty() ? peerId : host[0] ? std::string(host) : Impl::kDefaultPeerId;
 
     impl_->listenSock_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (impl_->listenSock_ == INVALID_SOCKET) {
@@ -1241,6 +984,11 @@ bool LanFileServer::start(uint16_t port, lanpair::PairError* err) noexcept {
     bindAddr.sin_family      = AF_INET;
     bindAddr.sin_port        = htons(port);
     bindAddr.sin_addr.s_addr = INADDR_ANY;
+    if (bindAddress && inet_pton(AF_INET, bindAddress, &bindAddr.sin_addr) != 1) {
+        if (err) { err->code = ERROR_INVALID_ADDRESS; err->message = "Invalid bind address"; }
+        impl_->closeListen();
+        return false;
+    }
 
     if (bind(impl_->listenSock_,
              reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0) {

@@ -182,7 +182,7 @@
 268=Abbina...
 269=Shell...
 270=LAN Pair
-271=Password di abbinamento (opzionale – vuota = usa chiave di trust).
+271=Inserire la password di abbinamento (la stessa su entrambi i computer).
 272=Ricevente LAN Pair arrestato.
 273=Avvio ricevente non riuscito: {}
 274=Ricevente LAN Pair avviato (porta 45846). Clicca Abbina... di nuovo per fermare.
@@ -406,3 +406,4 @@
 12145=Salta
 12146=Salta tutto
 12147=Saltato dopo un errore di download:
+12148=L'agente PHP sul server è troppo vecchio per questa versione del plugin: non accetta richieste firmate. Caricate il file sftp.php fornito con il plugin.

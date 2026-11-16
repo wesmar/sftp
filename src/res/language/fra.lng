@@ -182,7 +182,7 @@
 268=Pair...
 269=Shell...
 270=LAN Pair
-271=Mot de passe de pairage (optionnel – laisser vide pour utiliser la clé de confiance).
+271=Saisissez le mot de passe de pairage (le même sur les deux ordinateurs).
 272=Receveur LAN Pair arrete.
 273=Echec du demarrage du receveur: {}
 274=Receveur LAN Pair demarre (port 45846). Cliquez encore Pair... pour arreter.
@@ -407,3 +407,4 @@
 12145=Ignorer
 12146=Tout ignorer
 12147=Ignoré après une erreur de téléchargement :
+12148=L'agent PHP du serveur est trop ancien pour cette version du plugin : il n'accepte pas les requêtes signées. Envoyez le sftp.php fourni avec le plugin.

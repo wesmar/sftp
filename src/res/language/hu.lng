@@ -182,7 +182,7 @@
 268=Párosítás...
 269=Shell...
 270=LAN Pair
-271=Párosítási jelszó (nem kötelező – üresen hagyva a mentett megbízható kulcsot használja).
+271=Adja meg a párosítási jelszót (mindkét számítógépen ugyanazt).
 272=A LAN Pair fogadó leállt.
 273=A fogadó indítása sikertelen: {}
 274=A LAN Pair fogadó elindult (45846-os port). Kattintson újra a Párosítás... gombra a leállításhoz.
@@ -406,3 +406,4 @@
 12145=Kihagyás
 12146=Összes kihagyása
 12147=Letöltési hiba miatt kihagyva:
+12148=A szerveren lévő PHP-ügynök túl régi ehhez a bővítményverzióhoz: nem fogad el aláírt kéréseket. Töltse fel a bővítménnyel kapott sftp.php fájlt.

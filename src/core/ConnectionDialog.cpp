@@ -746,7 +746,17 @@ static void HandleLanPairAction(HWND hWnd, ConnectDialogContext* dlgCtx, pConnec
 
     std::array<wchar_t, MAX_PATH> passW{};
     GetDlgItemTextW(hWnd, IDC_PASSWORD, passW.data(), static_cast<int>(passW.size() - 1));
-    // Empty password is allowed in TOFU mode (trust-on-first-use).
+    // Pairing proves that both computers were given the same password; with
+    // none, whoever answered first would be trusted with this computer's files.
+    if (!passW[0]) {
+        WindowsUserFeedback tempFeedback(hWnd);
+        const std::wstring msgW = LoadResStringW(IDS_LAN_ERR_PASSWORD);
+        const std::wstring titleW = LoadResStringW(IDS_LAN_TITLE);
+        tempFeedback.ShowError(msgW.empty() ? "Enter the pairing password (the same on both computers)." : WideToUtf8(msgW),
+                               titleW.empty() ? "LAN Pair" : WideToUtf8(titleW));
+        SetFocus(GetDlgItem(hWnd, IDC_PASSWORD));
+        return;
+    }
 
     const int roleIdx = (int)SendDlgItemMessage(hWnd, IDC_SYSTEM, CB_GETCURSEL, 0, 0);
     int role = LanRoleComboToValue(roleIdx);

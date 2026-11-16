@@ -159,6 +159,10 @@ struct tConnectSettings {
     int php_chunk_mib;         // 0=auto, manual: 2/4/8/16/32/64 MiB
     int php_recommended_chunk_mib; // runtime from PROBE (0=unknown), used only when php_chunk_mib=0
     bool php_tar = false;          // TAR streaming for directory downloads (PHP Agent only)
+    // Request signing (TCSFTP-HMAC-V2), learnt from the agent's PROBE
+    bool php_auth_known = false;    // scheme confirmed and salt read
+    std::string php_auth_salt;      // AGENT_PSK_SALT of the agent ("" when none)
+    int64_t php_clock_offset = 0;   // agent clock minus ours, in seconds
     int lan_pair_role;         // 0=auto, 1=receiver, 2=donor
     std::string lan_pair_peer; // peerId of the remote machine (set during pairing)
     std::string lan_pair_ip;   // current IP of remote peer (found by discovery)

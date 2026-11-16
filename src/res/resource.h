@@ -567,6 +567,7 @@
 #define IDS_DOWNLOAD_SKIP               12145
 #define IDS_DOWNLOAD_SKIP_ALL           12146
 #define IDS_LOG_DOWNLOAD_SKIPPED        12147
+#define IDS_PHP_ERR_AGENT_OUTDATED      12148
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

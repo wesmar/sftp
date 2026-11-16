@@ -21,13 +21,13 @@
   <li>You choose a password for the connection.</li>
   <li>The plugin stores a <b>salted SHA-256 hash</b> of that password into your local <code>sftp.php</code>. The password itself is never written to any file.</li>
   <li>You upload that modified <code>sftp.php</code> to your web server.</li>
-  <li>When you connect, the plugin sends the password in the <code>X-SFTP-AUTH</code> header of every request. The server hashes it with the stored salt and compares the result with the stored hash.</li>
+  <li>When you connect, the plugin <b>signs every request</b> (HMAC-SHA256) with a key derived from the password: the same salted hash that is stored in <code>sftp.php</code>. The password itself never leaves your computer. The server checks the signature, the time and a single-use nonce, and refuses any request whose operation, parameters or content were altered on the way.</li>
 </ol>
 
-<p>This means: someone who reads <code>sftp.php</code> on the server sees only a hash and cannot log in with it. The hash is a single salted SHA-256, so a short or common password can still be guessed from it offline — use a long random one.</p>
+<p>This means: your password is in no file and on no network. The hash in <code>sftp.php</code>, however, is the key the server checks signatures with — whoever can read that file can send signed requests. Keep it readable by the web server only (permissions <code>600</code> or <code>640</code>), and use a long random password: the hash is a single salted SHA-256, so a short or common password can be guessed from it offline.</p>
 
 <div class="warn">
-  <b>Use HTTPS.</b> The password travels with every request, protected only by the connection itself. Over HTTPS, TLS encrypts it. Over plain <code>http://</code> anyone on the network path can read it and use it — including to run commands through PHP Shell.
+  <b>Use HTTPS.</b> Signing protects the password and the requests on plain HTTP too, but not your files: over <code>http://</code> anyone on the network path sees every file and listing you transfer. HTTPS encrypts them.
 </div>
 
 <h2>Step-by-step deployment</h2>
@@ -45,7 +45,7 @@
 </table>
 
 <div class="note">
-  <b>URL format:</b> Always use <code>https://</code> in production. Plain <code>http://</code> is for local testing only — over HTTP all traffic, the password included, is unencrypted.
+  <b>URL format:</b> Always use <code>https://</code> in production. Plain <code>http://</code> is for local testing only — over HTTP the files and listings you transfer travel unencrypted.
 </div>
 
 <h3>Step 2 — Save the session</h3>
@@ -96,12 +96,12 @@
 <table border="1" cellpadding="5" cellspacing="0">
   <tr><th>Location</th><th>What is stored</th><th>Is the password exposed?</th></tr>
   <tr><td><code>sftpplug.ini</code> (on your PC)</td><td>Password encrypted with Windows DPAPI (user-account bound)</td><td>No — DPAPI ciphertext only</td></tr>
-  <tr><td><code>sftp.php</code> (on server)</td><td><code>AGENT_PSK_SALT</code> (random) + <code>AGENT_PSK_SHA256</code> = SHA-256(salt + password)</td><td>No — one-way hash only</td></tr>
-  <tr><td>Network traffic</td><td>Password in the <code>X-SFTP-AUTH</code> header of every request</td><td>Over HTTPS — no, TLS encrypts it. Over HTTP — <b>yes</b>, readable and reusable by anyone on the path</td></tr>
+  <tr><td><code>sftp.php</code> (on server)</td><td><code>AGENT_PSK_SALT</code> (random) + <code>AGENT_PSK_SHA256</code> = SHA-256(salt + password)</td><td>No — one-way hash only. The hash is the signing key, though: protect the file like a password</td></tr>
+  <tr><td>Network traffic</td><td>A signature per request (HMAC-SHA256, single-use nonce, 5-minute window) — never the password</td><td>No. Over plain HTTP the transferred files and listings themselves are readable</td></tr>
 </table>
 
 <div class="note">
-  <b>In short:</b> No file holds your password in plain text, and the hash in <code>sftp.php</code> is not enough to log in. On the network the password is only as safe as the connection: HTTPS is required for anything beyond local testing.
+  <b>In short:</b> No file and no request holds your password. The hash in <code>sftp.php</code> signs requests, so keep that file private to the web server. HTTPS keeps the transferred files private as well, and is required for anything beyond local testing.
 </div>
 
 <h2>URL formats</h2>

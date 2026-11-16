@@ -86,6 +86,29 @@ foreach ($a in $Archs) {
 }
 
 # ============================================================================
+# Build metadata
+# ============================================================================
+# Taken from git, never from the clock, so two builds of one commit come out
+# byte for byte the same. "-dirty" marks a tree with uncommitted changes.
+Write-Section 'Build metadata'
+$BuildInfoGen = Join-Path $Root 'src\include\build_info_gen.h'
+$git = Get-Command git -ErrorAction SilentlyContinue
+$sha = if ($git) { (& git -C $Root rev-parse --short=7 HEAD 2>$null) } else { $null }
+if ($sha) {
+    $tag  = (& git -C $Root describe --tags --always 2>$null)
+    $date = (& git -C $Root log -1 --format=%cs 2>$null)
+    if (& git -C $Root status --porcelain --untracked-files=no 2>$null) { $sha += '-dirty' }
+    $header = "#pragma once`r`n#define SFTP_BUILD_TAG  `"$tag`"`r`n#define SFTP_BUILD_SHA  `"$sha`"`r`n#define SFTP_BUILD_DATE `"$date`"`r`n"
+    # Rewritten only on change, so an unchanged tree does not recompile.
+    $current = if (Test-Path -LiteralPath $BuildInfoGen) { [System.IO.File]::ReadAllText($BuildInfoGen) } else { '' }
+    if ($current -ne $header) { [System.IO.File]::WriteAllText($BuildInfoGen, $header, [System.Text.Encoding]::ASCII) }
+    Write-Ok "$tag $sha $date"
+} else {
+    if (Test-Path -LiteralPath $BuildInfoGen) { Remove-Item -LiteralPath $BuildInfoGen -Force }
+    Write-Host '  not a git checkout - the plugin labels itself "local"' -ForegroundColor Yellow
+}
+
+# ============================================================================
 # Build
 # ============================================================================
 New-Item -ItemType Directory -Path $BinDir -Force | Out-Null

@@ -182,7 +182,7 @@
 268=Asociere...
 269=Shell...
 270=LAN Pair
-271=Parolă asociere (opțional – gol = folosiți cheia de încredere salvată).
+271=Introduceți parola de asociere (aceeași pe ambele calculatoare).
 272=Receptor LAN Pair oprit.
 273=Pornirea receptorului a eșuat: {}
 274=Receptor LAN Pair pornit (port 45846). Faceți clic din nou pe Asociere... pentru a opri.
@@ -406,3 +406,4 @@
 12145=Omite
 12146=Omite tot
 12147=Omis după o eroare la descărcare:
+12148=Agentul PHP de pe server este prea vechi pentru această versiune a pluginului: nu acceptă cereri semnate. Încărcați sftp.php livrat cu pluginul.

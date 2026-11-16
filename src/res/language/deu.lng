@@ -182,7 +182,7 @@
 268=Paaren...
 269=Shell...
 270=LAN Pair
-271=Pairing-Passwort (optional – leer lassen, um gespeicherten Trust-Key zu verwenden).
+271=Geben Sie das Pairing-Passwort ein (auf beiden Computern dasselbe).
 272=LAN Pair Empfanger gestoppt.
 273=Empfanger-Start fehlgeschlagen: {}
 274=LAN Pair Empfanger gestartet (Port 45846). Klicken Sie erneut auf Paaren... zum Stoppen.
@@ -407,3 +407,4 @@
 12145=Überspringen
 12146=Alle überspringen
 12147=Nach einem Downloadfehler übersprungen:
+12148=Der PHP-Agent auf dem Server ist für diese Plugin-Version zu alt: Er nimmt keine signierten Anfragen an. Laden Sie die mit dem Plugin gelieferte sftp.php hoch.

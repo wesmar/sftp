@@ -182,7 +182,7 @@
 268=Párovat...
 269=Shell...
 270=LAN Pair
-271=Heslo párování (volitelné – prázdné = použít uložený důvěryhodný klíč).
+271=Zadejte heslo párování (stejné na obou počítačích).
 272=Příjemce LAN Pair zastaven.
 273=Spuštění příjemce se nezdařilo: {}
 274=Příjemce LAN Pair spuštěn (port 45846). Klikněte znovu na Párovat..., chcete-li zastavit.
@@ -406,3 +406,4 @@
 12145=Přeskočit
 12146=Přeskočit vše
 12147=Přeskočeno po chybě stahování:
+12148=Agent PHP na serveru je pro tuto verzi doplňku příliš starý: nepřijímá podepsané požadavky. Nahrajte sftp.php dodaný s doplňkem.

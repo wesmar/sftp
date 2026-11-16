@@ -182,7 +182,7 @@
 268=Emparelhar...
 269=Shell...
 270=LAN Pair
-271=Senha de emparelhamento (opcional – vazia = usar chave de confiança salva).
+271=Digite a senha de emparelhamento (a mesma nos dois computadores).
 272=Receptor LAN Pair parado.
 273=Falha ao iniciar o receptor: {}
 274=Receptor LAN Pair iniciado (porta 45846). Clique novamente em Emparelhar... para parar.
@@ -406,3 +406,4 @@
 12145=Ignorar
 12146=Ignorar todos
 12147=Ignorado após um erro de download:
+12148=O agente PHP no servidor é antigo demais para esta versão do plugin: ele não aceita solicitações assinadas. Envie o sftp.php que acompanha o plugin.

@@ -90,28 +90,29 @@ const AGENT_PSK_SHA256 = 'sha256(salt:psk)';</pre>
   </li>
 </ol>
 
-<h3>Password Header</h3>
-<p>The plugin sends the password with every request:</p>
+<h3>Signed Requests (TCSFTP-HMAC-V2)</h3>
+<p>The password never travels. Every request except PROBE carries:</p>
 <pre>
-X-SFTP-Auth: password
+X-SFTP-TS:             Unix time of the request
+X-SFTP-NONCE:          random, 8-128 characters [A-Za-z0-9._-], never reused
+X-SFTP-CONTENT-SHA256: hex SHA-256 of the request body (of "" when there is none)
+X-SFTP-SIGNATURE-V2:   hex HMAC-SHA256(key, "TCSFTP-HMAC-V2" \n METHOD \n OPERATION \n
+                       canonical query \n content SHA-256 \n timestamp \n nonce)
 </pre>
-<p>The agent compares it with the plain PSK, or hashes it with <code>AGENT_PSK_SALT</code> and compares the result with <code>AGENT_PSK_SHA256</code>. The password itself crosses the network on every request, so the connection must be HTTPS: over plain HTTP it can be read and reused by anyone on the path.</p>
-
-<h3>HMAC Signing (agent only)</h3>
-<p>The agent also accepts signed requests, which the plugin does not send:</p>
-<pre>
-X-SFTP-TS: timestamp
-X-SFTP-Nonce: random_nonce
-X-SFTP-Signature: HMAC-SHA256(METHOD\nOPERATION\nPATH\nTIMESTAMP\nNONCE, psk)
-</pre>
-<p>Signing needs the plain PSK on the server (environment variable or <code>AGENT_PSK</code>); with only the salted hash configured it is refused. The signature covers the method, operation, <code>path</code>, timestamp and nonce — not other parameters (<code>to</code>, <code>cmd</code>, <code>offset</code>) or the request body, so it does not replace HTTPS either.</p>
-
+<ul>
+  <li><b>Key:</b> hex SHA-256 of <code>AGENT_PSK_SALT ":" password</code> — exactly the value <code>AGENT_PSK_SHA256</code> holds, so an agent that stores only the hash verifies signatures too. With a plain PSK (environment variable or <code>AGENT_PSK</code>) the agent derives the same key itself. PROBE tells the client the salt.</li>
+  <li><b>Canonical query:</b> every URL parameter percent-decoded, sorted by name and then value, and encoded again per RFC 3986. The signature thus covers all parameters (<code>path</code>, <code>to</code>, <code>cmd</code>, <code>offset</code>, ...), and the body through its hash.</li>
+  <li><b>Body:</b> checked before it is used. An upload chunk is staged and written to its file only when its hash matches; a TAR upload is staged whole and extracted only then — a damaged or altered upload changes nothing on the server.</li>
+  <li><b>Replay:</b> the timestamp must lie within 300 seconds of the server's clock (the plugin reads that clock from PROBE), and each nonce is accepted once.</li>
+</ul>
+<p>The PSK in the clear (<code>X-SFTP-AUTH</code>) and the partial signature of plugins before 10.3 are refused unless <code>const AGENT_ACCEPT_LEGACY_AUTH = true;</code> is set in <code>sftp.php</code> — only while such a plugin still has to connect. A plugin from 10.3 on refuses an agent that does not sign and says so; it never falls back to sending the password.</p>
+<p>The signing key is in <code>sftp.php</code> as the hash: keep the file readable by the web server only. Signing protects the password and every request on plain HTTP too, but not the files themselves — use HTTPS so that transfers stay private.</p>
 <h3>Security Features</h3>
 <ul>
   <li><b>Root confinement:</b> file operations stay inside <code>AGENT_ROOT</code>; paths with <code>..</code>, and links pointing outside the root, are refused</li>
   <li><b>Root protection:</b> the root folder itself cannot be removed or renamed</li>
-  <li><b>Anonymous PROBE:</b> without the password it returns only the agent name, version and recommended chunk size</li>
-  <li><b>Signed requests:</b> expire after 300 seconds, each nonce is accepted once</li>
+  <li><b>Anonymous PROBE:</b> unsigned, it returns only the agent name and version, the signing scheme and salt, and the recommended chunk size</li>
+  <li><b>Signed requests:</b> expire after 300 seconds, each nonce is accepted once, and nothing in them can be altered unnoticed</li>
 </ul>
 
 <div class="warn">
@@ -146,17 +147,18 @@ https://example.com/sftp.php?path=%2Fvar%2Fwww
 <pre>
 GET https://example.com/sftp.php?op=PROBE
 
-Response without the password:
+Response to an unsigned PROBE:
 {
   "ok": true,
-  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "agent": { "name": "TC PHP Agent", "version": "1.1.0" },
+  "auth": { "scheme": "TCSFTP-HMAC-V2", "salt": "3f9c..." },
   "capabilities": { "recommended_chunk_size": 1048576 }
 }
 
-Response with a valid X-SFTP-Auth header:
+Response to a signed PROBE:
 {
   "ok": true,
-  "agent": { "name": "TC PHP Agent", "version": "1.0.2" },
+  "agent": { "name": "TC PHP Agent", "version": "1.1.0" },
   "capabilities": { "recommended_chunk_size": 1048576, "operations": [...], ... },
   "runtime": { "php_version": "8.2", "sapi": "apache2handler" },
   "ini": { "upload_max_filesize": "256M", ... }
@@ -442,7 +444,7 @@ AGENT_MAX_LIST_ITEMS = 20000
 </ul>
 
 <div class="warn">
-  <b>Security Warning:</b> Always use HTTPS for PHP Agent in production. Plain HTTP exposes all traffic including authentication.
+  <b>Security Warning:</b> Always use HTTPS for PHP Agent in production. Requests are signed and the password never travels, but over plain HTTP the files and listings you transfer are readable by anyone on the path.
 </div>
 
 <div class="note">

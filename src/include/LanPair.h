@@ -147,24 +147,4 @@ bool deleteSecret(const std::string& key,
 
 } // namespace DpapiSecretStore
 
-// Planned command channel — type tags used in LAN2 wire protocol
-enum class PairCommandType : uint8_t {
-    Handshake = 1,
-    ListRoots = 2,
-    ListDirectory = 3,
-    StartSend = 4,
-    StartReceive = 5,
-    DataChunk = 6,
-    Ack = 7,
-    Error = 8,
-};
-
-struct PairFrameHeader {
-    uint32_t magic = 0x4B564350; // "KVCP"
-    uint16_t version = 1;
-    PairCommandType type = PairCommandType::Handshake;
-    uint8_t reserved = 0;
-    uint32_t payloadSize = 0;
-};
-
 } // namespace lanpair

@@ -33,19 +33,18 @@
   <b>Firewall tip:</b> UDP broadcast (port 45845) is blocked between network segments and VLANs by default. LAN Pair discovery works reliably only within the same broadcast domain (same subnet/switch). If your machines are on different VLANs, peers will not be found via auto-discovery.
 </div>
 
-<h2>Trust model — first connection vs. subsequent connections</h2>
-<p>LAN Pair uses a <b>TOFU (Trust On First Use)</b> authentication model. You only need to enter a password once:</p>
+<h2>Password, pairing and encryption</h2>
+<p>The two computers are paired with a password, the same one on both. It never crosses the network:</p>
 <ol>
-  <li><b>First connection:</b> A pairing password is required. Both sides must use the same password.</li>
-  <li>On success, the plugin derives a cryptographic trust key (PBKDF2-HMAC-SHA256, 120,000 iterations) and stores it encrypted on disk via Windows DPAPI — bound to your Windows user account.</li>
-  <li><b>Subsequent connections:</b> The stored trust key is used automatically. No password prompt appears.</li>
+  <li><b>Pairing:</b> enter the password on both computers. Each turns it into a pair key (PBKDF2-HMAC-SHA256, 120,000 iterations), and the two prove to each other that they hold the same key with SPAKE2 (RFC 9382). Someone listening learns nothing to guess the password with; someone joining in gets one guess per connection.</li>
+  <li>Once both sides have proved the key, each stores it encrypted with Windows DPAPI, for that peer.</li>
+  <li><b>Later sessions:</b> the stored key is used, so the password field may stay empty.</li>
 </ol>
-<p>Trust is stored per peer pair. Removing a session or switching Windows accounts requires re-pairing with a password.</p>
+<p>Everything after the handshake — listings, file names, file contents — travels encrypted and authenticated with AES-256-GCM. A packet altered, repeated or reordered on the way ends the connection instead of reaching a file.</p>
 
 <div class="note">
-  <b>Note:</b> The pairing password can be left empty if both machines agree on an empty password. In that case, trust is still established cryptographically — but an empty password offers no brute-force resistance. Use a real password on any network you do not fully control.
+  <b>Both computers need version 10.3 or later.</b> Earlier versions used a protocol without encryption that let a computer with no key ask for one; a 10.3 computer tells an older one to upgrade instead of letting it in. Pairing without a password is no longer possible.
 </div>
-
 <h2>Roles</h2>
 <ul>
   <li><b>Auto</b> — guided 60-second pairing wizard; the plugin starts the local file server in the background and waits up to 60 seconds for a peer to appear, then prompts you to connect or stay as server.</li>
@@ -81,7 +80,7 @@
   <li>Choose <b>Auto</b>, <b>Receiver</b>, or <b>Donor</b> in the role dropdown.</li>
   <li>Optional: set <b>Session timeout</b> in minutes. <code>0</code> means no limit.</li>
   <li>Click <b>Pair...</b>.</li>
-  <li>On first use: enter the pairing password (must match on both sides).</li>
+  <li>Enter the pairing password — the same on both computers. Pairing does not start without one.</li>
   <li>When the peer is found and roles are confirmed, the session opens as a regular TC file panel.</li>
 </ol>
 
@@ -90,7 +89,7 @@
 
 <h3>How it works</h3>
 <ol>
-  <li>When a remote peer connects to the local LAN Pair file server, the server thread impersonates the TrustedInstaller service account before handling any commands.</li>
+  <li>When a remote peer connects to the local LAN Pair file server and the handshake succeeds, the server thread impersonates the TrustedInstaller service account before handling any commands. The handshake itself runs as you, since your DPAPI holds the pair keys.</li>
   <li>While impersonating TrustedInstaller, all file operations (read, write, delete, rename, mkdir) run with TrustedInstaller privileges, bypassing the normal ownership restrictions.</li>
   <li>Impersonation is reverted automatically when the remote peer disconnects.</li>
 </ol>
@@ -159,11 +158,12 @@ lanparti=0
   <tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr>
   <tr><td>Peers not found</td><td>Windows Firewall blocking UDP 45845 or machines on different subnets</td><td>Allow UDP 45845 inbound in Windows Firewall; verify both machines are on the same network segment</td></tr>
   <tr><td>Connection refused</td><td>Windows Firewall blocking TCP 45846</td><td>Allow TCP 45846 inbound on the Receiver machine</td></tr>
-  <tr><td>Password rejected on first connect</td><td>Passwords do not match on both sides</td><td>Ensure both sides use exactly the same pairing password (case-sensitive)</td></tr>
-  <tr><td>Trust forgotten after reinstall</td><td>DPAPI trust keys are stored per Windows user/machine and lost on reinstall</td><td>Re-pair with password; trust will be rebuilt automatically</td></tr>
+  <tr><td>"Wrong LAN Pair password, or the stored key no longer matches"</td><td>The passwords differ, or one computer was paired again with a new password</td><td>Pair again with exactly the same password on both computers (case-sensitive)</td></tr>
+  <tr><td>"No LAN Pair key for this one"</td><td>The other computer has never been paired with this one, or lost its key (Windows reinstalled, another user account)</td><td>Pair again with the password; the key is stored again on both sides</td></tr>
+  <tr><td>"May run a plugin older than 10.3"</td><td>The other computer runs a version without the encrypted protocol</td><td>Update the plugin on both computers</td></tr>
   <tr><td>Peers found but classic SMB works — LAN Pair does not</td><td>UDP broadcast not reaching the other machine (VLAN, managed switch isolation)</td><td>Check switch/VLAN settings; UDP broadcast must reach port 45845 on both sides</td></tr>
   <tr><td>TrustedInstaller files cannot be modified</td><td>TrustedInstaller option not enabled, or TC not running with SeDebugPrivilege</td><td>Enable the <b>Trusted Installer</b> checkbox in the connection settings on the machine that owns the files; run Total Commander as Administrator if needed</td></tr>
-  <tr><td>TrustedInstaller option enabled but pairing fails on first connect</td><td>Old DPAPI trust key was saved under a different user context and cannot be decrypted</td><td>Delete the matching <code>lanpair_trust_*.bin</code> file from the plugin directory and re-pair; trust will be rebuilt using machine-context encryption compatible with TrustedInstaller</td></tr>
+  <tr><td>A stored key cannot be read</td><td>The key was saved under a different Windows account or on another installation</td><td>Nothing to delete by hand: an unreadable key in <code>%APPDATA%\GHISLER\sftpplug.secrets</code> is removed, and the next connection made with the password stores it again</td></tr>
 </table>
 
 <p><a href="index.html">Back to index</a></p>

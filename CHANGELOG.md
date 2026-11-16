@@ -25,10 +25,27 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
   scale cleanly across DPI changes and auto-size controls for all 16 languages.
 - **Faster shell fallback uploads.** Multi-line `base64` chunking sends up to
   49,152 bytes per command on large files, cutting transfer overhead sharply.
+- **Signed PHP Agent requests (agent 1.1.0).** The password no longer travels:
+  every request is signed (HMAC-SHA256 over method, operation, every
+  parameter, the body's hash, time and a single-use nonce) with a key derived
+  from it, and the agent checks a body before using it - an altered upload
+  never reaches a file. Works with the salted hash the plugin writes into
+  `sftp.php`. **Upload the new `sftp.php`:** an older agent is refused with a
+  message saying so, and the new agent refuses the old clear-text header
+  unless `AGENT_ACCEPT_LEGACY_AUTH` is set.
+- **LAN Pair, encrypted (protocol PAIR3).** The two computers prove to each
+  other that they were given the same password without sending it or
+  anything a password could be guessed from (SPAKE2, RFC 9382), and
+  everything after that - listings, file names, file contents - travels in
+  AES-256-GCM; a frame altered, replayed or reordered on the way ends the
+  connection. **Update both computers:** a plugin older than 10.3 is told to
+  upgrade, not let in. **Pairing needs the password**, the same on both
+  computers; the first pairing used to be possible without one.
 - **Hardened C++20 build & automated test suite.** Built with `/std:c++20`,
   `/W4 /WX`, Control Flow Guard, and CET (`x64`), backed by unit tests
-  (PPK v2/v3, text conversion, ECMA-48 terminal filter, LAN Pair crypto,
-  wildcards), 16-language UI layout checks, and 5-mode SSH integration tests.
+  (PPK v2/v3, text conversion, ECMA-48 terminal filter, LAN Pair handshake,
+  channel and a whole session, wildcards), 16-language UI layout checks, and
+  5-mode SSH integration tests.
 
 ### Fixes
 
@@ -58,6 +75,12 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
 - **Post-login command.** Its output is shown whole, including non-ASCII text
   at the end of a line, and the progress dialog shows its text again.
 
+- **PHP Agent: empty files.** Uploading a 0-byte file failed: the plugin
+  finalized an upload it had never started.
+- **PHP Agent: one error, one report.** A failed download or upload no longer
+  opens a dialog of its own on top of Total Commander's report - in a batch
+  that meant one dialog per file, *Skip all* or not. It goes to the log.
+
 ### Security
 
 - **Stack protection (`/GS`) is on.** The build had it switched off.
@@ -77,15 +100,19 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
   `OPENSSL_CONF` variable, so no file on the machine can change its behaviour.
 - **Diagnostic log off by default**, and written to
   `%LOCALAPPDATA%\SFTPplug\sftpplug.log` instead of the shared `C:\temp`.
+- **LAN Pair accepted anyone who asked.** A computer with no pair key could
+  request one (`TRUSTNEW`) and was handed a fresh key, in the clear, with full
+  access to the files the LAN Pair server shares; a client also kept a key
+  before the server had proved it. Both are gone: a key comes only from the
+  password, and is stored only once the peer has proved the same one.
+- **LAN Pair server and TrustedInstaller.** The handshake now runs as the
+  user; TrustedInstaller, when enabled, covers the file operations only.
 
 ### Known limitations
 
-- **LAN Pair traffic is not encrypted.** Pairing derives a shared key, but the
-  transfers themselves travel in the clear: use LAN Pair only on a network you
-  trust. Authenticated encryption is planned.
-- **The PHP Agent client authenticates with the shared key in a request
-  header.** `sftp.php` can verify HMAC-signed requests, but the plugin does not
-  sign them yet: reach the agent over HTTPS only.
+- **PHP Agent over plain HTTP.** Requests are signed and the password never
+  travels, but the transferred files and listings are readable on the way:
+  use HTTPS beyond local testing.
 
 ## 10.0.2.2 — 2026-11-03
 

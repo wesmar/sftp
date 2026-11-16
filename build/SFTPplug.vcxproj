@@ -203,6 +203,7 @@
     <ClCompile Include="..\src\core\SshSessionInit.cpp" />
     <ClCompile Include="..\src\core\ConnectionAuth.cpp" />
     <ClCompile Include="..\src\core\LanPair.cpp" />
+    <ClCompile Include="..\src\core\LanPairProtocol.cpp" />
     <ClCompile Include="..\src\core\LanPairSession.cpp" />
     <ClCompile Include="..\src\core\TrustedInstallerToken.cpp" />
   </ItemGroup>
@@ -266,6 +267,7 @@
     <ClInclude Include="..\src\include\SshSessionInit.h" />
     <ClInclude Include="..\src\include\ConnectionAuth.h" />
     <ClInclude Include="..\src\include\LanPair.h" />
+    <ClInclude Include="..\src\include\LanPairProtocol.h" />
     <ClInclude Include="..\src\include\LanPairSession.h" />
     <ClInclude Include="..\src\include\TrustedInstallerToken.h" />
     <ClInclude Include="..\src\include\libssh2\libssh2.h" />

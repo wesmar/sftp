@@ -225,7 +225,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server  # Must be present
 <ul>
   <li>Password doesn't match PSK in sftp.php</li>
   <li>An old sftp.php on the server, generated for a different password</li>
-  <li>A proxy or CDN in front of the server drops the <code>X-SFTP-Auth</code> header</li>
+  <li>A proxy or CDN in front of the server drops the <code>X-SFTP-*</code> headers that carry the signature</li>
 </ul>
 
 <h4>Solutions</h4>

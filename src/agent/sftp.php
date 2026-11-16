@@ -27,8 +27,10 @@ if (!function_exists('str_ends_with')) {
  * 2) Prefer setting PSK via environment variable (see AGENT_PSK_ENV_KEYS).
  * 3) For "upload-only deploy" flow, set AGENT_PSK_SALT + AGENT_PSK_SHA256 and keep AGENT_PSK placeholder.
  * 4) Optionally set AGENT_ROOT to the desired jail root.
- * 5) Serve it over HTTPS: the client sends the PSK in the X-SFTP-AUTH header
- *    of every request, so plain HTTP exposes it to anyone on the path.
+ * 5) Serve it over HTTPS. Every request is signed (TCSFTP-HMAC-V2, see
+ *    require_auth): the PSK never travels, and neither the operation, its
+ *    parameters nor its body can be altered on the way. Plain HTTP still
+ *    shows every file and listing to anyone on the path.
  *
  * AGENT_ROOT confines file operations only. SHELL_EXEC runs any command as
  * the web server user, so whoever holds the PSK can reach everything that
@@ -40,7 +42,7 @@ if (!function_exists('str_ends_with')) {
 // ---------------------------------------------------------------------
 
 const AGENT_NAME = 'TC PHP Agent';
-const AGENT_VERSION = '1.0.2';
+const AGENT_VERSION = '1.1.0';
 const AGENT_PSK = 'CHANGE_ME_TO_LONG_RANDOM_SECRET';
 const AGENT_PSK_SALT = '';
 const AGENT_PSK_SHA256 = '';
@@ -51,6 +53,13 @@ const AGENT_NONCE_TTL = 300; // seconds
 const AGENT_REPLAY_DIR = '._sftp_agent_nonce_cache';
 const AGENT_DEFAULT_CHUNK = 262144; // 256 KiB
 const AGENT_MAX_LIST_ITEMS = 20000;
+// Request authentication. Plugins before 10.3 sent the PSK itself in the
+// X-SFTP-AUTH header, or signed only part of a request (v1); set this to true
+// only while such a plugin still has to connect.
+const AGENT_AUTH_SCHEME = 'TCSFTP-HMAC-V2';
+const AGENT_ACCEPT_LEGACY_AUTH = false;
+// Largest body read whole and checked before use (TAR_PACK path lists, forms).
+const AGENT_MAX_SIGNED_BODY = 16777216;
 
 // ---------------------------------------------------------------------
 // Bootstrap
@@ -129,7 +138,8 @@ try {
 // ---------------------------------------------------------------------
 
 // PROBE answers without auth, so an anonymous caller gets only what the
-// client needs to connect; runtime and configuration details need the PSK.
+// client needs to connect - the auth scheme and its salt, which are not
+// secret; runtime and configuration details need a signed request.
 function op_probe(): void
 {
     $payload = [
@@ -137,12 +147,22 @@ function op_probe(): void
             'name' => AGENT_NAME,
             'version' => AGENT_VERSION,
         ],
+        'auth' => [
+            'scheme' => AGENT_AUTH_SCHEME,
+            'salt' => resolve_agent_psk_salt(),
+        ],
         'capabilities' => [
             'recommended_chunk_size' => recommended_chunk_size(),
         ],
     ];
-    $auth = get_header('x-sftp-auth', '');
-    if ($auth !== '' && verify_legacy_auth($auth)) {
+    $signed = get_header('x-sftp-signature-v2', '') !== '';
+    $legacyHeader = get_header('x-sftp-auth', '');
+    $legacy = AGENT_ACCEPT_LEGACY_AUTH && $legacyHeader !== '' && verify_legacy_auth($legacyHeader);
+    if ($signed) {
+        // A bad signature fails here, as on any other operation.
+        require_auth(strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'), 'PROBE');
+    }
+    if ($signed || $legacy) {
         $ini = collect_ini_info();
         $payload['runtime'] = [
             'php_version' => PHP_VERSION,
@@ -481,15 +501,19 @@ function op_tar_extract(): void
     @set_time_limit(0);
     $relPath = normalize_rel((string)get_param('path', '.'));
     $absPath = ($relPath === '.') ? root_realpath() : resolve_path_for_create($relPath);
+    // The archive is staged and checked as a whole before a single file of it
+    // is written: extraction cannot be undone, so a damaged or altered upload
+    // must never start one.
+    $staged = tmpfile();
+    if ($staged === false) {
+        fail(507, 'STAGING_FAILED', 'No room to stage the upload');
+    }
+    stage_verified_body($staged, signed_body_sha256());
     if (!is_dir($absPath) && !@mkdir($absPath, 0775, true)) {
         fail(500, 'MKDIR_FAILED', 'Cannot create target directory');
     }
-    $in = @fopen('php://input', 'rb');
-    if ($in === false) {
-        fail(500, 'INPUT_OPEN_FAILED', 'Failed to open input stream');
-    }
-    $count = tar_extract_stream($absPath, $in);
-    fclose($in);
+    $count = tar_extract_stream($absPath, $staged);
+    fclose($staged);
     ok(['extracted' => $count]);
 }
 
@@ -601,7 +625,7 @@ function tar_extract_stream(string $rootAbs, $in): int
 // returns them as a TAR archive (buffered for hosting compatibility).
 function op_tar_pack(): void
 {
-    $body = (string)file_get_contents('php://input');
+    $body = verified_body();
     $lines = preg_split('/\r?\n/', $body);
     if ($lines === false) {
         fail(400, 'EMPTY_LIST', 'No paths provided');
@@ -698,12 +722,21 @@ function op_put(): void
 
     $offset = max(0, (int)get_param('offset', 0));
     $usePart = bool_param('part', true);
-    $verifyHash = strtolower((string)get_header('x-sftp-content-sha256', ''));
 
     $targetRel = $usePart ? ($relPath . '.part') : $relPath;
     $absPath = resolve_path_for_create($targetRel);
-    ensure_parent_dir($absPath);
 
+    // The chunk is staged and checked first: one that was damaged or altered
+    // on the way never reaches the file. Legacy requests may still declare
+    // a hash of their own in the same header.
+    $staged = fopen('php://temp/maxmemory:8388608', 'w+b');
+    if ($staged === false) {
+        fail(500, 'STAGING_FAILED', 'Unable to stage the upload');
+    }
+    $declared = signed_body_sha256() ?? strtolower((string)get_header('x-sftp-content-sha256', ''));
+    $actualHash = stage_verified_body($staged, $declared);
+
+    ensure_parent_dir($absPath);
     $fp = @fopen($absPath, 'c+b');
     if ($fp === false) {
         fail(500, 'OPEN_FAILED', 'Failed to open target file');
@@ -728,48 +761,19 @@ function op_put(): void
         fail(500, 'SEEK_FAILED', 'Failed to seek target file');
     }
 
-    $in = fopen('php://input', 'rb');
-    if ($in === false) {
+    $written = stream_copy_to_stream($staged, $fp);
+    fclose($staged);
+    if ($written === false) {
         flock($fp, LOCK_UN);
         fclose($fp);
-        fail(500, 'INPUT_OPEN_FAILED', 'Unable to open input stream');
+        fail(500, 'WRITE_FAILED', 'Write to target failed');
     }
-
-    $ctx = hash_init('sha256');
-    $written = 0;
-    $chunk = recommended_chunk_size();
-    while (!feof($in)) {
-        $buf = fread($in, $chunk);
-        if ($buf === false) {
-            fclose($in);
-            flock($fp, LOCK_UN);
-            fclose($fp);
-            fail(500, 'INPUT_READ_FAILED', 'Read from input failed');
-        }
-        if ($buf === '') {
-            continue;
-        }
-        hash_update($ctx, $buf);
-        $n = fwrite($fp, $buf);
-        if ($n === false) {
-            fclose($in);
-            flock($fp, LOCK_UN);
-            fclose($fp);
-            fail(500, 'WRITE_FAILED', 'Write to target failed');
-        }
-        $written += $n;
-    }
-    fclose($in);
 
     fflush($fp);
+    clearstatcache(true, $absPath);
     $newSize = (int)filesize($absPath);
     flock($fp, LOCK_UN);
     fclose($fp);
-
-    $actualHash = hash_final($ctx);
-    if ($verifyHash !== '' && !hash_equals($verifyHash, $actualHash)) {
-        fail(409, 'HASH_MISMATCH', 'Uploaded content hash mismatch');
-    }
 
     ok([
         'path' => $targetRel,
@@ -1049,28 +1053,95 @@ function resolve_shell_cwd(string $cwdRaw): string
 // Auth and request helpers
 // ---------------------------------------------------------------------
 
+// TCSFTP-HMAC-V2. The client sends
+//   X-SFTP-TS              Unix time of the request
+//   X-SFTP-NONCE           8-128 characters [A-Za-z0-9._-], never reused
+//   X-SFTP-CONTENT-SHA256  hex SHA-256 of the request body (of "" when none)
+//   X-SFTP-SIGNATURE-V2    hex HMAC-SHA256 over
+//       "TCSFTP-HMAC-V2" \n METHOD \n OP \n canonical query \n
+//       content SHA-256 \n timestamp \n nonce
+// keyed with the hex SHA-256 of (AGENT_PSK_SALT ":" PSK) - the very value
+// AGENT_PSK_SHA256 holds, so a server that keeps only that hash can check
+// signatures too. A body read whole is checked here; PUT and TAR_EXTRACT
+// check theirs before writing anything.
 function require_auth(string $method, string $op): void
 {
-    $legacyConfigured = is_legacy_psk_configured();
-    $hmacPsk = resolve_agent_psk_for_hmac();
-    if (!$legacyConfigured && $hmacPsk === '') {
+    $key = agent_auth_key();
+    if ($key === '') {
         fail(503, 'AGENT_NOT_CONFIGURED', 'PSK is not configured (set env var, AGENT_PSK, or AGENT_PSK_SHA256)');
     }
 
-    $legacyAuth = get_header('x-sftp-auth', '');
-    if ($legacyAuth !== '' && verify_legacy_auth($legacyAuth)) {
-        return;
+    $sig = strtolower(get_header('x-sftp-signature-v2', ''));
+    if ($sig === '') {
+        if (AGENT_ACCEPT_LEGACY_AUTH && legacy_auth_ok($method, $op)) {
+            return;
+        }
+        fail(401, 'AUTH_REQUIRED', 'Signed request required (' . AGENT_AUTH_SCHEME . ')');
     }
 
-    $path = normalize_rel((string)get_param('path', ''));
     $tsRaw = get_header('x-sftp-ts', '');
     $nonce = get_header('x-sftp-nonce', '');
-    $sig = get_header('x-sftp-signature', '');
-
-    if ($tsRaw === '' || $nonce === '' || $sig === '') {
-        fail(401, 'AUTH_REQUIRED', 'Missing auth headers');
+    $bodySha = strtolower(get_header('x-sftp-content-sha256', ''));
+    $ts = check_timestamp_and_nonce($tsRaw, $nonce);
+    if (!preg_match('/^[0-9a-f]{64}$/', $bodySha)) {
+        fail(401, 'BAD_CONTENT_HASH', 'Missing or malformed content hash');
     }
 
+    $base = AGENT_AUTH_SCHEME . "\n" . strtoupper($method) . "\n" . $op . "\n" . canonical_query() . "\n"
+          . $bodySha . "\n" . $tsRaw . "\n" . $nonce;
+    if (!hash_equals(hash_hmac('sha256', $base, $key), $sig)) {
+        fail(401, 'BAD_SIGNATURE', 'Signature mismatch');
+    }
+    // Only a correctly signed request may record its nonce, so unsigned
+    // traffic cannot fill the cache or burn nonces of real requests.
+    enforce_nonce_once($nonce, $ts);
+
+    $GLOBALS['agent_signed_body_sha256'] = $bodySha;
+    if ($op !== 'PUT' && $op !== 'TAR_EXTRACT') {
+        verified_body();
+    }
+}
+
+// The HMAC key: hex SHA-256 of salt ":" PSK, from the plain PSK when the
+// server has it, otherwise the stored hash itself.
+function agent_auth_key(): string
+{
+    $plain = resolve_agent_psk_plain();
+    if ($plain !== '') {
+        return hash('sha256', resolve_agent_psk_salt() . ':' . $plain);
+    }
+    return resolve_agent_psk_hash();
+}
+
+// The query string as signed: every parameter decoded, sorted by name and
+// then value, and encoded again per RFC 3986.
+function canonical_query(): string
+{
+    $pairs = [];
+    foreach (explode('&', (string)($_SERVER['QUERY_STRING'] ?? '')) as $part) {
+        if ($part === '') {
+            continue;
+        }
+        $eq = strpos($part, '=');
+        $pairs[] = $eq === false
+            ? [rawurldecode($part), '']
+            : [rawurldecode(substr($part, 0, $eq)), rawurldecode(substr($part, $eq + 1))];
+    }
+    usort($pairs, static function (array $a, array $b): int {
+        return strcmp($a[0], $b[0]) ?: strcmp($a[1], $b[1]);
+    });
+    $encoded = [];
+    foreach ($pairs as $p) {
+        $encoded[] = rawurlencode($p[0]) . '=' . rawurlencode($p[1]);
+    }
+    return implode('&', $encoded);
+}
+
+function check_timestamp_and_nonce(string $tsRaw, string $nonce): int
+{
+    if ($tsRaw === '' || $nonce === '') {
+        fail(401, 'AUTH_REQUIRED', 'Missing auth headers');
+    }
     if (!ctype_digit($tsRaw)) {
         fail(401, 'BAD_TIMESTAMP', 'Invalid timestamp');
     }
@@ -1081,18 +1152,99 @@ function require_auth(string $method, string $op): void
     if (!preg_match('/^[A-Za-z0-9._-]{8,128}$/', $nonce)) {
         fail(401, 'BAD_NONCE', 'Invalid nonce format');
     }
+    return $ts;
+}
 
+// The SHA-256 a signed request declared for its body, or null when the
+// request came in through legacy auth and declared nothing.
+function signed_body_sha256(): ?string
+{
+    return $GLOBALS['agent_signed_body_sha256'] ?? null;
+}
+
+// The whole request body, checked against the signed hash before anything
+// uses it.
+function verified_body(): string
+{
+    static $body = null;
+    if ($body !== null) {
+        return $body;
+    }
+    $in = fopen('php://input', 'rb');
+    $data = $in === false ? '' : (string)stream_get_contents($in, AGENT_MAX_SIGNED_BODY + 1);
+    if ($in !== false) {
+        fclose($in);
+    }
+    if (strlen($data) > AGENT_MAX_SIGNED_BODY) {
+        fail(413, 'BODY_TOO_LARGE', 'Request body exceeds the allowed size');
+    }
+    $declared = signed_body_sha256();
+    if ($declared !== null && !hash_equals($declared, hash('sha256', $data))) {
+        fail(401, 'BAD_CONTENT_HASH', 'Request body does not match its signature');
+    }
+    $body = $data;
+    return $body;
+}
+
+// Copies the request body into $out while hashing it, then checks the hash
+// against $declared (when there is one) and returns it. Callers write to
+// their target only after this returns.
+function stage_verified_body($out, ?string $declared): string
+{
+    $in = fopen('php://input', 'rb');
+    if ($in === false) {
+        fail(500, 'INPUT_OPEN_FAILED', 'Unable to open input stream');
+    }
+    $ctx = hash_init('sha256');
+    $chunk = recommended_chunk_size();
+    while (!feof($in)) {
+        $buf = fread($in, $chunk);
+        if ($buf === false) {
+            fclose($in);
+            fail(500, 'INPUT_READ_FAILED', 'Read from input failed');
+        }
+        if ($buf === '') {
+            continue;
+        }
+        hash_update($ctx, $buf);
+        if (fwrite($out, $buf) !== strlen($buf)) {
+            fclose($in);
+            fail(500, 'STAGING_FAILED', 'Staging the request body failed');
+        }
+    }
+    fclose($in);
+    $actual = hash_final($ctx);
+    if ($declared !== null && $declared !== '' && !hash_equals($declared, $actual)) {
+        fail(401, 'BAD_CONTENT_HASH', 'Request body does not match its declared hash');
+    }
+    rewind($out);
+    return $actual;
+}
+
+// Plugins before 10.3: the PSK itself in X-SFTP-AUTH, or the v1 signature
+// over method, operation, path, time and nonce. Accepted only while
+// AGENT_ACCEPT_LEGACY_AUTH is true.
+function legacy_auth_ok(string $method, string $op): bool
+{
+    $legacyAuth = get_header('x-sftp-auth', '');
+    if ($legacyAuth !== '') {
+        return verify_legacy_auth($legacyAuth);
+    }
+    $sig = strtolower(get_header('x-sftp-signature', ''));
+    $hmacPsk = resolve_agent_psk_for_hmac();
+    if ($sig === '' || $hmacPsk === '') {
+        return false;
+    }
+    $tsRaw = get_header('x-sftp-ts', '');
+    $nonce = get_header('x-sftp-nonce', '');
+    $ts = check_timestamp_and_nonce($tsRaw, $nonce);
+    $path = normalize_rel((string)get_param('path', ''));
     $base = strtoupper($method) . "\n" . $op . "\n" . $path . "\n" . $ts . "\n" . $nonce;
-    if ($hmacPsk === '') {
-        fail(401, 'AUTH_REQUIRED', 'HMAC auth requires plain PSK');
+    if (!hash_equals(hash_hmac('sha256', $base, $hmacPsk), $sig)) {
+        return false;
     }
-    $expected = hash_hmac('sha256', $base, $hmacPsk);
-    if (!hash_equals($expected, strtolower($sig))) {
-        fail(401, 'BAD_SIGNATURE', 'Signature mismatch');
-    }
-    // Only a correctly signed request may record its nonce, so unsigned
-    // traffic cannot fill the cache or burn nonces of real requests.
     enforce_nonce_once($nonce, $ts);
+    return true;
 }
 
 function resolve_agent_psk_plain(): string
@@ -1591,10 +1743,10 @@ function collect_capabilities(array $ini): array
         'shell_method' => $shellMethod,
         'auth' => [
             'probe_public' => true,
+            'scheme' => AGENT_AUTH_SCHEME,
             'psk_configured' => is_legacy_psk_configured(),
             'psk_source' => resolve_agent_psk_source(),
-            'legacy_header_auth' => true,
-            'hmac_auth' => resolve_agent_psk_for_hmac() !== '',
+            'legacy_auth' => AGENT_ACCEPT_LEGACY_AUTH,
         ],
         'operations' => $ops,
     ];

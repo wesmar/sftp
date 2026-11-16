@@ -7,14 +7,11 @@
 // these constants the beta cycle would present as "the same 10.0.2.0"
 // to anyone inspecting the plugin from Total Commander.
 //
-// The three defines below are the *fallback* used by a plain local
-// build. The GitHub Actions release workflow overrides them by writing
-// a `build_info_gen.h` next to this file **before** the compiler runs;
-// the `__has_include` guard below picks it up automatically — no
-// compiler flag needed. That gives every workflow-built artifact real
-// values while a developer's `build.ps1` still produces a self-labelled
-// `local` build without needing to touch git or CI. `build_info_gen.h`
-// is gitignored so it never gets committed by mistake.
+// The three defines below are the *fallback*. build.ps1 writes
+// `build_info_gen.h` next to this file before the compiler runs, with the
+// tag, short SHA and commit date from git; the `__has_include` guard below
+// picks it up - no compiler flag needed. Outside a git checkout the plugin
+// labels itself `local`. `build_info_gen.h` is gitignored.
 
 #if __has_include("build_info_gen.h")
 #  include "build_info_gen.h"
@@ -28,6 +25,8 @@
 #define SFTP_BUILD_SHA  "unknown"
 #endif
 
+// No __DATE__: a build has to depend on its sources only, never on the day
+// it was made.
 #ifndef SFTP_BUILD_DATE
-#define SFTP_BUILD_DATE __DATE__
+#define SFTP_BUILD_DATE "unknown"
 #endif

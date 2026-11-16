@@ -43,7 +43,7 @@ Import-Module (Join-Path $Root 'tools\Toolchain.psm1') -Force
 $Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
 # "-Modes scponly,shell" arrives as one string through pwsh -File.
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text'
+$knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'php'
 foreach ($m in $Modes) { if ($m -notin $knownModes) { throw "Unknown mode '$m'. Known: $($knownModes -join ', ')" } }
 $Latin1 = [System.Text.Encoding]::GetEncoding(28591)  # byte-preserving round trip of an ANSI ini
 
@@ -78,6 +78,8 @@ $overrides = @{
     scponly = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '0' }
     shell   = @{ scpfordata = '1'; scponly = '1'; shelltransfer = '1'; shelltransferforce = '1'; unixlinebreaks = '0' }
     text    = @{ scpfordata = '0'; scponly = '0'; shelltransfer = '0'; shelltransferforce = '0'; unixlinebreaks = '1' }
+    # PHP Agent: the profile itself says transfermode=1; it has no permissions.
+    php     = @{}
 }
 
 $iniDir = Join-Path ([System.IO.Path]::GetTempPath()) "sftpplug-it-ini-$PID"
@@ -122,6 +124,7 @@ try {
             Write-Host "=== $a / $mode ===" -ForegroundColor Cyan
             $harnessArgs = @($plugin, $iniDir, "it-$mode", $RemoteBase)
             if ($mode -eq 'text') { $harnessArgs += 'text' }
+            if ($mode -eq 'php') { $harnessArgs += 'nochmod' }
             & $exe @harnessArgs
             if ($LASTEXITCODE -ne 0) { $failures.Add("$a/$mode") }
         }

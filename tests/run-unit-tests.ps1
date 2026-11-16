@@ -31,9 +31,14 @@ $UnitSources = @(
     'src\core\PpkConverter.cpp',
     'src\core\TerminalText.cpp',
     'src\core\PasswordCrypto.cpp',
-    'src\core\WildcardMatch.cpp'
+    'src\core\WildcardMatch.cpp',
+    'src\core\LanPairProtocol.cpp',
+    'src\core\LanPair.cpp',
+    'src\core\LanPairSession.cpp',
+    'src\core\TrustedInstallerToken.cpp',
+    'src\core\DllExceptionBarrier.cpp'
 )
-$SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib'
+$SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib iphlpapi.lib shell32.lib ole32.lib dbghelp.lib'
 
 $Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
 $Toolchain = Get-SftpToolchain -Arch $Archs
@@ -81,7 +86,7 @@ cl $common $($v.Flags) $include /I"$osslInclude" $($testSources -join ' ') $($pr
         Invoke-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "compile unit tests $a $($v.Name)" -LogPath (Join-Path $out 'build.log') -Body $body
 
         Write-Host "  running $a $($v.Name)" -ForegroundColor Gray
-        $testArgs = if ($Filter) { @($Filter) } else { @() }
+        [string[]]$testArgs = if ($Filter) { $Filter } else { @() } # an array: a string would splat letter by letter
         $savedPath = $env:PATH
         if ($v.Name -eq 'asan') { $env:PATH = "$($Toolchain.Targets[$a].BinDir);$env:PATH" }
         try {

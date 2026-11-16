@@ -1,7 +1,7 @@
 // Drives a built SFTPplug.wfx through the exported Fs* entry points Total
 // Commander uses, against a real SSH server, without Total Commander.
 //
-//   plugin_harness <plugin.wfx> <ini-dir> <session> <remote-base> [text]
+//   plugin_harness <plugin.wfx> <ini-dir> <session> <remote-base> [text] [nochmod]
 //
 //   ini-dir      directory holding the sftpplug.ini the plugin is pointed at
 //   session      section of that ini to connect with
@@ -319,7 +319,15 @@ int wmain(int argc, wchar_t** argv)
     const std::wstring iniDir = argv[2];
     const std::wstring session = argv[3];
     std::wstring remoteBase = argv[4];
-    const bool textChecks = argc > 5 && std::wcscmp(argv[5], L"text") == 0;
+    // Optional flags after the remote base, in any order.
+    bool textChecks = false;
+    bool chmodChecks = true;
+    for (int i = 5; i < argc; ++i) {
+        if (std::wcscmp(argv[i], L"text") == 0)
+            textChecks = true;
+        else if (std::wcscmp(argv[i], L"nochmod") == 0)
+            chmodChecks = false; // a transport without permissions (PHP Agent)
+    }
     g_verbose = EnvIs(L"SFTP_IT_VERBOSE", L"1");
 
     for (auto& c : remoteBase)
@@ -418,7 +426,7 @@ int wmain(int argc, wchar_t** argv)
         }
     }
 
-    {
+    if (chmodChecks) {
         std::wstring target = dir + L"\\renamed.bin";
         const int rc = g_plugin.ExecuteFileW(nullptr, target.data(), L"chmod 640");
         entries = ListDir(dir, ok);

@@ -466,7 +466,7 @@ void StopGlobalLanServices()
 }
 
 // Connect a LAN Pair session: run discovery to find the peer's current IP,
-// then connect + authenticate with DPAPI trust key.
+// then connect and run the PAIR3 handshake (password, or the stored key).
 static int LanPairConnect(pConnectSettings cs)
 {
     // lan_pair_role: 0=mutual, 1=receiver (biorca), 2=donor (dawca)
@@ -579,11 +579,15 @@ int SftpConnect(pConnectSettings ConnectSettings)
     }
     if (IsPhpAgentTransport(ConnectSettings)) {
         ShowStatusId(IDS_LOG_PHP_AGENT_MODE, nullptr, true);
-        if (PhpAgentProbe(ConnectSettings) != SFTP_OK) {
+        std::string probeError;
+        if (PhpAgentProbe(ConnectSettings, probeError) != SFTP_OK) {
             if (ConnectSettings->feedback) {
-                std::array<char, 256> msgbuf{};
-                const int n = LoadStr(msgbuf, IDS_PHP_PROBE_FAILED);
-                ConnectSettings->feedback->ShowError(n > 0 ? msgbuf.data() : "PHP Agent probe failed. Check URL and key.");
+                if (probeError.empty()) {
+                    std::array<char, 256> msgbuf{};
+                    const int n = LoadStr(msgbuf, IDS_PHP_PROBE_FAILED);
+                    probeError = n > 0 ? msgbuf.data() : "PHP Agent probe failed. Check URL and key.";
+                }
+                ConnectSettings->feedback->ShowError(probeError);
             }
             return SFTP_FAILED;
         }

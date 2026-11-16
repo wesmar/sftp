@@ -1,7 +1,8 @@
 #pragma once
-// LanPairInternal.h — shared crypto and socket primitives for LanPair.cpp / LanPairSession.cpp.
+// LanPairInternal.h — shared crypto and socket primitives for the LAN Pair
+// sources (LanPair.cpp, LanPairSession.cpp, LanPairProtocol.cpp) and their tests.
 //
-// NOT part of the public API.  Include ONLY from those two translation units.
+// NOT part of the public API.
 //
 // Every definition here is marked `inline` so the header may be included from
 // multiple TUs without ODR violations (C++17 inline variables / functions).
@@ -28,14 +29,14 @@
 #include <string_view>
 #include <vector>
 
+#include "LanPair.h"
+
 namespace lanpair_internal {
 
 // ---------------------------------------------------------------------------
 // Protocol constants
 // ---------------------------------------------------------------------------
 
-inline constexpr size_t kNonceSize       = 16;
-inline constexpr size_t kSaltSize        = 16;
 inline constexpr size_t kDerivedKeySize  = 32;
 inline constexpr ULONG  kPbkdf2Iterations = 120'000;
 
@@ -116,10 +117,6 @@ inline std::optional<std::vector<uint8_t>> hexDecode(std::string_view in) {
 // Cryptographic primitives
 // ---------------------------------------------------------------------------
 
-inline bool randomBytes(uint8_t* out, size_t len) {
-    return BCryptGenRandom(nullptr, out, static_cast<ULONG>(len),
-                           BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
-}
 
 inline std::optional<std::vector<uint8_t>> hmacSha256(
     std::span<const uint8_t> key,
@@ -244,7 +241,8 @@ inline std::string trustKeyForClient(std::string_view serverPeerId,
          + "__" + sanitizeKey(clientPeerId);
 }
 
-// Percent-encode a token for the PAIR1 wire protocol.
+// Percent-encode a token for the LAN Pair wire protocols (peer ids and names
+// may hold spaces and any UTF-8); unescapeToken reverses it.
 inline std::string escapeToken(std::string_view in) {
     std::ostringstream oss;
     for (unsigned char c : in) {
@@ -257,6 +255,38 @@ inline std::string escapeToken(std::string_view in) {
         }
     }
     return oss.str();
+}
+
+inline std::string unescapeToken(std::string_view in) {
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size(); ++i) {
+        if (in[i] == '%' && i + 2 < in.size()) {
+            const auto decoded = hexDecode(in.substr(i + 1, 2));
+            if (decoded && decoded->size() == 1) {
+                out.push_back(static_cast<char>((*decoded)[0]));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(in[i]);
+    }
+    return out;
+}
+
+inline const char* roleToString(lanpair::PairRole role) {
+    switch (role) {
+    case lanpair::PairRole::Donor:    return "donor";
+    case lanpair::PairRole::Receiver: return "receiver";
+    case lanpair::PairRole::Dual:     return "dual";
+    }
+    return "dual";
+}
+
+inline lanpair::PairRole roleFromString(std::string_view s) {
+    if (s == "donor")    return lanpair::PairRole::Donor;
+    if (s == "receiver") return lanpair::PairRole::Receiver;
+    return lanpair::PairRole::Dual;
 }
 
 // ---------------------------------------------------------------------------

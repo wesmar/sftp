@@ -741,7 +741,7 @@ BEGIN
     IDS_BUTTON_PAIR         "Pair..."
     IDS_BUTTON_SHELL        "Shell..."
     IDS_LAN_TITLE           "LAN Pair"
-    IDS_LAN_ERR_PASSWORD    "Pairing password (optional ? leave empty to use stored trust key)."
+    IDS_LAN_ERR_PASSWORD    "Enter the pairing password (the same on both computers)."
 END
 
 STRINGTABLE
@@ -807,7 +807,9 @@ BEGIN
     IDS_DOWNLOAD_ERROR_TEXT "The file could not be downloaded:"
     IDS_DOWNLOAD_SKIP       "Skip"
     IDS_DOWNLOAD_SKIP_ALL   "Skip all"
-    IDS_LOG_DOWNLOAD_SKIPPED "Skipped after a download error:"    IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
+    IDS_LOG_DOWNLOAD_SKIPPED "Skipped after a download error:"
+    IDS_PHP_ERR_AGENT_OUTDATED "The PHP Agent on the server is too old for this plugin version: it does not accept signed requests. Upload the sftp.php that comes with the plugin."
+    IDS_DLG_LANPAIR_GROUP   " LAN Pair Session: "
     IDS_DLG_FILEMOD         "New files (Upload):"
     IDS_DLG_DIRMOD          "New folders:"
     IDS_DLG_SESSION         "Session:"

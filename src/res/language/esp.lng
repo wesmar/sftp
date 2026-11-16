@@ -182,7 +182,7 @@
 268=Emparejar...
 269=Shell...
 270=LAN Pair
-271=Contrasena de pairado (opcional – dejar vacia para usar clave de confianza).
+271=Introduzca la contraseña de emparejamiento (la misma en ambos equipos).
 272=Receptor LAN Pair detenido.
 273=Error al iniciar receptor: {}
 274=Receptor LAN Pair iniciado (puerto 45846). Pulsa Emparejar... otra vez para detener.
@@ -407,3 +407,4 @@
 12145=Omitir
 12146=Omitir todo
 12147=Omitido tras un error de descarga:
+12148=El agente PHP del servidor es demasiado antiguo para esta versión del complemento: no acepta solicitudes firmadas. Suba el sftp.php incluido con el complemento.
