@@ -8,15 +8,19 @@ The test executable embeds the plugin's own resources and layout code, so
 each dialog is built exactly as the plugin builds it. Failures are clipped
 text, overlapping controls and controls outside the dialog; PNG screenshots
 go to tests\out\ui\<arch>.
+
+.PARAMETER Arch
+x64 (default), x86, arm64, both (x64 + x86) or all. An architecture this
+machine cannot run (arm64 on x64) is compiled only.
 #>
-param([ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'x64')
+param([ValidateSet('x64', 'x86', 'arm64', 'both', 'all')] [string]$Arch = 'x64')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 $Root = Split-Path $PSScriptRoot -Parent
 Import-Module (Join-Path $Root 'tools\Toolchain.psm1') -Force
 
-$Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
+$Archs = @(Resolve-SftpTestArch $Arch)
 $Toolchain = Get-SftpToolchain -Arch $Archs
 $failed = $false
 foreach ($a in $Archs) {
@@ -33,6 +37,10 @@ cd /d "$out" || exit /b 3
 cl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /utf-8 /MT /O2 /DUNICODE /D_UNICODE $inc "$(Join-Path $PSScriptRoot 'ui\DialogLayoutTest.cpp')" "$(Join-Path $Root 'src\core\DialogLayout.cpp')" "$res" /Fe:"$exe" /link /SUBSYSTEM:CONSOLE /MANIFEST:EMBED /MANIFESTINPUT:"$(Join-Path $PSScriptRoot 'ui\host.manifest')" user32.lib gdi32.lib dwmapi.lib gdiplus.lib || exit /b 4
 "@
     Invoke-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "build layout test $a" -LogPath (Join-Path $out 'build.log') -Body $body
+    if (-not (Test-SftpArchRunnable $a)) {
+        Write-Host "  $a : compiled; this machine cannot run it - run the test on Windows on Arm" -ForegroundColor Yellow
+        continue
+    }
     & $exe (Join-Path $Root 'src\res\language') $out
     if ($LASTEXITCODE -ne 0) { $failed = $true }
 }

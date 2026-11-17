@@ -586,13 +586,20 @@ Remote `locale` command output is parsed to determine the server's character enc
 
 ## Verification and Test Suites
 
-Verification uses automated test suites targeting both `x64` and `Win32` Release builds:
+Every suite compiles the plugin's own sources under the same `/W4 /WX` as the plugin and runs against the Release builds of each architecture: x64 and x86 everywhere, arm64 on Windows on Arm (which also runs x64 and x86 under emulation). On an x64 machine the arm64 tests are compiled and left for an Arm machine. Every test creates its own files and removes only those. The latest full run is in [`tests/RESULTS.md`](tests/RESULTS.md).
+
+```powershell
+.\tests\run-all-tests.ps1 -Profiles <sftpplug.ini section> -LanPairHost <another Windows PC>
+```
+
+builds the plugin and runs everything below, each step even after a failed one, and ends with a summary; `-SkipBuild` tests the binaries already built, `-SkipPhp` leaves out the PHP Agent. Each runner also works on its own; `-Arch x64|x86|arm64|both|all` picks the architectures.
 
 | Suite | Runner | Scope and Methodology |
 |-------|--------|-----------------------|
 | **Unit tests** | `tests\run-unit-tests.ps1` | 40 test cases and 325,538 assertions per architecture. Validates PPK v2/v3 parsing and OpenSSL 4.1.0 Argon2id decryption against deterministic RSA, ECDSA P-256/P-384/P-521, and Ed25519 fixtures in `tests\fixtures\ppk`, UTF-8 and CRLF conversion, ECMA-48 control-sequence stripping, LAN Pair cryptography (PBKDF2, SPAKE2 against the RFC 9382 vector, AES-GCM frames that are altered, replayed or reordered), a LAN Pair file server and session end to end on the loopback interface, DPAPI/legacy password codecs, and wildcard matching. |
 | **UI layout tests** | `tests\run-ui-tests.ps1` | Instantiates all 7 Win32 dialog templates, including `download-error`, across all 16 localizations under Per-Monitor V2 DPI scaling. Computes rendered glyph extents against control bounding boxes to fail on clipped text, overlapping controls, or out-of-bounds geometry. |
-| **Integration tests** | `tests\run-integration-tests.ps1` | Loads the compiled `.wfx` plugin via `PluginHarness.cpp` against a live OpenSSH server across 5 transfer paths: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text conversion — and the *Skip / Skip all* batch prompt, answered through its own dialog the way a user would. |
+| **Integration tests** | `tests\run-integration-tests.ps1 -Profile <section>` | Loads the compiled `.wfx` plugin via `PluginHarness.cpp` against a live OpenSSH server across 5 transfer paths: SFTP, SCP data, SCP-only, shell fallback, and CRLF/LF text conversion — and the *Skip / Skip all* batch prompt, answered through its own dialog the way a user would. The server comes from an `sftpplug.ini` section or from `-Server`/`-User`/`-KeyFile`. |
+| **PHP Agent** | `tests\run-php-agent-tests.ps1` | Starts `php -S` on a free local port with the shipped `sftp.php`, in both password configurations (PSK in the environment, salted hash in the script). 26 protocol checks - signatures, replayed nonces, stale timestamps, altered bodies, legacy authentication refused - then the integration suite through the plugin in PHP mode. Runs whenever `php.exe` is found. |
 | **LAN Pair, two computers** | `tests\run-lanpair-remote-test.ps1 -RemoteHost <pc>` | Runs the plugin's LAN Pair sources as a file server on another Windows computer (over ssh) and as the client here: pairing with a fresh random password, a 16 MiB round trip with a UTF-8 file name, rename and delete, a session on the stored keys, a refused wrong password. Opens one firewall rule there, for this computer only, and removes it, the program, its files and the test keys on both computers afterwards. |
 | **PHP Agent harness** | `tools\php-agent-test\docker-compose.yml` | Reproduces HTTP TAR upload, TAR streaming download, and `SHELL_EXEC` workflows against a local PHP container. |
 
@@ -605,29 +612,31 @@ Two scripts at the project root. Both find Visual Studio, the MSVC toolset and t
 **1. Dependencies** — once, and again whenever a pin changes:
 
 ```powershell
-.\build-deps.ps1              # OpenSSL 4.1.0 + libssh2 1.11.1, x64 and x86
-.\build-deps.ps1 -Arch x64    # one architecture
-.\build-deps.ps1 -Clean       # rebuild from scratch
+.\build-deps.ps1                # OpenSSL 4.1.0 + libssh2 1.11.1: x64, x86 and arm64
+.\build-deps.ps1 -amd64 -arm64  # the ones named (-amd64 is also -x64)
+.\build-deps.ps1 -Clean         # rebuild from scratch
 ```
 
 - OpenSSL comes as the release tarball, checked against a pinned SHA-256 and the OpenSSL release key in `thirdparty\keys\`. It is built with `no-autoload-config`, so no `openssl.cnf` on a user's machine is ever read.
 - libssh2 is the `thirdparty\libssh2` submodule plus Debian's CVE patches (`thirdparty\patches\libssh2-1.11.1\series`).
 - Both are linked statically with `/MT`. `src\lib\deps-manifest.json` records the pins and the SHA-256 of every library built; `build.ps1` refuses libraries that do not match it.
-- Needs a native Perl (Strawberry), NASM and CMake. Paths that are not found automatically go into `build.local.psd1` (see `build.local.example.psd1`).
+- Needs a native Perl (Strawberry), NASM (x64, x86) and CMake. Paths that are not found automatically go into `build.local.psd1` (see `build.local.example.psd1`).
+- arm64 is cross-compiled on an x64 machine and built natively on Windows on Arm. OpenSSL's ARMv8 assembly (AES, SHA, GHASH and ChaCha20 on the CPU's crypto extensions) needs `clang-cl` - Visual Studio's *C++ Clang tools for Windows* component or LLVM; without it, OpenSSL for arm64 is built from C alone, and the build says so.
 
 **2. The plugin:**
 
 ```powershell
-.\build.ps1                 # x64 + x86, help page, bin\SFTPplug.zip, deploy into Total Commander
+.\build.ps1                 # x64 + x86 + arm64, help page, packages, deploy into Total Commander
+.\build.ps1 -amd64 -arm64   # the architectures named (-amd64 is also -x64; -x86, -arm64)
 .\build.ps1 -NoDeploy       # leave Total Commander alone
-.\build.ps1 -X64Only        # 64-bit only
 .\build.ps1 -NoHelp -NoZip  # plugin binaries only
 ```
 
 - Release build: C++20, `/W4 /WX` with no warning switched off, `/permissive-`, `/GS`, Control Flow Guard, CET shadow stack (x64), static CRT.
 - Reproducible: two builds of one commit with the same toolchain give byte-identical `.wfx` files. `/Brepro` drops the timestamps, and the tag, short SHA and commit date shown by the plugin come from git, never from the clock (`-dirty` marks uncommitted changes).
 - Before a release: `.\tests\run-all-tests.ps1 -Profiles <sftpplug.ini section> -LanPairHost <another Windows PC>` builds and runs every test suite, and ends with a summary.
-- The plugins land in `build\bin\x64_Release` and `build\bin\Win32_Release`; the package and the help page in `bin\`. The help page needs Python 3.
+- The plugins land in `build\bin\x64_Release`, `build\bin\Win32_Release` and `build\bin\ARM64_Release`; the packages and the help page in `bin\`. The help page needs Python 3.
+- The tests build for arm64 too. Where they cannot run (arm64 on an x64 machine) they are compiled - under the same `/W4 /WX` - and left for Windows on Arm, which runs all three architectures.
 - Deploying asks Total Commander to close (it is never killed), copies the plugin into `plugins\wfx\SFTPplug` and starts Total Commander again.
 
 **Diagnostic log:** off in every build. `DebugLog=1` under `[Configuration]` in `sftpplug.ini`, or `SFTPPLUG_DEBUGLOG=1` in the environment, writes `%LOCALAPPDATA%\SFTPplug\sftpplug.log`.
@@ -639,7 +648,7 @@ Two scripts at the project root. Both find Visual Studio, the MSVC toolset and t
 |-----------|-------------|
 | Windows | Windows 7 or later (Windows 10/11 recommended) |
 | Total Commander | Version 9.0 or later (x64 or x86) |
-| Architecture | x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) |
+| Architecture | x64 (`SFTPplug.wfx64`), x86 (`SFTPplug.wfx`); native arm64 in `SFTPplug-arm64.zip` |
 | Compiler (build) | Visual Studio 2026, MSVC v145 toolset, C++20 |
 | libssh2 | Statically linked (1.11.1), built against OpenSSL |
 | OpenSSL | Statically linked (4.1.0) — the crypto backend of libssh2 and of the PPK decoder |
@@ -650,7 +659,7 @@ Two scripts at the project root. Both find Visual Studio, the MSVC toolset and t
 
 ## Packaging and Installation
 
-Distribution archive: `SFTPplug.zip`
+Distribution archive: `SFTPplug.zip` (Total Commander: x64 and x86). Total Commander has no arm64 build - on Windows on Arm it runs as x64 under emulation and uses `SFTPplug.wfx64` from this package. `SFTPplug-arm64.zip` holds the native arm64 plugin for hosts that run natively on Arm; it carries no `pluginst.inf`, so Total Commander never installs it where it cannot be loaded.
 
 | File | Purpose |
 |------|---------|

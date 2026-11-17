@@ -30,7 +30,7 @@ Run the protocol checks only.
 #>
 param(
     [string]$Php,
-    [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
+    [ValidateSet('x64', 'x86', 'arm64', 'both', 'all', '')] [string]$Arch = '',
     [switch]$SkipIntegration
 )
 
@@ -211,7 +211,8 @@ foreach ($config in 'psk-in-environment', 'salted-hash-in-script') {
             New-Item -ItemType Directory -Path $iniDir -Force | Out-Null
             $ini = Join-Path $iniDir 'sftpplug.ini'
             [System.IO.File]::WriteAllText($ini, "[phpagent]`r`nserver=$base`r`nuser=tester`r`ntransfermode=1`r`npassword=plain:$($script:psk)`r`n")
-            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-integration-tests.ps1') -IniPath $ini -Profile phpagent -Modes php -RemoteBase / -Arch $Arch
+            $archArgs = if ($Arch) { @('-Arch', $Arch) } else { @() }
+            & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'run-integration-tests.ps1') -IniPath $ini -Profile phpagent -Modes php -RemoteBase / @archArgs
             if ($LASTEXITCODE -ne 0) { $failedSteps.Add("integration ($config)") }
             Remove-Item -LiteralPath $iniDir -Recurse -Force -ErrorAction SilentlyContinue
         }

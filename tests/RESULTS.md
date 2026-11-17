@@ -2,20 +2,24 @@
 
 The latest full run before a release, on the maintainer's machine. Every
 suite builds the plugin's own sources with `/W4 /WX`; how to run them is in
-the README, section *Verification*.
+the README, section *Verification and Test Suites*.
 
-**Run of 2026-11-16, version 10.3.0.0** - Visual Studio 2026 (MSVC 14.52,
+**Run of 2026-11-17, version 10.3.0.0** - Visual Studio 2026 (MSVC 14.52,
 toolset v145), Windows SDK 10.0.28000.0, OpenSSL 4.1.0, libssh2 1.11.1.
 
-| Suite | x64 | x86 |
-|-------|-----|-----|
-| Build, `/W4 /WX` | passed | passed |
-| Unit tests | 40 cases, 325,538 checks, passed | 40 cases, 325,538 checks, passed |
-| Dialog layout, 7 dialogs × 16 languages | passed | passed |
-| PHP Agent protocol (signatures, replays, staged bodies) | 26 checks, passed | |
-| PHP Agent through the plugin, 2 agent configurations | 35 + 35, passed | 35 + 35, passed |
-| SSH integration, OpenSSH on Ubuntu 26.04: SFTP / SCP / SCP-only / shell / text | 36 / 36 / 36 / 36 / 39, passed | 36 / 36 / 36 / 36 / 39, passed |
-| LAN Pair between two computers | passed | |
+| Suite | x64 | x86 | arm64 |
+|-------|-----|-----|-------|
+| Build, `/W4 /WX` | passed | passed | passed (cross-compiled) |
+| Unit tests | 40 cases, 325,538 checks, passed | 40 cases, 325,538 checks, passed | compiled; to be run on Windows on Arm |
+| Dialog layout, 7 dialogs × 16 languages | passed | | |
+| PHP Agent protocol (signatures, replays, staged bodies) | 26 checks, passed | | |
+| PHP Agent through the plugin, 2 agent configurations | 35 + 35, passed | 35 + 35, passed | |
+| SSH integration, OpenSSH on Ubuntu 26.04: SFTP / SCP / SCP-only / shell / text | 36 / 36 / 36 / 36 / 39, passed | 36 / 36 / 36 / 36 / 39, passed | |
+| LAN Pair between two computers (2026-11-16) | passed | | |
+
+The arm64 plugin is a native ARM64 image (machine `0xAA64`) with Control
+Flow Guard, ASLR with high entropy and DEP, and exports the same 43
+functions as the x64 one.
 
 ## LAN Pair between two computers
 

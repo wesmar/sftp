@@ -6,6 +6,7 @@
     <!-- Map MSBuild Platform name to lib suffix -->
     <LibSuffix Condition="'$(Platform)'=='x64'">x64</LibSuffix>
     <LibSuffix Condition="'$(Platform)'=='Win32'">x86</LibSuffix>
+    <LibSuffix Condition="'$(Platform)'=='ARM64'">arm64</LibSuffix>
     <IntDir>$(SolutionDir).intermediates\$(ProjectName)\$(Platform)_$(Configuration)\</IntDir>
     <LibDir>$(SolutionDir)lib\$(Platform)_$(Configuration)\</LibDir>
     <BinDir>$(SolutionDir)bin\$(Platform)_$(Configuration)\</BinDir>
@@ -55,7 +56,7 @@
       <DataExecutionPrevention>true</DataExecutionPrevention>
       <CETCompat Condition="'$(Platform)'=='x64'">true</CETCompat>
       <DynamicBase>true</DynamicBase>
-      <HighEntropyVA Condition="'$(Platform)'=='x64'">true</HighEntropyVA>
+      <HighEntropyVA Condition="'$(Platform)'=='x64' Or '$(Platform)'=='ARM64'">true</HighEntropyVA>
     </Link>
   </ItemDefinitionGroup>
 </Project>

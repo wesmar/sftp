@@ -23,7 +23,7 @@ Everything the run creates on the server lives in one directory under
 .\tests\run-integration-tests.ps1 -Server localhost:2222 -User tester -KeyFile .\ci_key -AcceptNewHostKey
 #>
 param(
-    [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
+    [ValidateSet('x64', 'x86', 'arm64', 'both', 'all', '')] [string]$Arch = '',
     [string]$Profile,
     [string]$IniPath = (Join-Path $env:APPDATA 'GHISLER\sftpplug.ini'),
     [string]$Server,
@@ -40,7 +40,9 @@ Set-StrictMode -Version 3.0
 $Root = Split-Path $PSScriptRoot -Parent
 Import-Module (Join-Path $Root 'tools\Toolchain.psm1') -Force
 
-$Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
+# Default: every architecture this machine can run (x64 and x86 here, all
+# three on Windows on Arm). Others are compiled only.
+$Archs = @(Resolve-SftpTestArch $Arch)
 # "-Modes scponly,shell" arrives as one string through pwsh -File.
 $Modes = @($Modes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $knownModes = 'sftp', 'scp', 'scponly', 'shell', 'text', 'php'
@@ -108,7 +110,7 @@ $env:SFTPPLUG_DEBUGLOG = '1'
 $failures = [System.Collections.Generic.List[string]]::new()
 try {
     foreach ($a in $Archs) {
-        $platformDir = if ($a -eq 'x64') { 'x64_Release' } else { 'Win32_Release' }
+        $platformDir = @{ x64 = 'x64_Release'; x86 = 'Win32_Release'; arm64 = 'ARM64_Release' }[$a]
         $plugin = Join-Path $Root "build\bin\$platformDir\SFTPplug.wfx"
         if (-not (Test-Path -LiteralPath $plugin)) { throw "$plugin not found. Run .\build.ps1 first." }
 
@@ -119,6 +121,10 @@ try {
         $source = Join-Path $PSScriptRoot 'integration\PluginHarness.cpp'
         $body = "cd /d `"$out`" || exit /b 1`r`ncl /nologo /std:c++20 /EHsc /W4 /WX /permissive- /utf-8 /MT /O2 /DUNICODE /D_UNICODE /I`"$(Join-Path $Root 'src\include')`" `"$source`" /Fe:`"$exe`" || exit /b 2"
         Invoke-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "build harness $a" -LogPath (Join-Path $out 'build.log') -Body $body
+        if (-not (Test-SftpArchRunnable $a)) {
+            Write-Host "  $a : harness compiled; this machine cannot run it - run the tests on Windows on Arm" -ForegroundColor Yellow
+            continue
+        }
 
         foreach ($mode in $Modes) {
             Write-Host "=== $a / $mode ===" -ForegroundColor Cyan

@@ -15,11 +15,23 @@ Provenance:
            thirdparty\patches\libssh2-1.11.1 (Debian security backports and
            SFTPplug's own changes).
 
-The toolchain is detected on evidence by tools\Toolchain.psm1. x64 and x86
-build in parallel, each in its own developer shell.
+The toolchain is detected on evidence by tools\Toolchain.psm1. The
+architectures build in parallel, each in its own developer shell; arm64 is
+cross-compiled on an x64 machine and built natively on Windows on Arm.
 
-.PARAMETER Arch
-x64, x86 or both (default).
+OpenSSL for arm64 uses its ARMv8 assembly (AES, SHA, GHASH, ChaCha20 with
+the CPU's crypto extensions) when clang-cl is found - Visual Studio's "C++
+Clang tools for Windows" component, or LLVM. Without it, it is built from C
+alone and the build says so.
+
+.PARAMETER amd64
+Build for x64 (alias -x64). With none of -amd64, -x86, -arm64: all three.
+
+.PARAMETER x86
+Build for 32-bit x86.
+
+.PARAMETER arm64
+Build for 64-bit Arm.
 
 .PARAMETER SkipOpenSSL
 Reuse the OpenSSL already installed under thirdparty\build.
@@ -31,7 +43,9 @@ Delete thirdparty\build before building.
 Skip the PGP check when gpg is unavailable. The SHA-256 pin still applies.
 #>
 param(
-    [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
+    [Alias('x64')] [switch]$amd64,
+    [switch]$x86,
+    [switch]$arm64,
     [switch]$SkipOpenSSL,
     [switch]$Clean,
     [switch]$NoSignatureCheck
@@ -91,7 +105,7 @@ $LibDest     = Join-Path $Root 'src\lib'
 $HeaderDest  = Join-Path $Root 'src\include\libssh2'
 $Manifest    = Join-Path $LibDest 'deps-manifest.json'
 
-$Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
+$Archs = @(Select-SftpArch -Amd64:$amd64 -X86:$x86 -Arm64:$arm64)
 
 function Write-Section([string]$Title) { Write-Host ''; Write-Host "=== $Title ===" -ForegroundColor Cyan }
 function Write-Step([string]$Text)     { Write-Host "  $Text" -ForegroundColor Gray }
@@ -132,7 +146,16 @@ $Nasm = Find-SftpBuildTool -Name 'Nasm' -Executable 'nasm.exe' -Candidates @(
     (Join-Path $env:ProgramFiles 'NASM\nasm.exe'),
     (Join-Path $env:LOCALAPPDATA 'bin\NASM\nasm.exe')
 )
-if (-not $Nasm) { throw 'NASM not found (OpenSSL assembly needs it). Install it, or set Nasm in build.local.psd1.' }
+if (-not $Nasm -and ($Archs -contains 'x64' -or $Archs -contains 'x86')) {
+    throw 'NASM not found (OpenSSL x86/x64 assembly needs it). Install it, or set Nasm in build.local.psd1.'
+}
+
+# OpenSSL's ARMv8 assembly is written for clang's assembler.
+$ClangCl = Find-SftpBuildTool -Name 'ClangCl' -Executable 'clang-cl.exe' -Candidates @(
+    (Join-Path $Toolchain.VsPath 'VC\Tools\Llvm\x64\bin\clang-cl.exe'),
+    (Join-Path $Toolchain.VsPath 'VC\Tools\Llvm\ARM64\bin\clang-cl.exe'),
+    (Join-Path $env:ProgramFiles 'LLVM\bin\clang-cl.exe')
+)
 
 $CMake = Find-SftpBuildTool -Name 'CMake' -Executable 'cmake.exe' -Candidates @(
     (Join-Path $Toolchain.VsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'),
@@ -150,9 +173,12 @@ $Git = Find-SftpBuildTool -Name 'Git' -Executable 'git.exe'
 if (-not $Git) { throw 'git not found.' }
 
 Write-Step "perl  : $Perl"
-Write-Step "nasm  : $Nasm"
+Write-Step "nasm  : $(if ($Nasm) { $Nasm } else { 'not found - not needed for arm64' })"
+if ($Archs -contains 'arm64') {
+    Write-Step "clang : $(if ($ClangCl) { "$ClangCl - OpenSSL arm64 with ARMv8 assembly" } else { 'clang-cl not found - OpenSSL arm64 from C alone, without the crypto extensions' })"
+}
 Write-Step "cmake : $CMake"
-Write-Step "jom   : $(if ($Jom) { $Jom } else { 'not found - nmake (x64 and x86 still build in parallel)' })"
+Write-Step "jom   : $(if ($Jom) { $Jom } else { 'not found - nmake (the architectures still build in parallel)' })"
 Write-Step "gpg   : $(if ($Gpg) { $Gpg } else { 'not found' })"
 
 # ============================================================================
@@ -268,23 +294,33 @@ if ($Clean -and (Test-Path -LiteralPath $BuildRoot)) {
 New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
 
 # ============================================================================
-# OpenSSL (out-of-tree, both architectures in parallel)
+# OpenSSL (out-of-tree, the architectures in parallel)
 # ============================================================================
 function Get-OpenSslPrefix([string]$A) { Join-Path $BuildRoot "openssl-$A-install" }
+
+function Get-OpenSslTarget([string]$A) {
+    switch ($A) {
+        'x64'   { 'VC-WIN64A' }
+        'x86'   { 'VC-WIN32' }
+        'arm64' { if ($ClangCl) { 'VC-WIN64-CLANGASM-ARM' } else { 'VC-WIN64-ARM' } }
+    }
+}
 
 # Everything that determines an OpenSSL build. Stored next to the install so
 # -SkipOpenSSL can prove the existing libcrypto matches the current pins.
 function Get-OpenSslStamp([string]$A) {
-    "$OpenSslVersion|$OpenSslSha256|$($OpenSslOptions -join ' ')|$DependencyCFlags|$A|MSVC $($Toolchain.Targets[$A].MsvcVersion)"
+    "$OpenSslVersion|$OpenSslSha256|$($OpenSslOptions -join ' ')|$DependencyCFlags|$A|$(Get-OpenSslTarget $A)|MSVC $($Toolchain.Targets[$A].MsvcVersion)"
 }
 function Get-OpenSslStampPath([string]$A) { Join-Path (Get-OpenSslPrefix $A) '.sftpplug-openssl' }
 
 if (-not $SkipOpenSSL) {
     Write-Section "OpenSSL $OpenSslVersion"
-    $nasmDir = Split-Path -Parent $Nasm
     $perlDir = Split-Path -Parent $Perl
     $steps = foreach ($a in $Archs) {
-        $target = if ($a -eq 'x64') { 'VC-WIN64A' } else { 'VC-WIN32' }
+        $target = Get-OpenSslTarget $a
+        $toolDirs = @($perlDir)
+        if ($a -eq 'arm64') { if ($ClangCl) { $toolDirs = @((Split-Path -Parent $ClangCl)) + $toolDirs } }
+        else { $toolDirs = @((Split-Path -Parent $Nasm)) + $toolDirs }
         $work = Join-Path $BuildRoot "openssl-$a"
         $prefix = Get-OpenSslPrefix $a
         foreach ($d in $work, $prefix) { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force } }
@@ -300,7 +336,7 @@ $configure || exit /b 2
 $make build_libs || exit /b 3
 $make install_dev || exit /b 4
 "@
-        Start-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "OpenSSL $a" -LogPath (Join-Path $LogRoot "openssl-$a.log") -Body $body -PrependPath @($nasmDir, $perlDir)
+        Start-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "OpenSSL $a ($target)" -LogPath (Join-Path $LogRoot "openssl-$a.log") -Body $body -PrependPath $toolDirs
     }
     Wait-SftpDevShellSteps -Steps @($steps)
     foreach ($a in $Archs) {
@@ -384,7 +420,7 @@ foreach ($a in $Archs) {
     if (-not $sshLib) { throw "libssh2.lib not produced for $a" }
     Install-File (Join-Path (Get-OpenSslPrefix $a) 'lib\libcrypto.lib') (Join-Path $LibDest "libcrypto_$a.lib")
     Install-File $sshLib.FullName (Join-Path $LibDest "libssh2_$a.lib")
-    # OpenSSL headers are per target (configuration.h differs between x64 and x86).
+    # OpenSSL headers are per target (configuration.h differs between them).
     $headerTarget = Join-Path $LibDest "include-$a"
     if (Test-Path -LiteralPath $headerTarget) { Remove-Item -LiteralPath $headerTarget -Recurse -Force }
     Copy-Item -LiteralPath (Join-Path (Get-OpenSslPrefix $a) 'include') -Destination $headerTarget -Recurse
@@ -393,7 +429,7 @@ foreach ($a in $Archs) {
     $targets[$a] = [ordered]@{
         digest    = $digest
         toolchain = "MSVC $($Toolchain.Targets[$a].MsvcVersion), Windows SDK $($Toolchain.WindowsSdk.Version)"
-        openssl   = "$OpenSslVersion sha256:$OpenSslSha256"
+        openssl   = "$OpenSslVersion sha256:$OpenSslSha256 $(Get-OpenSslTarget $a)"
         libssh2   = "$Libssh2Tag $libssh2Commit + $($AppliedPatches.Count) patches"
         libraries = [ordered]@{
             "libcrypto_$a.lib" = Get-Sha256 (Join-Path $LibDest "libcrypto_$a.lib")

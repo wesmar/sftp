@@ -37,6 +37,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 $Root = Split-Path $PSScriptRoot -Parent
+Import-Module (Join-Path $Root 'tools\Toolchain.psm1') -Force
 $results = [System.Collections.Generic.List[object]]::new()
 
 function Invoke-Step([string]$Name, [string]$Script, [string[]]$Arguments) {
@@ -52,6 +53,10 @@ if (-not $SkipBuild) {
     Invoke-Step 'build' (Join-Path $Root 'build.ps1') @('-NoDeploy', '-NoZip')
 }
 Invoke-Step 'unit tests' (Join-Path $PSScriptRoot 'run-unit-tests.ps1') @()
+# arm64 on an x64 machine: the tests are compiled (under /W4 /WX), not run.
+if (-not (Test-SftpArchRunnable 'arm64')) {
+    Invoke-Step 'unit tests arm64 (compile only)' (Join-Path $PSScriptRoot 'run-unit-tests.ps1') @('-Arch', 'arm64')
+}
 Invoke-Step 'dialog layout tests' (Join-Path $PSScriptRoot 'run-ui-tests.ps1') @()
 $phpFound = (Get-Command php.exe -ErrorAction SilentlyContinue) -or
             (Test-Path 'C:\inetpub\php\php.exe') -or (Test-Path 'C:\php\php.exe')

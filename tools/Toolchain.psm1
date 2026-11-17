@@ -19,8 +19,59 @@ Set-StrictMode -Version 3.0
 $script:RepoRoot = Split-Path $PSScriptRoot -Parent
 
 $script:Targets = @{
-    x64 = [pscustomobject]@{ Dir = 'x64'; Assembler = 'ml64.exe'; MSBuildPlatform = 'x64' }
-    x86 = [pscustomobject]@{ Dir = 'x86'; Assembler = 'ml.exe';   MSBuildPlatform = 'Win32' }
+    x64   = [pscustomobject]@{ Dir = 'x64';   Assembler = 'ml64.exe';     MSBuildPlatform = 'x64' }
+    x86   = [pscustomobject]@{ Dir = 'x86';   Assembler = 'ml.exe';       MSBuildPlatform = 'Win32' }
+    arm64 = [pscustomobject]@{ Dir = 'arm64'; Assembler = 'armasm64.exe'; MSBuildPlatform = 'ARM64' }
+}
+
+function Get-SftpHostArchs {
+    <#
+    Compiler host architectures to try, the machine's own first: Windows on
+    Arm runs the native arm64-hosted compilers, an x64 machine the x64 ones;
+    the others are fallbacks (emulated, or 32-bit).
+    #>
+    $os = "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+    if ($os -eq 'Arm64') { return @('arm64', 'x64', 'x86') }
+    return @('x64', 'x86')
+}
+
+function Select-SftpArch {
+    <#
+    The architectures a script was asked for by its -amd64 (-x64), -x86 and
+    -arm64 switches, in build order; no switch at all means every one.
+    #>
+    param([switch]$Amd64, [switch]$X86, [switch]$Arm64)
+    $chosen = @()
+    if ($Amd64) { $chosen += 'x64' }
+    if ($X86)   { $chosen += 'x86' }
+    if ($Arm64) { $chosen += 'arm64' }
+    if ($chosen.Count -eq 0) { $chosen = @('x64', 'x86', 'arm64') }
+    return $chosen
+}
+
+function Test-SftpArchRunnable {
+    <#
+    Whether this machine can run programs built for an architecture: Windows
+    on Arm runs arm64 natively and x64/x86 under emulation; an x64 machine
+    cannot run arm64.
+    #>
+    param([Parameter(Mandatory)] [ValidateSet('x64', 'x86', 'arm64')] [string]$Arch)
+    $os = "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+    return $os -eq 'Arm64' -or $Arch -ne 'arm64'
+}
+
+function Resolve-SftpTestArch {
+    <#
+    Maps a test runner's -Arch value to architectures: x64, x86, arm64, both
+    (x64 + x86), all, or empty - what this machine can run.
+    #>
+    param([string]$Arch)
+    switch ($Arch) {
+        'both'  { return @('x64', 'x86') }
+        'all'   { return @('x64', 'x86', 'arm64') }
+        ''      { return @(@('x64', 'x86', 'arm64') | Where-Object { Test-SftpArchRunnable $_ }) }
+        default { return @($Arch) }
+    }
 }
 
 function ConvertTo-SftpVersion {
@@ -81,12 +132,13 @@ function Get-SftpVisualStudioInstances {
 function Find-SftpMsvc {
     <#
     Newest MSVC version under a VS instance that can build the target, with
-    the host architecture whose bin directory is complete. A native x64 host
-    is preferred; an x86 host is accepted when only that one is installed.
+    the host architecture whose bin directory is complete. The machine's own
+    architecture is preferred (Get-SftpHostArchs); another host is accepted
+    when only that one is installed.
     #>
     param(
         [Parameter(Mandatory)] [string]$VsPath,
-        [Parameter(Mandatory)] [ValidateSet('x64', 'x86')] [string]$Arch
+        [Parameter(Mandatory)] [ValidateSet('x64', 'x86', 'arm64')] [string]$Arch
     )
     $target = $script:Targets[$Arch]
     $root = Join-Path $VsPath 'VC\Tools\MSVC'
@@ -99,7 +151,7 @@ function Find-SftpMsvc {
         $libDir = Join-Path $v.FullName "lib\$($target.Dir)"
         if (-not ((Test-Path (Join-Path $libDir 'libcmt.lib')) -and (Test-Path (Join-Path $libDir 'libvcruntime.lib')))) { continue }
 
-        foreach ($hostArch in 'x64', 'x86') {
+        foreach ($hostArch in (Get-SftpHostArchs)) {
             $bin = Join-Path $v.FullName "bin\Host$hostArch\$($target.Dir)"
             $required = @('cl.exe', 'link.exe', 'lib.exe', 'nmake.exe', $target.Assembler)
             $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $bin $_)) })
@@ -195,7 +247,7 @@ function Get-SftpToolchain {
     Picks the newest Visual Studio instance that can build every requested
     architecture, and returns everything a build step needs.
     #>
-    param([ValidateSet('x64', 'x86')] [string[]]$Arch = @('x64', 'x86'))
+    param([ValidateSet('x64', 'x86', 'arm64')] [string[]]$Arch = @('x64', 'x86', 'arm64'))
 
     $rejected = [System.Collections.Generic.List[string]]::new()
     foreach ($vs in @(Get-SftpVisualStudioInstances)) {
@@ -229,8 +281,11 @@ function Get-SftpToolchain {
         }
         if (-not $complete) { continue }
 
-        $sdk = Find-SftpWindowsSdk -Arch $Arch -HostArch 'x64'
-        if (-not $sdk) { $sdk = Find-SftpWindowsSdk -Arch $Arch -HostArch 'x86' }
+        $sdk = $null
+        foreach ($hostArch in (Get-SftpHostArchs)) {
+            $sdk = Find-SftpWindowsSdk -Arch $Arch -HostArch $hostArch
+            if ($sdk) { break }
+        }
         if (-not $sdk) { $rejected.Add("$($vs.displayName): no complete Windows SDK"); continue }
 
         return [pscustomobject]@{
@@ -264,7 +319,7 @@ function New-SftpDevShellScript {
     #>
     param(
         [Parameter(Mandatory)] $Toolchain,
-        [Parameter(Mandatory)] [ValidateSet('x64', 'x86')] [string]$Arch,
+        [Parameter(Mandatory)] [ValidateSet('x64', 'x86', 'arm64')] [string]$Arch,
         [Parameter(Mandatory)] [string]$Body,
         [string[]]$PrependPath = @()
     )
@@ -294,7 +349,7 @@ function Start-SftpDevShellStep {
     #>
     param(
         [Parameter(Mandatory)] $Toolchain,
-        [Parameter(Mandatory)] [ValidateSet('x64', 'x86')] [string]$Arch,
+        [Parameter(Mandatory)] [ValidateSet('x64', 'x86', 'arm64')] [string]$Arch,
         [Parameter(Mandatory)] [string]$Body,
         [Parameter(Mandatory)] [string]$Name,
         [Parameter(Mandatory)] [string]$LogPath,
@@ -334,7 +389,7 @@ function Wait-SftpDevShellSteps {
 function Invoke-SftpDevShellStep {
     param(
         [Parameter(Mandatory)] $Toolchain,
-        [Parameter(Mandatory)] [ValidateSet('x64', 'x86')] [string]$Arch,
+        [Parameter(Mandatory)] [ValidateSet('x64', 'x86', 'arm64')] [string]$Arch,
         [Parameter(Mandatory)] [string]$Body,
         [Parameter(Mandatory)] [string]$Name,
         [Parameter(Mandatory)] [string]$LogPath,
@@ -367,6 +422,6 @@ function Get-SftpDependencyDigest {
     finally { $sha.Dispose() }
 }
 
-Export-ModuleMember -Function ConvertTo-SftpVersion, Find-SftpBuildTool, Get-SftpToolchain,
+Export-ModuleMember -Function Select-SftpArch, Test-SftpArchRunnable, Resolve-SftpTestArch, ConvertTo-SftpVersion, Find-SftpBuildTool, Get-SftpToolchain,
     Write-SftpToolchainSummary, New-SftpDevShellScript, Start-SftpDevShellStep,
     Wait-SftpDevShellSteps, Invoke-SftpDevShellStep, Get-SftpDependencyDigest

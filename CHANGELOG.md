@@ -41,6 +41,13 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
   connection. **Update both computers:** a plugin older than 10.3 is told to
   upgrade, not let in. **Pairing needs the password**, the same on both
   computers; the first pairing used to be possible without one.
+- **arm64.** The plugin, OpenSSL and libssh2 build for 64-bit Arm as well
+  (`build.ps1` / `build-deps.ps1` with `-amd64`, `-x86`, `-arm64`; none
+  means all three), cross-compiled on x64 or native on Windows on Arm, and
+  the tests with them. Total Commander has no arm64 build - on Windows on Arm
+  it runs as x64 and loads `SFTPplug.wfx64` from the usual package; the
+  native plugin comes separately in `SFTPplug-arm64.zip` for hosts that run
+  natively on Arm.
 - **Hardened C++20 build & automated test suite.** Built with `/std:c++20`,
   `/W4 /WX`, Control Flow Guard, and CET (`x64`), backed by unit tests
   (PPK v2/v3, text conversion, ECMA-48 terminal filter, LAN Pair handshake,

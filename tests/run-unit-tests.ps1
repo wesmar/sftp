@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Builds and runs the unit tests for x64 and x86.
+Builds and runs the unit tests for x64, x86 and arm64.
 
 .DESCRIPTION
 Tests are compiled with the same evidence-selected toolchain as the plugin,
@@ -10,13 +10,16 @@ AddressSanitizer runtime for a target, that target's tests are additionally
 built and run under ASan.
 
 .PARAMETER Arch
-x64, x86 or both (default).
+x64, x86, arm64, both (x64 + x86) or all. Default: every architecture this
+machine can run - x64 and x86 here, all three on Windows on Arm. An
+architecture the machine cannot run (arm64 on x64) is compiled - which
+checks it under /W4 /WX - and its tests are left for an Arm machine.
 
 .PARAMETER Filter
 Runs only test cases whose name contains this text.
 #>
 param(
-    [ValidateSet('x64', 'x86', 'both')] [string]$Arch = 'both',
+    [ValidateSet('x64', 'x86', 'arm64', 'both', 'all', '')] [string]$Arch = '',
     [string]$Filter
 )
 
@@ -40,7 +43,7 @@ $UnitSources = @(
 )
 $SystemLibs = 'ws2_32.lib crypt32.lib advapi32.lib user32.lib bcrypt.lib iphlpapi.lib shell32.lib ole32.lib dbghelp.lib'
 
-$Archs = if ($Arch -eq 'both') { @('x64', 'x86') } else { @($Arch) }
+$Archs = @(Resolve-SftpTestArch $Arch)
 $Toolchain = Get-SftpToolchain -Arch $Archs
 Write-SftpToolchainSummary $Toolchain
 
@@ -52,7 +55,7 @@ $include = "/I`"$(Join-Path $Root 'src\include')`" /I`"$(Join-Path $PSScriptRoot
 function Test-AsanAvailable([string]$A) {
     $t = $Toolchain.Targets[$A]
     $msvcRoot = Split-Path (Split-Path (Split-Path $t.BinDir -Parent) -Parent) -Parent
-    $suffix = if ($A -eq 'x64') { 'x86_64' } else { 'i386' }
+    $suffix = switch ($A) { 'x64' { 'x86_64' } 'x86' { 'i386' } 'arm64' { 'aarch64' } }
     (Test-Path (Join-Path $msvcRoot "lib\$A\clang_rt.asan_dynamic-$suffix.lib")) -and
     (Test-Path (Join-Path $t.BinDir "clang_rt.asan_dynamic-$suffix.dll"))
 }
@@ -85,6 +88,10 @@ cl $common $($v.Flags) $include /I"$osslInclude" $($testSources -join ' ') $($pr
 "@
         Invoke-SftpDevShellStep -Toolchain $Toolchain -Arch $a -Name "compile unit tests $a $($v.Name)" -LogPath (Join-Path $out 'build.log') -Body $body
 
+        if (-not (Test-SftpArchRunnable $a)) {
+            Write-Host "  $a $($v.Name): compiled; this machine cannot run it - run $exe on Windows on Arm" -ForegroundColor Yellow
+            continue
+        }
         Write-Host "  running $a $($v.Name)" -ForegroundColor Gray
         [string[]]$testArgs = if ($Filter) { $Filter } else { @() } # an array: a string would splat letter by letter
         $savedPath = $env:PATH
