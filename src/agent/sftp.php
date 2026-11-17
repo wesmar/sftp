@@ -53,7 +53,7 @@ const AGENT_NONCE_TTL = 300; // seconds
 const AGENT_REPLAY_DIR = '._sftp_agent_nonce_cache';
 const AGENT_DEFAULT_CHUNK = 262144; // 256 KiB
 const AGENT_MAX_LIST_ITEMS = 20000;
-// Request authentication. Plugins before 10.3 sent the PSK itself in the
+// Request authentication. Plugins before 10.3.1 sent the PSK itself in the
 // X-SFTP-AUTH header, or signed only part of a request (v1); set this to true
 // only while such a plugin still has to connect.
 const AGENT_AUTH_SCHEME = 'TCSFTP-HMAC-V2';
@@ -1221,7 +1221,7 @@ function stage_verified_body($out, ?string $declared): string
     return $actual;
 }
 
-// Plugins before 10.3: the PSK itself in X-SFTP-AUTH, or the v1 signature
+// Plugins before 10.3.1: the PSK itself in X-SFTP-AUTH, or the v1 signature
 // over method, operation, path, time and nonce. Accepted only while
 // AGENT_ACCEPT_LEGACY_AUTH is true.
 function legacy_auth_ok(string $method, string $op): bool

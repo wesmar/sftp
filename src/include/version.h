@@ -7,18 +7,18 @@
 
 #define VER_MAJOR       10
 #define VER_MINOR       3
-#define VER_PATCH       0
+#define VER_PATCH       1
 #define VER_BUILD       0
 
 // Comma-separated form for FILEVERSION / PRODUCTVERSION
 #define VER_FILEVERSION         VER_MAJOR, VER_MINOR, VER_PATCH, VER_BUILD
 
 // Dot-separated strings for StringFileInfo VALUE fields
-#define VER_FILEVERSION_STR     "10.3.0.0"
-#define VER_PRODUCTVERSION_STR  "10.3.0.0"
+#define VER_FILEVERSION_STR     "10.3.1.0"
+#define VER_PRODUCTVERSION_STR  "10.3.1.0"
 
 // Wide-string variant for C++ runtime use
-#define VER_FILEVERSION_WSTR    L"10.3.0.0"
+#define VER_FILEVERSION_WSTR    L"10.3.1.0"
 
 #if defined(__cplusplus) && !defined(RC_INVOKED)
 #include <string_view>

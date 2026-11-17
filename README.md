@@ -2,7 +2,7 @@
 
 ![SFTP Plugin](images/sftp01.jpg)
 
-**Version 10.3.0.0** — C++20 SFTP, SCP, PHP Agent, and LAN Pair plugin for Total Commander x64 and x86.
+**Version 10.3.1.0** — C++20 SFTP, SCP, PHP Agent, and LAN Pair plugin for Total Commander x64 and x86, with a native arm64 build.
 
 Complete C-to-C++20 rewrite of the original SFTP plugin by Christian Ghisler. Transport, authentication, and session subsystems use an interface-driven backend abstraction over statically linked **OpenSSL 4.1.0** and **libssh2 1.11.1**, compiled under `/W4 /WX`, Control Flow Guard, and CET. At runtime, the plugin selects native SFTP, native SCP, shell chunk transfer via `cat`/`dd`/`base64`, PHP Agent over HTTP, or direct LAN Pair based on server capabilities.
 
@@ -79,8 +79,8 @@ Complete C-to-C++20 rewrite of the original SFTP plugin by Christian Ghisler. Tr
 - Automatic UTF-8 filename detection via remote `locale` command.
 - Automatic CRLF/LF conversion on text-mode transfers.
 - Symlink tracking including `~` home directory shortcut protection.
-- External `.lng` file localization — **15 languages** (EN/PL/RU/DE/FR/ES/IT/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN) — dynamic dialog translation at runtime, auto-detected from TC `wincmd.ini`, language-aware control layout (`ArrangeInlineRow`)
-- Dual-architecture distribution: x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in a single ZIP.
+- Localization — **16 languages**: English built in, 15 as external `.lng` files (PL/RU/DE/FR/ES/IT/CS/HU/NL/PT-BR/RO/SK/UK/JA/ZH-CN) — dynamic dialog translation at runtime, auto-detected from TC `wincmd.ini`, language-aware control layout (`ArrangeInlineRow`)
+- x64 (`SFTPplug.wfx64`) and x86 (`SFTPplug.wfx`) in one Total Commander package; a native arm64 build in `SFTPplug-arm64.zip`.
 - Offline help — a single page opened in your browser from the dialog's Help button.
 - Background transfer support (TC `BG_DOWNLOAD` / `BG_UPLOAD` flags).
 - Batch download error prompt (**Skip / Skip all / Cancel**) localized across all 16 UI languages, with Per-Monitor V2 DPI scaling and Mica titlebar support.
@@ -91,49 +91,93 @@ Complete C-to-C++20 rewrite of the original SFTP plugin by Christian Ghisler. Tr
 
 ### Layered Structure
 
+Every call Total Commander makes goes through one barrier, then down to the
+transport the session uses. The crypto and SSH libraries are linked in; the
+rest is Windows itself.
+
 ```mermaid
-flowchart TD
-    A[TC WFX API] --> B[Entry Points]
-    B --> C[SSH Layer]
-    B --> D[Transfer Layer]
-    B --> L[LAN Pair]
-    C --> C1[Network/Proxy/Jump]
-    C --> C2[Auth/Session]
-    C --> C3[Dialog/Settings]
-    D --> D1[SFTP/SCP/Shell]
-    D --> D2[RemoteOps/Utils]
-    D --> D3[PHP Agent/Shell]
-    L --> L1[LanPair Session]
-    C1 --> E[ISshBackend]
-    C2 --> E
-    D1 --> E
-    D2 --> E
-    E --> F[Libssh2 + OpenSSL 4.1.0]
-    B --> G[IUserFeedback]
-    G --> H[Win32 UI]
+flowchart TB
+    TC(["Total Commander<br/>x64 · x86 · x64 on Windows on Arm"])
+
+    subgraph Boundary["Plugin boundary"]
+        direction TB
+        API(["WFX entry points<br/>FsFindFirstW · FsGetFileW · FsPutFileW · FsExecuteFileW …"])
+        BAR(["DllExceptionBarrier<br/>no exception ever reaches Total Commander"])
+    end
+
+    subgraph Core["Sessions and connections"]
+        direction TB
+        CFG(["Profiles · [Imports] · dialogs<br/>sftpplug.ini · DPAPI · 16 languages"])
+        CON(["Connection lifecycle<br/>socket · proxy · jump host · authentication"])
+        FB(["IUserFeedback<br/>prompts that also work in background transfers"])
+    end
+
+    subgraph Transports["Transports"]
+        direction LR
+        SSH(["SSH<br/>SFTP · SCP · shell fallback"])
+        PHP(["PHP Agent · PHP Shell<br/>signed HTTP requests"])
+        LAN(["LAN Pair<br/>PAIR3 · AES-256-GCM"])
+    end
+
+    subgraph Linked["Statically linked"]
+        direction LR
+        BE(["ISshBackend<br/>Libssh2Backend"])
+        L2(["libssh2 1.11.1<br/>+ CVE patches"])
+        OSSL(["OpenSSL 4.1.0"])
+    end
+
+    WIN(["Windows<br/>Winsock · WinHTTP · BCrypt · DPAPI"])
+
+    TC --> API --> BAR
+    BAR --> CON
+    BAR --> CFG
+    CON --> FB
+    CON --> SSH
+    CON --> PHP
+    CON --> LAN
+    SSH --> BE --> L2 --> OSSL
+    PHP --> OSSL
+    LAN --> OSSL
+    PHP --> WIN
+    LAN --> WIN
+    CFG --> WIN
 ```
 
-```
-WFX API Layer
-  ↓
-DllExceptionBarrier (every exported Fs* function)
-  ↓
-Plugin Entry Points (FsFindFirst / FsGetFile / FsPutFile / FsExecuteFile / ...)
-  ↓
-┌───────────────────────────────────────────┐
-│  Business Logic Layer                     │
-│  ├─ ConnectionNetwork / ProxyNegotiator   │
-│  ├─ ConnectionAuth / SessionPostAuth      │
-│  ├─ SFTP / SCP / Shell fallback           │
-│  ├─ PHP Agent (HTTP) / PHP Shell          │
-│  └─ UI separation (IUserFeedback)         │
-└───────────────────────────────────────────┘
-  ↓
-ISshBackend Interface (ISshSession / ISshChannel / ISftpHandle)
-  ↓
-Libssh2Backend Implementation (libssh2 1.11.1 + OpenSSL 4.1.0 statically linked)
-```
+| Layer | Sources |
+|-------|---------|
+| Entry points and barrier | `PluginEntryPoints*.cpp`, `DllExceptionBarrier.cpp` |
+| Connections | `SftpConnection.cpp`, `ConnectionNetwork.cpp`, `ProxyNegotiator.cpp`, `JumpHostConnection.cpp`, `SshSessionInit.cpp`, `ConnectionAuth.cpp`, `SessionPostAuth.cpp` |
+| Transfers | `SftpTransfer.cpp`, `ScpTransfer.cpp`, `ShellFallbackTransfer.cpp`, `SftpRemoteOps.cpp` |
+| PHP Agent / Shell | `PhpAgentClient.cpp`, `PhpShellConsole.cpp`, `src\agent\sftp.php` |
+| LAN Pair | `LanPair.cpp` (discovery, pairing), `LanPairProtocol.cpp` (SPAKE2, encrypted channel), `LanPairSession.cpp` (file server, session) |
+| SSH backend | `ISshBackend.h`, `Libssh2Backend.cpp` |
+| Profiles, imports, UI | `ProfileSettings.cpp`, `PasswordCrypto.cpp`, `*Adapter.cpp`, `ConnectionDialog.cpp`, `DialogLayout.cpp`, `LngLoader.cpp` |
 
+### Connection Lifecycle
+
+```mermaid
+flowchart LR
+    S(["A session is opened"]) --> T{"Transfer mode"}
+
+    T -->|"SSH"| J{"Jump host?"}
+    J -->|"yes"| JH(["Bastion: connect,<br/>host key, authenticate"]) --> TUN(["direct-tcpip tunnel"]) --> HS
+    J -->|"no"| SO(["TCP · IPv4 / IPv6"]) --> P{"Proxy?"}
+    P -->|"HTTP · SOCKS4/4a/5"| PN(["Proxy negotiation"]) --> HS
+    P -->|"no"| HS(["SSH handshake"])
+    HS --> FP(["Host key check<br/>SHA256 fingerprint"]) --> AU(["Authentication"])
+    AU --> PA(["After login<br/>UTF-8 detection · login command · SCP size probe"])
+    PA --> SM{"Mode"}
+    SM -->|"SFTP"| SF(["SFTP subsystem<br/>or a custom sftp-server"])
+    SM -->|"SCP-only · shell"| SC(["SCP · cat / dd / base64<br/>over a shell channel"])
+
+    T -->|"PHP Agent"| PR(["PROBE<br/>agent version · salt · server clock"])
+    T -->|"LAN Pair"| DI(["UDP discovery<br/>finds the peer's address"]) --> P3(["PAIR3 handshake"]) --> L2(["LAN2 session"])
+
+    SF --> OK(["Remote panel"])
+    SC --> OK
+    PR --> OK
+    L2 --> OK
+```
 ---
 
 ## Transfer Protocols
@@ -160,13 +204,34 @@ Requires libssh2 ≥ 1.7.0 for 64-bit size field support.
 
 For servers where the SFTP subsystem is blocked and `scp` is unavailable. Uses a hidden interactive SSH shell channel.
 
-**Upload:** Split data into 1024-byte chunks → base64-encode → send via `printf '%s' | base64 -d` → server appends decoded bytes.
+When SCP gives up, the plugin first tries raw bytes over an exec channel
+(`cat`, `tail -c +N` to resume, `cat >` / `cat >>`) and checks the size; a
+mismatch, or a profile set to shell transfer, moves the file through base64
+on a persistent shell channel instead. Each command's output is framed by
+`__WFX_DD_BEGIN__` / `__WFX_DD_END__` markers, so prompts, banners and echo
+around it are never mistaken for data.
 
-**Download:** Fast path via `cat`. Fallback to `base64 -w 0` when binary pipe is unreliable. Incremental decode (streaming, no full-file buffering).
+```mermaid
+flowchart TD
+    S(["File transfer in SCP-only or shell mode"]) --> F{"Shell transfer<br/>forced by the profile?"}
+    F -->|"no"| R(["Exec channel, raw bytes<br/>cat · tail -c +N · cat > · cat >>"])
+    R --> V{"Size as expected?"}
+    V -->|"yes"| OK(["Done"])
+    V -->|"no"| B
+    F -->|"yes"| B(["Persistent shell channel · base64"])
+    B --> D(["Download<br/>base64 -w 0, decoded as it streams"])
+    B --> U{"Upload: does the shell take<br/>multi-line base64?"}
+    U -->|"yes, file over 1 KiB"| U48(["48 KiB per command"])
+    U -->|"no"| U1(["1 KiB per command"])
+    U48 --> M(["printf '%s' … | base64 -d >> file<br/>framed by begin / end markers"])
+    U1 --> M
+    D --> OK
+    M --> OK
+```
 
-Chunk size kept below 1024 bytes (1368 base64 characters) to stay within shell line-length limits on restricted hosts.
-
-The base64 encoder is built in, with no external dependency.
+Whether the shell takes multi-line base64 is asked once per connection
+(`printf '%s' 'QUJD\nREVG' | base64 -d | wc -c` must print 6). The base64
+encoder and decoder are built in.
 
 ### Jump Host (ProxyJump)
 
@@ -200,6 +265,35 @@ Fail-fast local validation before any network auth attempt:
 | Invalid PPK format | Precise error with MAC/KDF diagnostics |
 
 This eliminates the minute-long UI freeze caused by impossible auth attempts in the original plugin.
+
+Then the methods are tried in the order the server allows and the profile
+provides. Pageant and a key file are alternatives - the profile picks one;
+keyboard-interactive answers password prompts with the stored password, and
+a one-time code is never kept as one.
+
+```mermaid
+flowchart TD
+    L(["Server's method list"]) --> N{"Already logged in?"}
+    N -->|"yes"| OK(["Logged in"])
+    N -->|"no"| K{"publickey allowed?"}
+    K -->|"Pageant enabled"| PG(["Pageant<br/>started from pageant.lnk if needed"])
+    K -->|"key file set"| KF(["Key file<br/>PEM · OpenSSH · PPK v2 / v3"])
+    K -->|"no key to offer"| PF
+    KF -->|"unreadable key file"| X(["Stop with the file error"])
+    PG -->|"accepted"| OK
+    KF -->|"accepted"| OK
+    PG -->|"refused"| PF{"Password stored and<br/>confirmed by the server?"}
+    KF -->|"refused"| PF
+    PF -->|"no"| KI(["Keyboard-interactive"])
+    PF -->|"yes"| PW(["Password"])
+    KI -->|"accepted"| OK
+    KI -->|"refused"| PW
+    PW -->|"accepted"| OK
+    PW -->|"refused, keyboard not tried yet"| KI2(["Keyboard-interactive"])
+    KI2 -->|"accepted"| OK
+    PW -->|"refused"| FAIL(["Login failed"])
+    KI2 -->|"refused"| FAIL
+```
 
 ### Native PPK v2 / v3 Decoder
 
@@ -236,6 +330,15 @@ Connects via named pipe to the running Pageant agent. If Pageant is not running 
 | DPAPI | `password=dpapi:<base64>` | `CryptProtectData`, user-account scope |
 | Explicit plaintext | `password=plain:<text>` | Opt-in only |
 | Legacy XOR | `<decimal triplets>` | Read-only; written in 2000s versions |
+
+```mermaid
+flowchart LR
+    P(["Password typed<br/>in the dialog"]) --> M{"Total Commander<br/>master password?"}
+    M -->|"yes"| CP(["Total Commander CryptProc"]) --> I1(["password=!"])
+    M -->|"no"| D(["DPAPI · CryptProtectData<br/>the current Windows user"]) --> I2(["password=dpapi:…"])
+    O(["Explicit opt-in"]) --> I3(["password=plain:…"])
+    L(["Profiles from old versions"]) -.->|"read, never written"| I4(["decimal XOR triplets"])
+```
 
 ### DPAPI Implementation
 
@@ -282,6 +385,23 @@ Sessions from other programs appear in an `[Imports]` folder in the plugin root,
 | WinSCP | `HKCU\Software\Martin Prikryl\WinSCP 2\Sessions` | A portable `WinSCP.ini` |
 | FileZilla | `%APPDATA%\FileZilla\sitemanager.xml` | Any `sitemanager.xml` |
 | KiTTY | `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%` under `KiTTY\Sessions\`, or the path behind the `.kitty` file association | The `Sessions\` folder or the install root |
+| OpenSSH | `%USERPROFILE%\.ssh\config`, with its `Include` files | Any `ssh_config`-style file |
+
+```mermaid
+flowchart LR
+    subgraph Sources["Where each program keeps its sessions"]
+        direction TB
+        SC(["SecureCRT"])
+        PU(["PuTTY"])
+        WS(["WinSCP"])
+        FZ(["FileZilla"])
+        KI(["KiTTY"])
+        OS(["OpenSSH config"])
+    end
+    Sources --> CA(["Import cache<br/>next to sftpplug.ini"]) --> IM(["[Imports] folder<br/>one subfolder per source"])
+    IM -->|"Enter"| CO(["Connect with the<br/>source's own settings"])
+    IM -->|"F5"| SV(["Saved session in sftpplug.ini<br/>passwords re-protected with DPAPI"])
+```
 
 **Behaviour:**
 - `Enter` connects using the settings read from the source; nothing is written to the plugin's own configuration
@@ -295,7 +415,7 @@ Sessions from other programs appear in an `[Imports]` folder in the plugin root,
 
 ### Host Key Verification
 
-MD5 fingerprint stored in INI per server. First connection prompts acceptance. Changed key raises an explicit warning dialog. Both behaviors use the `IUserFeedback` interface so they work correctly in background transfer mode.
+The fingerprint is stored per server in the INI as SHA256, in the form OpenSSH prints it (`SHA256:…`), so it can be checked on the server with `ssh-keygen -lf`; the prompt shows the MD5 as well. An MD5 stored by an older version still matches and is rewritten as SHA256 on that connection. The first connection asks for acceptance, a changed key raises an explicit warning, and a jump host keeps its own fingerprint. Both prompts go through `IUserFeedback`, so they work in background transfers too.
 
 ---
 
@@ -322,6 +442,31 @@ Both computers are given the same pairing password. Each turns it into the
 pair key, `PBKDF2-HMAC-SHA256(password, salt, 120 000 iterations, 32 bytes)`
 with the salt derived from the two peer ids, and neither ever sends it:
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Receiver (client)
+    participant S as Donor (LAN Pair server)
+    Note over C,S: UDP 45845: both announce themselves every 2 s, the client learns the server's address
+    Note over C,S: each side holds the pair key: from the password, or from DPAPI after an earlier session
+    C->>S: TCP 45846 · PAIR3 HELLO clientId role
+    S->>C: PAIR3 SHARE serverId name role pB
+    Note over C: pA = x·G + w·M<br/>K = x·(pB − w·N), keys from the transcript
+    C->>S: PAIR3 CONFIRM pA cA
+    Note over S: cA checked in constant time<br/>wrong: 1 s delay, PAIR3 FAIL bad-auth
+    S->>C: PAIR3 OK cB
+    Note over C,S: cB checked · the proven pair key is stored with DPAPI on both sides
+    rect rgba(46, 160, 67, 0.15)
+    Note over C,S: AES-256-GCM from here on · own key and IV prefix per direction · numbered frames
+    C->>S: LAN2 HELLO
+    S->>C: LAN2 READY
+    C->>S: ROOTS · LIST · GET · PUT · MKDIR · DEL · REN
+    S->>C: OK + listing lines or file bytes
+    end
+```
+
+On the wire, before the encryption starts:
+
 ```
 Client → Server:  PAIR3 HELLO   <clientId> <role>
 Server → Client:  PAIR3 SHARE   <serverId> <displayName> <role> <pB>
@@ -341,11 +486,12 @@ From then on every byte goes in AES-256-GCM frames: a 4-byte length (in the
 additional data), the ciphertext, a 16-byte tag. Each direction has its own key
 and IV prefix from `HKDF(Ke, salt = Hash(TT))`, and the IV carries a frame
 counter, so a frame that is altered, replayed, dropped or reordered ends the
-connection. A plugin older than 10.3 gets `PAIR1 FAIL upgrade-required` - both
+connection. A plugin older than 10.3.1 gets `PAIR1 FAIL upgrade-required` - both
 computers need 10.3.
 
 Pairing requires the password. After a successful handshake each side stores
 the pair key, and later sessions may leave the password empty.
+
 ### LAN Pair Roles
 
 | Role | INI value | Behavior |
@@ -387,6 +533,7 @@ in base64.
 | `QUIT` | `BYE` |
 
 Session timeout configurable via `setTimeoutMin(int minutes)`. When a non-zero timeout is set, every `cmd()` call checks elapsed time via `std::chrono::steady_clock` and closes the session automatically when the limit is reached. All methods are `noexcept`.
+
 ---
 
 ## PHP Agent and PHP Shell
@@ -397,19 +544,77 @@ Single-file `sftp.php` deployed on the web server. The plugin communicates via W
 
 Operations supported: `PROBE`, `LIST`, `GET`, `PUT`, `MKDIR`, `REMOVE`, `RENAME`, `CHMOD`, `STAT`, `TAR_STREAM`, `TAR_EXTRACT`, `TAR_PACK`, `SHELL_EXEC`.
 
+#### Signed requests (TCSFTP-HMAC-V2)
+
+The password never leaves the computer. `PROBE`, the only unsigned request,
+gives the salt and the server's clock; every other request carries an
+HMAC-SHA256 signature over its method, operation, every parameter, the hash
+of its body, the time and a single-use nonce. A body is staged and checked
+against its signed hash before the agent uses any of it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Plugin
+    participant A as sftp.php
+    P->>A: GET ?op=PROBE (unsigned)
+    A-->>P: agent version · auth scheme · salt · Date header
+    Note over P: key = SHA-256(salt + ":" + password)<br/>clock offset taken from Date
+    rect rgba(31, 111, 235, 0.12)
+    Note over P,A: every other request
+    P->>A: method · op · parameters · body<br/>X-SFTP-TS · X-SFTP-NONCE · X-SFTP-CONTENT-SHA256<br/>X-SFTP-SIGNATURE-V2 = HMAC-SHA256(key, canonical request)
+    Note over A: time inside the window?<br/>nonce not seen before?<br/>signature matches?<br/>staged body matches its hash?
+    alt every check passes
+        A-->>P: the result: listing, file bytes, status
+    else any check fails
+        A-->>P: 401 · AUTH_REQUIRED · BAD_SIGNATURE · NONCE_REPLAY · TIMESTAMP_EXPIRED · BAD_CONTENT_HASH
+    end
+    end
+```
+
+The agent keeps only the salted hash (`AGENT_PSK_SALT`, `AGENT_PSK_SHA256`)
+or reads the password from the `TC_SFTP_AGENT_PSK` environment variable;
+either way it derives the same key.
+
 #### TAR Streaming — Upload (TAR_EXTRACT) and Batch Download (TAR_PACK)
 
 When the `php_tar` checkbox is enabled in the connection profile, all directory copies and batch file transfers use a single TAR HTTP round-trip instead of individual `PUT`/`GET` requests. This eliminates per-request overhead — critical on shared hosting (OVH, home.pl) where even small files cost full HTTP round-trip latency.
 
 **Upload (TAR_EXTRACT)**
 
-TC's `FsStatusInfo` `PUT_MULTI` / `PUT_MULTI_THREAD` session is used to collect all files. The plugin runs a first pass to compute the exact total size, then streams the complete POSIX ustar TAR in a single WinHTTP POST to `?op=TAR_EXTRACT`. The server script extracts files on-the-fly via a streaming parser (`tar_extract_stream`) — no temporary files created on the server. `Content-Length` is sent as a 64-bit header value (no 4 GB overflow). Regular `.tar` file uploads without `php_tar` enabled are unaffected.
+TC's `FsStatusInfo` `PUT_MULTI` / `PUT_MULTI_THREAD` session is used to collect all files. The plugin runs a first pass to compute the exact total size, then streams the complete POSIX ustar TAR in a single WinHTTP POST to `?op=TAR_EXTRACT`. The server stages the archive in a temporary file, checks it against the signed hash, and only then extracts it with a streaming parser (`tar_extract_stream`) — an altered archive writes nothing. `Content-Length` is sent as a 64-bit header value (no 4 GB overflow). Regular `.tar` file uploads without `php_tar` enabled are unaffected.
 
 **Batch Download (TAR_PACK)**
 
 When TC signals a multi-file download (`FsStatusInfo GET_MULTI` / `GET_MULTI_THREAD`), each `FsGetFileW` call is intercepted and the remote path queued into `TarDownloadSession`. When the batch ends, a single POST to `?op=TAR_PACK` is sent with all remote paths (newline-separated). The server streams the ustar TAR directly to `php://output` with no buffering — no 504 Gateway Timeout even for large archives. The plugin parses the TAR stream on the fly, writing files as each entry arrives.
 
 Both directions support **GNU LongLink** (`././@LongLink`, typeflag `L`) for paths longer than 99 characters. Files exceeding 8 589 934 591 bytes (POSIX ustar limit) are skipped cleanly without corrupting the rest of the archive.
+
+```mermaid
+sequenceDiagram
+    participant TC as Total Commander
+    participant P as Plugin
+    participant A as sftp.php
+    rect rgba(31, 111, 235, 0.12)
+    Note over TC,A: Batch download, php_tar on
+    TC->>P: FsStatusInfo GET_MULTI start
+    TC->>P: FsGetFileW × N, queued, nothing sent yet
+    TC->>P: FsStatusInfo GET_MULTI end
+    P->>A: POST ?op=TAR_PACK, every path, signed
+    A-->>P: ustar stream straight from php://output
+    P->>P: each entry written to disk as it arrives
+    end
+    rect rgba(46, 160, 67, 0.15)
+    Note over TC,A: Batch upload, php_tar on
+    TC->>P: FsStatusInfo PUT_MULTI start
+    TC->>P: FsPutFileW × N, queued
+    TC->>P: FsStatusInfo PUT_MULTI end
+    P->>P: first pass: exact TAR size
+    P->>A: POST ?op=TAR_EXTRACT, one ustar stream, signed
+    A->>A: staged, hash checked, then extracted
+    A-->>P: number of files extracted
+    end
+```
 
 `AgentUrl` struct parsed from connection profile: `secure` (HTTPS), `host`, `port`, `object` path.
 
@@ -594,6 +799,23 @@ Every suite compiles the plugin's own sources under the same `/W4 /WX` as the pl
 
 builds the plugin and runs everything below, each step even after a failed one, and ends with a summary; `-SkipBuild` tests the binaries already built, `-SkipPhp` leaves out the PHP Agent. Each runner also works on its own; `-Arch x64|x86|arm64|both|all` picks the architectures.
 
+```mermaid
+flowchart LR
+    RA(["run-all-tests.ps1"]) --> B(["build.ps1<br/>x64 · x86 · arm64"])
+    B --> U(["Unit tests<br/>40 cases · x64 · x86"])
+    B --> UA(["Unit tests arm64<br/>compiled here, run on Arm"])
+    B --> UI(["Dialog layout<br/>7 dialogs × 16 languages"])
+    B --> PH(["PHP Agent<br/>26 protocol checks + the plugin"])
+    B --> IT(["Integration, per profile<br/>SFTP · SCP · SCP-only · shell · text"])
+    B --> LP(["LAN Pair<br/>between two computers"])
+    U --> SUM(["Summary<br/>exit code 0 only when all pass"])
+    UA --> SUM
+    UI --> SUM
+    PH --> SUM
+    IT --> SUM
+    LP --> SUM
+```
+
 | Suite | Runner | Scope and Methodology |
 |-------|--------|-----------------------|
 | **Unit tests** | `tests\run-unit-tests.ps1` | 40 test cases and 325,538 assertions per architecture. Validates PPK v2/v3 parsing and OpenSSL 4.1.0 Argon2id decryption against deterministic RSA, ECDSA P-256/P-384/P-521, and Ed25519 fixtures in `tests\fixtures\ppk`, UTF-8 and CRLF conversion, ECMA-48 control-sequence stripping, LAN Pair cryptography (PBKDF2, SPAKE2 against the RFC 9382 vector, AES-GCM frames that are altered, replayed or reordered), a LAN Pair file server and session end to end on the loopback interface, DPAPI/legacy password codecs, and wildcard matching. |
@@ -608,6 +830,32 @@ builds the plugin and runs everything below, each step even after a failed one, 
 ## Build System
 
 Two scripts at the project root. Both find Visual Studio, the MSVC toolset and the Windows SDK on their own (`tools\Toolchain.psm1`), choosing the ones whose compiler, assembler and libraries actually exist on disk; no version number is written into them.
+
+```mermaid
+flowchart LR
+    subgraph Deps["build-deps.ps1 · when a pin changes"]
+        direction TB
+        OT(["OpenSSL 4.1.0 tarball<br/>SHA-256 pin + PGP signature"])
+        LS(["libssh2 1.11.1 submodule<br/>+ Debian CVE patches"])
+        TCH(["Toolchain.psm1<br/>MSVC, SDK and assemblers found on disk"])
+        LIB(["src\lib<br/>libcrypto + libssh2 per architecture<br/>deps-manifest.json"])
+        OT --> LIB
+        LS --> LIB
+        TCH --> LIB
+    end
+    subgraph Plugin["build.ps1"]
+        direction TB
+        CHK(["Manifest check<br/>pins and library hashes"])
+        VER(["version.h<br/>tag · commit · date from git"])
+        MSB(["MSBuild · /W4 /WX<br/>x64 · x86 · arm64"])
+        PKG(["SFTPplug.zip · x64 + x86<br/>SFTPplug-arm64.zip"])
+        DEP(["Deploy into Total Commander<br/>x64 · x86"])
+        CHK --> MSB
+        VER --> MSB
+        MSB --> PKG --> DEP
+    end
+    LIB --> CHK
+```
 
 **1. Dependencies** — once, and again whenever a pin changes:
 
@@ -758,6 +1006,8 @@ To add a new language: create `language\XYZ.lng` (UTF-8) following the existing 
 - `ConnectionGuard` RAII — leak-free connection lifecycle in `FsFindFirstW`
 - `UpdateCertSectionState` — unified cert section control for all transport modes
 - x64 and x86 packaging — single ZIP with both architectures, TC auto-install via `pluginst.inf`
+- **arm64 build** — plugin, OpenSSL and libssh2 cross-compiled or built natively on Windows on Arm; separate `SFTPplug-arm64.zip`
+- **Signed PHP Agent requests** — TCSFTP-HMAC-V2, the password never leaves the computer, bodies verified before use
 - PHP Shell persistent command history — ring buffer (128 entries), atomic NTFS write, `%APPDATA%\GHISLER\shell_history.txt`, `history -c` / `clear history` commands
 - **`[Imports]` magic folder** — sessions from SecureCRT, PuTTY, WinSCP, FileZilla and KiTTY listed as live entries, one subfolder per source; `Enter` connects, `F5` materialises into `sftpplug.ini`; per-source `[Refresh]` and custom portable locations; enumeration cached next to the INI so entries are present at startup
 - **KiTTY password import** — obfuscated session passwords decoded natively, with no external helper binary, and re-stored as DPAPI
@@ -796,7 +1046,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
   dropdown that switched sessions. Sessions are picked in the panel;
   typing another name here renames the session, and a name already
   taken is refused instead of overwritten.
-- **15 languages** — every dialog follows Total Commander's own language
+- **16 languages** — every dialog follows Total Commander's own language
   setting, with English as the fallback for languages the plugin does
   not ship. `Language=` in `sftpplug.ini` overrides the choice.
 - **PuTTY ed25519 keys work** — a `.ppk` holding an ed25519 key used to
@@ -808,7 +1058,6 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 - **Transparency** — Argon2 for PuTTY PPK v3 key files is computed by OpenSSL, built from its verified release source; no pre-compiled blob remains
 
 ### In Progress
-
 
 - Unicode end to end — the connection dialog, settings and import cache
   still go through ANSI WinAPI, so paths and names with characters
@@ -827,7 +1076,7 @@ User-facing summary; see `CHANGELOG.md` for per-version detail.
 
 ---
 
-**Highlights:** OpenSSL 4.1.0 + libssh2 1.11.1, C++20 `/W4 /WX` with CFG/CET, `DllExceptionBarrier` (ABI protection), `ConnectionGuard` RAII, Per-Monitor V2 DPI + Mica dialogs, **Skip / Skip all / Cancel** batch download prompt, 16-language localization (EN + 15 `.lng`), **`[Imports]` magic folder** (SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY / `~/.ssh/config`), **PHP Agent TAR upload+download**, automated unit/UI/integration test suites, no external DLLs or VC++ Redistributable required.
+**Highlights:** OpenSSL 4.1.0 + libssh2 1.11.1, C++20 `/W4 /WX` with CFG/CET, x64 · x86 · arm64, encrypted LAN Pair (SPAKE2 + AES-256-GCM), signed PHP Agent requests, `DllExceptionBarrier` (ABI protection), `ConnectionGuard` RAII, Per-Monitor V2 DPI + Mica dialogs, **Skip / Skip all / Cancel** batch download prompt, 16-language localization (EN + 15 `.lng`), **`[Imports]` magic folder** (SecureCRT / PuTTY / WinSCP / FileZilla / KiTTY / `~/.ssh/config`), **PHP Agent TAR upload+download**, automated unit/UI/integration/PHP/LAN Pair test suites, no external DLLs or VC++ Redistributable required.
 
 ### Acknowledgements
 

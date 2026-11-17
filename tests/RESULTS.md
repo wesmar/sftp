@@ -4,7 +4,7 @@ The latest full run before a release, on the maintainer's machine. Every
 suite builds the plugin's own sources with `/W4 /WX`; how to run them is in
 the README, section *Verification and Test Suites*.
 
-**Run of 2026-11-17, version 10.3.0.0** - Visual Studio 2026 (MSVC 14.52,
+**Run of 2026-11-17, version 10.3.1.0** - Visual Studio 2026 (MSVC 14.52,
 toolset v145), Windows SDK 10.0.28000.0, OpenSSL 4.1.0, libssh2 1.11.1.
 
 | Suite | x64 | x86 | arm64 |

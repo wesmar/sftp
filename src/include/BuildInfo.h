@@ -1,11 +1,11 @@
 #pragma once
 
 // Build metadata surfaced to the user and the log so that a beta
-// installation is unambiguously identifiable — the version bump in
-// `version.h` happens once per release (`10.0.2.0` → `10.0.2.1`),
-// but between-beta iterations only carry different git tags. Without
-// these constants the beta cycle would present as "the same 10.0.2.0"
-// to anyone inspecting the plugin from Total Commander.
+// installation is unambiguously identifiable — `version.h` changes once
+// per release, but the builds between two releases differ only in their
+// git tag and commit. Without these constants every one of them would
+// present itself as the same version to anyone inspecting the plugin
+// from Total Commander.
 //
 // The three defines below are the *fallback*. build.ps1 writes
 // `build_info_gen.h` next to this file before the compiler runs, with the

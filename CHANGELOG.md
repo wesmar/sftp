@@ -5,10 +5,80 @@ corresponds to a build of `SFTPplug.zip`. Internal refactors, build-script
 tweaks, and other developer-only changes are kept brief or omitted; the git log
 has the full detail.
 
-Release `10.3.0.0` reunites the upstream `wesmar/sftp` line with community
-improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`.
+## 10.3.1.0 — unreleased
+
+The 10.3.0.0 notes announced an encrypted LAN Pair and signed PHP Agent
+requests ahead of time; both arrive in this version. **Update the plugin on
+every computer you pair, and upload the new `sftp.php` to every server.**
+
+### Features
+
+- **LAN Pair, encrypted (protocol PAIR3).** The two computers prove to each
+  other that they were given the same password without sending it or
+  anything a password could be guessed from (SPAKE2, RFC 9382), and
+  everything after that - listings, file names, file contents - travels in
+  AES-256-GCM; a frame altered, replayed or reordered on the way ends the
+  connection. **Update both computers:** a plugin older than 10.3.1 is told to
+  upgrade, not let in. **Pairing needs the password**, the same on both
+  computers; the first pairing used to be possible without one.
+- **Signed PHP Agent requests (agent 1.1.0).** The password no longer travels:
+  every request is signed (HMAC-SHA256 over method, operation, every
+  parameter, the body's hash, time and a single-use nonce) with a key derived
+  from it, and the agent checks a body before using it - an altered upload
+  never reaches a file. Works with the salted hash the plugin writes into
+  `sftp.php`. **Upload the new `sftp.php`:** an older agent is refused with a
+  message saying so, and the new agent refuses the old clear-text header
+  unless `AGENT_ACCEPT_LEGACY_AUTH` is set.
+- **arm64.** The plugin, OpenSSL and libssh2 build for 64-bit Arm as well
+  (`build.ps1` / `build-deps.ps1` with `-amd64`, `-x86`, `-arm64`; none
+  means all three), cross-compiled on x64 or native on Windows on Arm, and
+  the tests with them. Total Commander has no arm64 build - on Windows on Arm
+  it runs as x64 and loads `SFTPplug.wfx64` from the usual package; the
+  native plugin comes separately in `SFTPplug-arm64.zip` for hosts that run
+  natively on Arm.
+
+### Fixes
+
+- **PHP Agent: empty files.** Uploading a 0-byte file failed: the plugin
+  finalized an upload it had never started.
+- **PHP Agent: one error, one report.** A failed download or upload no longer
+  opens a dialog of its own on top of Total Commander's report - in a batch
+  that meant one dialog per file, *Skip all* or not. It goes to the log.
+
+### Security
+
+- **LAN Pair accepted anyone who asked.** A computer with no pair key could
+  request one (`TRUSTNEW`) and was handed a fresh key, in the clear, with full
+  access to the files the LAN Pair server shares; a client also kept a key
+  before the server had proved it. Both are gone: a key comes only from the
+  password, and is stored only once the peer has proved the same one.
+- **LAN Pair server and TrustedInstaller.** The handshake now runs as the
+  user; TrustedInstaller, when enabled, covers the file operations only.
+- **PHP Agent password.** It was sent in a request header (`X-SFTP-AUTH`) on
+  every request, readable wherever HTTP was; now it never leaves the computer.
+
+### Build and tests
+
+- **Reproducible builds.** The tag, commit and date the plugin shows come
+  from git, never from the clock, and `/Brepro` drops the timestamps: two
+  builds of one commit with the same toolchain are byte-identical.
+- **More tests.** LAN Pair: SPAKE2 against the RFC 9382 test vector, frames
+  altered, replayed and reordered, a file server and session end to end, and
+  a run between two computers. PHP Agent: 26 protocol checks and the plugin
+  against `php -S` in both password configurations. `run-all-tests.ps1`
+  runs every suite; the arm64 tests compile on x64 and run on Windows on Arm.
+- Releases are built and tested locally; the GitHub release workflow is gone.
+
+### Known limitations
+
+- **PHP Agent over plain HTTP.** Requests are signed and the password never
+  travels, but the transferred files and listings are readable on the way:
+  use HTTPS beyond local testing.
 
 ## 10.3.0.0 — 2026-11-14
+
+Release `10.3.0.0` reunites the upstream `wesmar/sftp` line with community
+improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`.
 
 ### Features
 
@@ -25,34 +95,10 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
   scale cleanly across DPI changes and auto-size controls for all 16 languages.
 - **Faster shell fallback uploads.** Multi-line `base64` chunking sends up to
   49,152 bytes per command on large files, cutting transfer overhead sharply.
-- **Signed PHP Agent requests (agent 1.1.0).** The password no longer travels:
-  every request is signed (HMAC-SHA256 over method, operation, every
-  parameter, the body's hash, time and a single-use nonce) with a key derived
-  from it, and the agent checks a body before using it - an altered upload
-  never reaches a file. Works with the salted hash the plugin writes into
-  `sftp.php`. **Upload the new `sftp.php`:** an older agent is refused with a
-  message saying so, and the new agent refuses the old clear-text header
-  unless `AGENT_ACCEPT_LEGACY_AUTH` is set.
-- **LAN Pair, encrypted (protocol PAIR3).** The two computers prove to each
-  other that they were given the same password without sending it or
-  anything a password could be guessed from (SPAKE2, RFC 9382), and
-  everything after that - listings, file names, file contents - travels in
-  AES-256-GCM; a frame altered, replayed or reordered on the way ends the
-  connection. **Update both computers:** a plugin older than 10.3 is told to
-  upgrade, not let in. **Pairing needs the password**, the same on both
-  computers; the first pairing used to be possible without one.
-- **arm64.** The plugin, OpenSSL and libssh2 build for 64-bit Arm as well
-  (`build.ps1` / `build-deps.ps1` with `-amd64`, `-x86`, `-arm64`; none
-  means all three), cross-compiled on x64 or native on Windows on Arm, and
-  the tests with them. Total Commander has no arm64 build - on Windows on Arm
-  it runs as x64 and loads `SFTPplug.wfx64` from the usual package; the
-  native plugin comes separately in `SFTPplug-arm64.zip` for hosts that run
-  natively on Arm.
 - **Hardened C++20 build & automated test suite.** Built with `/std:c++20`,
   `/W4 /WX`, Control Flow Guard, and CET (`x64`), backed by unit tests
-  (PPK v2/v3, text conversion, ECMA-48 terminal filter, LAN Pair handshake,
-  channel and a whole session, wildcards), 16-language UI layout checks, and
-  5-mode SSH integration tests.
+  (PPK v2/v3, text conversion, ECMA-48 terminal filter, LAN Pair crypto,
+  wildcards), 16-language UI layout checks, and 5-mode SSH integration tests.
 
 ### Fixes
 
@@ -82,12 +128,6 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
 - **Post-login command.** Its output is shown whole, including non-ASCII text
   at the end of a line, and the progress dialog shows its text again.
 
-- **PHP Agent: empty files.** Uploading a 0-byte file failed: the plugin
-  finalized an upload it had never started.
-- **PHP Agent: one error, one report.** A failed download or upload no longer
-  opens a dialog of its own on top of Total Commander's report - in a batch
-  that meant one dialog per file, *Skip all* or not. It goes to the log.
-
 ### Security
 
 - **Stack protection (`/GS`) is on.** The build had it switched off.
@@ -107,20 +147,13 @@ improvements from `zvldz/totalcmd_sftp`, `numbereleven-a/sftp`, and `bukephalos`
   `OPENSSL_CONF` variable, so no file on the machine can change its behaviour.
 - **Diagnostic log off by default**, and written to
   `%LOCALAPPDATA%\SFTPplug\sftpplug.log` instead of the shared `C:\temp`.
-- **LAN Pair accepted anyone who asked.** A computer with no pair key could
-  request one (`TRUSTNEW`) and was handed a fresh key, in the clear, with full
-  access to the files the LAN Pair server shares; a client also kept a key
-  before the server had proved it. Both are gone: a key comes only from the
-  password, and is stored only once the peer has proved the same one.
-- **LAN Pair server and TrustedInstaller.** The handshake now runs as the
-  user; TrustedInstaller, when enabled, covers the file operations only.
 
 ### Known limitations
 
-- **PHP Agent over plain HTTP.** Requests are signed and the password never
-  travels, but the transferred files and listings are readable on the way:
-  use HTTPS beyond local testing.
-
+- **LAN Pair traffic is not encrypted**, and a computer with no pair key
+  could obtain one; fixed in 10.3.1.0.
+- **PHP Agent password in a request header.** Over plain HTTP it is readable
+  on the way; fixed in 10.3.1.0, until then HTTPS only.
 ## 10.0.2.2 — 2026-11-03
 
 ### Features

@@ -2092,7 +2092,7 @@ INT_PTR ConnectionDialog::OnInitDialog(LPARAM /*lParam*/)
 
     LocalizeDlgControls(m_hWnd, kConnectionDialogCaption, kConnectionDialogStrings);
 
-    // Append the version to the dialog title: "Connect to SFTP server v10.3.0.0"
+    // Append the version to the dialog title: "Connect to SFTP server v<version>"
     {
         const std::wstring ver = GetPluginVersionW();
         if (!ver.empty()) {

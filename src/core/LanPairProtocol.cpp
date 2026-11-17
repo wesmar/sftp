@@ -498,14 +498,14 @@ bool ClientHandshake(Channel& ch, const std::string& clientId, lanpair::PairRole
         return fail(WSAGetLastError(), "Cannot reach the other computer");
     std::string line;
     if (!ch.recvLine(&line, 4096))
-        return fail(ERROR_INVALID_DATA, "The other computer did not answer - it may run a plugin older than 10.3");
+        return fail(ERROR_INVALID_DATA, "The other computer did not answer - it may run a plugin older than 10.3.1");
     auto t = splitBySpace(line);
     if (t.size() >= 3 && t[0] == "PAIR3" && t[1] == "FAIL")
         return fail(ERROR_ACCESS_DENIED, t[2] == "no-key"
             ? "The other computer has no LAN Pair key for this one: pair them with the same password first"
             : "The other computer refused the connection");
     if (t.size() != 6 || t[0] != "PAIR3" || t[1] != "SHARE")
-        return fail(ERROR_INVALID_DATA, "Unexpected answer - the other computer may run a plugin older than 10.3");
+        return fail(ERROR_INVALID_DATA, "Unexpected answer - the other computer may run a plugin older than 10.3.1");
 
     PeerInfo server{unescapeToken(t[2]), unescapeToken(t[3]), roleFromString(t[4])};
     if (!expectedServerId.empty() && server.peerId != expectedServerId)
@@ -549,7 +549,7 @@ bool ServerHandshake(Channel& ch, const std::string& serverId, const std::string
         return false;
     auto t = splitBySpace(line);
     if (!t.empty() && t[0] == "PAIR1") {
-        ch.sendLine("PAIR1 FAIL upgrade-required"); // a plugin older than 10.3
+        ch.sendLine("PAIR1 FAIL upgrade-required"); // a plugin older than 10.3.1
         return false;
     }
     if (t.size() != 4 || t[0] != "PAIR3" || t[1] != "HELLO")

@@ -154,7 +154,7 @@ TEST_CASE("lanpair3: session against a file server - files, stored keys, refusal
         CHECK(!LanPairSession::connect(kLoopback, port, otherId, serverId, "", &none));
     }
 
-    // A plugin older than 10.3 is told to upgrade, not let in.
+    // A plugin older than 10.3.1 is told to upgrade, not let in.
     {
         lanpair_internal::WsaScope wsa;
         SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
