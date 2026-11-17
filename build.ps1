@@ -146,6 +146,16 @@ foreach ($a in $Archs) {
     Write-Ok ("$ProjectName.wfx ($a) {0:N0} KB" -f ((Get-Item -LiteralPath $wfx).Length / 1KB))
 }
 
+# Every build is a full Rebuild, so once it has succeeded the intermediate
+# files (half a gigabyte) serve nothing; a failed build keeps them, with
+# MSBuild's logs. The linker's import library and export file are of no use
+# for a plugin either.
+$Intermediates = Join-Path $BuildDir '.intermediates'
+if (Test-Path -LiteralPath $Intermediates) { Remove-Item -LiteralPath $Intermediates -Recurse -Force }
+foreach ($a in $Archs) {
+    Get-ChildItem -LiteralPath $OutputDir[$a] -File | Where-Object { $_.Extension -in '.lib', '.exp' } | Remove-Item -Force
+}
+
 # ============================================================================
 # Help page (one self-contained HTML file; needs only Python)
 # ============================================================================

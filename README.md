@@ -883,7 +883,7 @@ flowchart LR
 - Release build: C++20, `/W4 /WX` with no warning switched off, `/permissive-`, `/GS`, Control Flow Guard, CET shadow stack (x64), static CRT.
 - Reproducible: two builds of one commit with the same toolchain give byte-identical `.wfx` files. `/Brepro` drops the timestamps, and the tag, short SHA and commit date shown by the plugin come from git, never from the clock (`-dirty` marks uncommitted changes).
 - Before a release: `.\tests\run-all-tests.ps1 -Profiles <sftpplug.ini section> -LanPairHost <another Windows PC>` builds and runs every test suite, and ends with a summary.
-- The plugins land in `build\bin\x64_Release`, `build\bin\Win32_Release` and `build\bin\ARM64_Release`; the packages and the help page in `bin\`. The help page needs Python 3.
+- The plugins land in `build\bin\x64_Release`, `build\bin\Win32_Release` and `build\bin\ARM64_Release`; the packages and the help page in `bin\`. The help page needs Python 3. Every build is a full rebuild, so a successful one removes its intermediate files (about half a gigabyte); a failed one keeps them, with the logs.
 - The tests build for arm64 too. Where they cannot run (arm64 on an x64 machine) they are compiled - under the same `/W4 /WX` - and left for Windows on Arm, which runs all three architectures.
 - Deploying asks Total Commander to close (it is never killed), copies the plugin into `plugins\wfx\SFTPplug` and starts Total Commander again.
 
