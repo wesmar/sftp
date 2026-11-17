@@ -5,7 +5,7 @@ corresponds to a build of `SFTPplug.zip`. Internal refactors, build-script
 tweaks, and other developer-only changes are kept brief or omitted; the git log
 has the full detail.
 
-## 10.3.1.0 — unreleased
+## 10.3.1.0 — 2026-11-17
 
 The 10.3.0.0 notes announced an encrypted LAN Pair and signed PHP Agent
 requests ahead of time; both arrive in this version. **Update the plugin on
@@ -44,6 +44,11 @@ every computer you pair, and upload the new `sftp.php` to every server.**
 - **PHP Agent: one error, one report.** A failed download or upload no longer
   opens a dialog of its own on top of Total Commander's report - in a batch
   that meant one dialog per file, *Skip all* or not. It goes to the log.
+- **PHP Shell console.** The window had an empty title bar and no icon; it now
+  says "*session* - PHP Shell (pseudo-terminal over HTTP)" in the user's
+  language and carries the plugin's icon, and its welcome lines and menu are
+  translated. Server output and typed commands are UTF-8 end to end, so file
+  names outside the system code page show, and are sent, as they are.
 
 ### Security
 

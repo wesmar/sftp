@@ -407,3 +407,10 @@
 12146=Omite tot
 12147=Omis după o eroare la descărcare:
 12148=Agentul PHP de pe server este prea vechi pentru această versiune a pluginului: nu acceptă cereri semnate. Încărcați sftp.php livrat cu pluginul.
+12149={} - PHP Shell (pseudoterminal prin HTTP)
+12150=PHP Shell: un pseudoterminal prin HTTP, rulat de sftp.php pe server.
+12151=Tastați o comandă și apăsați Enter. Sus/Jos: istoric, 'history -c' îl șterge. Programele pe tot ecranul (vi, top, mc) nu funcționează aici.
+12152=Istoric șters.
+12153=Copiere
+12154=Lipire
+12155=Selectare totală

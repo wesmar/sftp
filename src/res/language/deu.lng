@@ -408,3 +408,10 @@
 12146=Alle überspringen
 12147=Nach einem Downloadfehler übersprungen:
 12148=Der PHP-Agent auf dem Server ist für diese Plugin-Version zu alt: Er nimmt keine signierten Anfragen an. Laden Sie die mit dem Plugin gelieferte sftp.php hoch.
+12149={} - PHP Shell (Pseudo-Terminal über HTTP)
+12150=PHP Shell: ein Pseudo-Terminal über HTTP, ausgeführt von sftp.php auf dem Server.
+12151=Befehl eingeben und Enter drücken. Auf/Ab: Verlauf, 'history -c' löscht ihn. Vollbildprogramme (vi, top, mc) funktionieren hier nicht.
+12152=Verlauf gelöscht.
+12153=Kopieren
+12154=Einfügen
+12155=Alles auswählen

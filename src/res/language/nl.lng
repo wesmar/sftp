@@ -407,3 +407,10 @@
 12146=Alles overslaan
 12147=Overgeslagen na een downloadfout:
 12148=De PHP-agent op de server is te oud voor deze pluginversie: hij accepteert geen ondertekende verzoeken. Upload de sftp.php die bij de plugin hoort.
+12149={} - PHP Shell (pseudo-terminal via HTTP)
+12150=PHP Shell: een pseudo-terminal via HTTP, uitgevoerd door sftp.php op de server.
+12151=Typ een opdracht en druk op Enter. Omhoog/omlaag: geschiedenis, 'history -c' wist die. Programma's op volledig scherm (vi, top, mc) werken hier niet.
+12152=Geschiedenis gewist.
+12153=Kopiëren
+12154=Plakken
+12155=Alles selecteren

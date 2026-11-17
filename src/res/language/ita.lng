@@ -407,3 +407,10 @@
 12146=Salta tutto
 12147=Saltato dopo un errore di download:
 12148=L'agente PHP sul server è troppo vecchio per questa versione del plugin: non accetta richieste firmate. Caricate il file sftp.php fornito con il plugin.
+12149={} - PHP Shell (pseudo-terminale via HTTP)
+12150=PHP Shell: uno pseudo-terminale via HTTP, eseguito da sftp.php sul server.
+12151=Digitare un comando e premere Invio. Su/Giù: cronologia, 'history -c' la cancella. I programmi a schermo intero (vi, top, mc) qui non funzionano.
+12152=Cronologia cancellata.
+12153=Copia
+12154=Incolla
+12155=Seleziona tutto

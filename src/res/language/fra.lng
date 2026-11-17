@@ -408,3 +408,10 @@
 12146=Tout ignorer
 12147=Ignoré après une erreur de téléchargement :
 12148=L'agent PHP du serveur est trop ancien pour cette version du plugin : il n'accepte pas les requêtes signées. Envoyez le sftp.php fourni avec le plugin.
+12149={} - PHP Shell (pseudo-terminal via HTTP)
+12150=PHP Shell : un pseudo-terminal via HTTP, exécuté par sftp.php sur le serveur.
+12151=Tapez une commande et appuyez sur Entrée. Haut/Bas : historique, 'history -c' l'efface. Les programmes plein écran (vi, top, mc) ne fonctionnent pas ici.
+12152=Historique effacé.
+12153=Copier
+12154=Coller
+12155=Tout sélectionner

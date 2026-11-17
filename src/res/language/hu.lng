@@ -407,3 +407,10 @@
 12146=Összes kihagyása
 12147=Letöltési hiba miatt kihagyva:
 12148=A szerveren lévő PHP-ügynök túl régi ehhez a bővítményverzióhoz: nem fogad el aláírt kéréseket. Töltse fel a bővítménnyel kapott sftp.php fájlt.
+12149={} - PHP Shell (pszeudoterminál HTTP-n keresztül)
+12150=PHP Shell: pszeudoterminál HTTP-n keresztül, a kiszolgálón futó sftp.php kezeli.
+12151=Írjon be egy parancsot, és nyomja meg az Entert. Fel/Le: előzmények, a 'history -c' törli őket. A teljes képernyős programok (vi, top, mc) itt nem működnek.
+12152=Előzmények törölve.
+12153=Másolás
+12154=Beillesztés
+12155=Összes kijelölése

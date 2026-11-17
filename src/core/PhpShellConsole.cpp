@@ -3,16 +3,20 @@
 #include "PhpAgentClient.h"
 #include "PluginEntryPoints.h"
 #include "ShellHistory.h"
+#include "DialogText.h"
+#include "res/resource.h"
 
 #include <richedit.h>
 #include <array>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <algorithm>
 
 namespace {
 
-constexpr const char* kShellWndClass = "TcPhpShellConsoleWnd";
+// The console window is Unicode, so its title reads right in every language.
+constexpr const wchar_t* kShellWndClass = L"TcPhpShellConsoleWnd";
 constexpr int IDC_SHELL_TERMINAL = 7001;
 constexpr int kPadding = 8;
 
@@ -254,13 +258,54 @@ static void ColorRange(HWND h, LONG from, LONG to, COLORREF color)
     SetSelEnd(h);
 }
 
-static void AppendTerminal(HWND h, const std::string& text, COLORREF color)
+// Server output, paths and the history are UTF-8; a history file written by
+// an older version may hold the system code page. Either way the terminal
+// gets UTF-16, so names outside the code page show as they are.
+static std::wstring TerminalWide(const std::string& text)
+{
+    if (text.empty())
+        return {};
+    for (const UINT cp : { UINT(CP_UTF8), UINT(CP_ACP) }) {
+        const DWORD flags = cp == CP_UTF8 ? MB_ERR_INVALID_CHARS : 0;
+        const int n = MultiByteToWideChar(cp, flags, text.data(), static_cast<int>(text.size()), nullptr, 0);
+        if (n > 0) {
+            std::wstring out(static_cast<size_t>(n), L'\0');
+            MultiByteToWideChar(cp, flags, text.data(), static_cast<int>(text.size()), out.data(), n);
+            return out;
+        }
+    }
+    return {};
+}
+
+// Replaces the selection with UTF-16 text (code page 1200), whatever the
+// control's own code page.
+static void ReplaceSelectionW(HWND h, const std::wstring& text)
+{
+    SETTEXTEX st{};
+    st.flags = ST_SELECTION;
+    st.codepage = 1200;
+    SendMessageW(h, EM_SETTEXTEX, reinterpret_cast<WPARAM>(&st), reinterpret_cast<LPARAM>(text.c_str()));
+}
+
+static void AppendTerminalW(HWND h, const std::wstring& text, COLORREF color)
 {
     if (!h || text.empty())
         return;
     SetSelEnd(h);
     SetSelectionColor(h, color);
-    SendMessageA(h, EM_REPLACESEL, FALSE, (LPARAM)text.c_str());
+    ReplaceSelectionW(h, text);
+}
+
+static void AppendTerminal(HWND h, const std::string& text, COLORREF color)
+{
+    AppendTerminalW(h, TerminalWide(text), color);
+}
+
+// A text of the console in the loaded language, English when it has none.
+static std::wstring ConsoleText(UINT id, const wchar_t* english)
+{
+    std::wstring text = LoadResStringW(id);
+    return text.empty() ? std::wstring(english) : text;
 }
 
 static std::string BuildPromptText(const ShellConsoleState* s)
@@ -296,16 +341,19 @@ static std::string GetCurrentInput(ShellConsoleState* s)
     range.cpMin = s->inputStart;
     range.cpMax = total;
     SendMessageA(s->hwndTerminal, EM_EXSETSEL, 0, (LPARAM)&range);
-    LONG bytes = total - s->inputStart;
-    if (bytes < 0)
-        bytes = 0;
-    std::string input((size_t)bytes + 8, '\0');
-    LRESULT copied = SendMessageA(s->hwndTerminal, EM_GETSELTEXT, 0, (LPARAM)input.data());
+    LONG chars = total - s->inputStart;
+    if (chars < 0)
+        chars = 0;
+    // As UTF-8, which is what the agent passes to the shell; a UTF-16 unit
+    // takes at most three bytes, a surrogate pair four for its two units.
+    std::string input(static_cast<size_t>(chars) * 3 + 4, '\0');
+    GETTEXTEX gt{};
+    gt.cb = static_cast<DWORD>(input.size());
+    gt.flags = GT_SELECTION;
+    gt.codepage = CP_UTF8;
+    SendMessageW(s->hwndTerminal, EM_GETTEXTEX, reinterpret_cast<WPARAM>(&gt), reinterpret_cast<LPARAM>(input.data()));
     SendMessageA(s->hwndTerminal, EM_EXSETSEL, 0, (LPARAM)&oldSel);
-    if (copied > 0)
-        input.resize((size_t)copied);
-    else
-        input.clear();
+    input.resize(std::strlen(input.c_str()));
     while (!input.empty() && (input.back() == '\r' || input.back() == '\n'))
         input.pop_back();
     return input;
@@ -318,7 +366,7 @@ static void ReplaceCurrentInput(ShellConsoleState* s, const std::string& value)
     LONG total = GetTerminalLength(s->hwndTerminal);
     SendMessageA(s->hwndTerminal, EM_SETSEL, (WPARAM)s->inputStart, (LPARAM)total);
     SetSelectionColor(s->hwndTerminal, s->colorCommand);
-    SendMessageA(s->hwndTerminal, EM_REPLACESEL, FALSE, (LPARAM)value.c_str());
+    ReplaceSelectionW(s->hwndTerminal, TerminalWide(value));
     SetSelEnd(s->hwndTerminal);
     SetSelectionColor(s->hwndTerminal, s->colorCommand);
 }
@@ -447,9 +495,9 @@ static void ShowTerminalContextMenu(ShellConsoleState* s, HWND hwnd, int x, int 
     HMENU menu = CreatePopupMenu();
     if (!menu)
         return;
-    AppendMenuA(menu, MF_STRING, 1, "Copy");
-    AppendMenuA(menu, MF_STRING, 2, "Paste");
-    AppendMenuA(menu, MF_STRING, 3, "Select all");
+    AppendMenuW(menu, MF_STRING, 1, ConsoleText(IDS_PHPSHELL_COPY, L"Copy").c_str());
+    AppendMenuW(menu, MF_STRING, 2, ConsoleText(IDS_PHPSHELL_PASTE, L"Paste").c_str());
+    AppendMenuW(menu, MF_STRING, 3, ConsoleText(IDS_PHPSHELL_SELECT_ALL, L"Select all").c_str());
 
     const UINT cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, x, y, 0, hwnd, nullptr);
     switch (cmd) {
@@ -502,7 +550,7 @@ static void ExecuteCommand(ShellConsoleState* s)
         s->shellHistory.Clear();
         s->history.clear();
         s->historyCursor = 0;
-        AppendTerminal(s->hwndTerminal, "History cleared.\r\n", s->colorText);
+        AppendTerminalW(s->hwndTerminal, ConsoleText(IDS_PHPSHELL_HISTORY_CLEARED, L"History cleared.") + L"\r\n", s->colorText);
         PrintPrompt(s);
         return;
     }
@@ -729,8 +777,10 @@ static void InitializeConsoleUi(HWND hwnd, ShellConsoleState* s)
     s->history = s->shellHistory.Entries();
     s->historyCursor = s->history.size();
 
-    AppendTerminal(s->hwndTerminal, "PHP Shell Console ready.\r\n", s->colorText);
-    AppendTerminal(s->hwndTerminal, "Type commands and press Enter. Use Up/Down for history. Type 'history -c' to clear history.\r\n\r\n", s->colorText);
+    AppendTerminalW(s->hwndTerminal, ConsoleText(IDS_PHPSHELL_READY,
+        L"PHP Shell: a pseudo-terminal over HTTP, run by sftp.php on the server.") + L"\r\n", s->colorText);
+    AppendTerminalW(s->hwndTerminal, ConsoleText(IDS_PHPSHELL_HELP,
+        L"Type a command and press Enter. Up/Down: history, 'history -c' clears it. Full-screen programs (vi, top, mc) do not work here.") + L"\r\n\r\n", s->colorText);
     PrintPrompt(s);
     SetFocus(s->hwndTerminal);
 }
@@ -748,16 +798,18 @@ static void DestroyConsoleUi(ShellConsoleState* s)
 
 static LRESULT CALLBACK ShellWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    auto* s = reinterpret_cast<ShellConsoleState*>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+    auto* s = reinterpret_cast<ShellConsoleState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     switch (msg) {
     case WM_NCCREATE:
     {
-        auto* cs = reinterpret_cast<CREATESTRUCTA*>(lParam);
-        SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
-        return TRUE;
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
+        // DefWindowProc is what sets the title from CreateWindowEx; returning
+        // TRUE here on our own left the title bar empty.
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
     case WM_CREATE:
-        s = reinterpret_cast<ShellConsoleState*>(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+        s = reinterpret_cast<ShellConsoleState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
         if (s)
             InitializeConsoleUi(hwnd, s);
         return 0;
@@ -782,30 +834,62 @@ static LRESULT CALLBACK ShellWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         if (s) {
             DestroyConsoleUi(s);
             delete s;
-            SetWindowLongPtrA(hwnd, GWLP_USERDATA, 0);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         }
         return 0;
     }
-    return DefWindowProcA(hwnd, msg, wParam, lParam);
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
+// The console carries the plugin's own connection icon, in the sizes the
+// system asks for the title bar and the taskbar.
+static void LoadConsoleIcons(HICON* bigIcon, HICON* smallIcon)
+{
+    *bigIcon = static_cast<HICON>(LoadImageW(hinst, MAKEINTRESOURCEW(IDI_ICON0), IMAGE_ICON,
+                                         GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
+    *smallIcon = static_cast<HICON>(LoadImageW(hinst, MAKEINTRESOURCEW(IDI_ICON0), IMAGE_ICON,
+                                           GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
+}
 static bool EnsureClassRegistered()
 {
     static bool registered = false;
     if (registered)
         return true;
 
-    WNDCLASSEXA wc{};
+    WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.hInstance = hinst;
     wc.lpfnWndProc = ShellWndProc;
     wc.lpszClassName = kShellWndClass;
     wc.hCursor = LoadCursor(nullptr, IDC_IBEAM);
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    if (!RegisterClassExA(&wc))
+    LoadConsoleIcons(&wc.hIcon, &wc.hIconSm);
+    if (!RegisterClassExW(&wc))
         return false;
     registered = true;
     return true;
+}
+
+// "<session> - PHP Shell (pseudo-terminal over HTTP)": the session as the
+// user named it, or the server for an imported one.
+static std::wstring ConsoleTitle(const tConnectSettings& settings)
+{
+    std::wstring name;
+    const std::string& display = settings.DisplayName;
+    if (!display.empty() && display.rfind("__import.", 0) != 0) {
+        const int n = MultiByteToWideChar(CP_ACP, 0, display.data(), static_cast<int>(display.size()), nullptr, 0);
+        if (n > 0) {
+            name.resize(static_cast<size_t>(n));
+            MultiByteToWideChar(CP_ACP, 0, display.data(), static_cast<int>(display.size()), name.data(), n);
+        }
+    }
+    if (name.empty())
+        name = TerminalWide(ExtractHostFromServerUrl(settings.server.c_str()));
+    std::wstring title = ConsoleText(IDS_PHPSHELL_TITLE, L"{} - PHP Shell (pseudo-terminal over HTTP)");
+    const size_t at = title.find(L"{}");
+    if (at != std::wstring::npos)
+        title.replace(at, 2, name);
+    return title;
 }
 
 } // namespace
@@ -817,11 +901,12 @@ void ShowPhpShellConsole(tConnectSettings settings)
 
     auto* s = new ShellConsoleState();
     s->settings = std::move(settings);
+    const std::wstring title = ConsoleTitle(s->settings);
 
-    HWND hwnd = CreateWindowExA(
+    HWND hwnd = CreateWindowExW(
         WS_EX_APPWINDOW,
         kShellWndClass,
-        "PHP Shell Console",
+        title.c_str(),
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, 960, 620,
         nullptr, nullptr, hinst, s);

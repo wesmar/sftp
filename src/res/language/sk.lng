@@ -407,3 +407,10 @@
 12146=Preskočiť všetko
 12147=Preskočené po chybe sťahovania:
 12148=Agent PHP na serveri je pre túto verziu doplnku príliš starý: neprijíma podpísané požiadavky. Nahrajte sftp.php dodaný s doplnkom.
+12149={} - PHP Shell (pseudoterminál cez HTTP)
+12150=PHP Shell: pseudoterminál cez HTTP, obsluhovaný súborom sftp.php na serveri.
+12151=Zadajte príkaz a stlačte Enter. Hore/Dole: história, 'history -c' ju vymaže. Celoobrazovkové programy (vi, top, mc) tu nefungujú.
+12152=História vymazaná.
+12153=Kopírovať
+12154=Prilepiť
+12155=Vybrať všetko

@@ -408,3 +408,10 @@
 12146=Omitir todo
 12147=Omitido tras un error de descarga:
 12148=El agente PHP del servidor es demasiado antiguo para esta versión del complemento: no acepta solicitudes firmadas. Suba el sftp.php incluido con el complemento.
+12149={} - PHP Shell (pseudoterminal por HTTP)
+12150=PHP Shell: un pseudoterminal por HTTP, ejecutado por sftp.php en el servidor.
+12151=Escriba un comando y pulse Intro. Arriba/Abajo: historial, 'history -c' lo borra. Los programas a pantalla completa (vi, top, mc) no funcionan aquí.
+12152=Historial borrado.
+12153=Copiar
+12154=Pegar
+12155=Seleccionar todo

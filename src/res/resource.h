@@ -568,6 +568,13 @@
 #define IDS_DOWNLOAD_SKIP_ALL           12146
 #define IDS_LOG_DOWNLOAD_SKIPPED        12147
 #define IDS_PHP_ERR_AGENT_OUTDATED      12148
+#define IDS_PHPSHELL_TITLE              12149
+#define IDS_PHPSHELL_READY              12150
+#define IDS_PHPSHELL_HELP               12151
+#define IDS_PHPSHELL_HISTORY_CLEARED    12152
+#define IDS_PHPSHELL_COPY               12153
+#define IDS_PHPSHELL_PASTE              12154
+#define IDS_PHPSHELL_SELECT_ALL         12155
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

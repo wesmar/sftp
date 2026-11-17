@@ -406,3 +406,10 @@
 12146=Pomiń wszystkie
 12147=Pominięto po błędzie pobierania:
 12148=Agent PHP na serwerze jest za stary dla tej wersji wtyczki: nie przyjmuje podpisanych żądań. Wgraj sftp.php dołączony do wtyczki.
+12149={} - PHP Shell (pseudoterminal przez HTTP)
+12150=PHP Shell: pseudoterminal przez HTTP, obsługiwany przez sftp.php na serwerze.
+12151=Wpisz polecenie i naciśnij Enter. Góra/Dół: historia, 'history -c' ją czyści. Programy pełnoekranowe (vi, top, mc) tu nie działają.
+12152=Historia wyczyszczona.
+12153=Kopiuj
+12154=Wklej
+12155=Zaznacz wszystko
